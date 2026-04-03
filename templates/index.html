@@ -1,0 +1,507 @@
+{% from "_shared.html" import render_page_header %}
+
+{% macro render_dashboard_top(summary, active_page) -%}
+    <div class="space-y-3">
+        {{ render_page_header(summary.overall_status, active_page) }}
+
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+            <button type="button" data-filter="all" onclick="setStatusFilter('all')" class="status-filter-card rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-sky-300/30 hover:bg-white/10">
+                <p class="text-xs uppercase tracking-wide text-slate-400">Monitore</p>
+                <p class="mt-1 text-2xl font-semibold">{{ summary.total }}</p>
+            </button>
+            <button type="button" data-filter="up" onclick="setStatusFilter('up')" class="status-filter-card rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-left transition hover:border-emerald-300/40 hover:bg-emerald-500/20">
+                <p class="text-xs uppercase tracking-wide text-emerald-200/80">Up</p>
+                <p class="mt-1 text-2xl font-semibold text-emerald-300">{{ summary.up }}</p>
+            </button>
+            <button type="button" data-filter="down" onclick="setStatusFilter('down')" class="status-filter-card rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-left transition hover:border-rose-300/40 hover:bg-rose-500/20">
+                <p class="text-xs uppercase tracking-wide text-rose-200/80">Down</p>
+                <p class="mt-1 text-2xl font-semibold text-rose-300">{{ summary.down }}</p>
+            </button>
+            <button type="button" data-filter="unknown" onclick="setStatusFilter('unknown')" class="status-filter-card rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-left transition hover:border-amber-300/40 hover:bg-amber-500/20">
+                <p class="text-xs uppercase tracking-wide text-amber-200/80">Unknown</p>
+                <p class="mt-1 text-2xl font-semibold text-amber-300">{{ summary.unknown }}</p>
+            </button>
+            <button type="button" data-filter="paused" onclick="setStatusFilter('paused')" class="status-filter-card rounded-2xl border border-slate-300/20 bg-slate-400/10 p-3 text-left transition hover:border-slate-200/30 hover:bg-slate-400/20">
+                <p class="text-xs uppercase tracking-wide text-slate-300/80">Pausiert</p>
+                <p class="mt-1 text-2xl font-semibold text-slate-200">{{ summary.paused }}</p>
+            </button>
+        </div>
+    </div>
+{%- endmacro %}
+
+{% macro render_monitor_intro() -%}
+    <div id="monitor-actions-anchor" class="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <p class="text-sm text-slate-300">Leichtgewichtiges Self-Hosted Monitoring für HTTP/S und Ping mit automatischen Statuswechsel-Benachrichtigungen.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button type="button" onclick="togglePanel('add-monitor-panel')" class="tap-target rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">
+                Monitor anlegen
+            </button>
+        </div>
+    </div>
+{%- endmacro %}
+
+{% macro render_monitor_cards(monitors) -%}
+    <section class="space-y-4">
+        <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {% for monitor in monitors %}
+            {% set status = monitor.display_status %}
+            {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
+            <article data-monitor-status="{{ status }}" class="monitor-card card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel transition">
+                    <div class="flex items-start justify-between gap-3">
+                        <div class="min-w-0">
+                            <div class="mb-2 flex items-center gap-2">
+                                <span class="inline-flex h-3 w-3 rounded-full {% if status == 'paused' %}bg-slate-400{% elif status == 'up' %}bg-emerald-400{% elif status == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}"></span>
+                                <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor.type | upper }}</p>
+                            </div>
+                            <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
+                            <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <form action="/monitors/{{ monitor.id }}/run" method="post">
+                                <button type="submit" aria-label="Monitor jetzt prüfen" title="Jetzt prüfen" class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-slate-100 transition hover:bg-white/15">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/>
+                                    </svg>
+                                    <span class="sr-only">Jetzt prüfen</span>
+                                </button>
+                            </form>
+                            <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {% if status == 'paused' %}bg-slate-500/20 text-slate-200{% elif status == 'up' %}bg-emerald-500/20 text-emerald-200{% elif status == 'down' %}bg-rose-500/20 text-rose-200{% else %}bg-amber-500/20 text-amber-200{% endif %}">
+                                {{ status }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                        <div class="rounded-2xl bg-slate-950/45 p-3">
+                            <p class="text-slate-400">Antwortzeit</p>
+                            <p class="mt-1 text-lg font-semibold">
+                                {% if monitor.last_response_time %}
+                                    {{ "%.0f"|format(monitor.last_response_time) }} ms
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="rounded-2xl bg-slate-950/45 p-3">
+                            <p class="text-slate-400">Uptime</p>
+                            <p class="mt-1 text-lg font-semibold">
+                                {% if monitor.uptime_percentage is not none %}
+                                    {{ monitor.uptime_percentage }} %
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <div class="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                            <span>Letzte {{ monitor.history|length }} Checks</span>
+                            <span>{{ monitor.interval }}s Intervall</span>
+                        </div>
+                        <div class="flex items-end gap-1">
+                            {% if monitor.history %}
+                                {% for item in monitor.history %}
+                                    <span class="uptime-bar {% if item == 'up' %}bg-emerald-400{% elif item == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}" title="{{ item }}"></span>
+                                {% endfor %}
+                            {% else %}
+                                <p class="text-sm text-slate-500">Noch keine Historie vorhanden.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="mt-4 flex flex-wrap gap-2">
+                        <form action="/monitors/{{ monitor.id }}/toggle" method="post">
+                            <button type="submit" aria-label="{% if monitor.enabled %}Monitor pausieren{% else %}Monitor fortsetzen{% endif %}" title="{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl {% if monitor.enabled %}bg-amber-500/15 text-amber-100 hover:bg-amber-500/25{% else %}bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25{% endif %} transition">
+                                {% if monitor.enabled %}
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm10 0a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/>
+                                </svg>
+                                {% else %}
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8.5 6.5c0-1.1 1.2-1.78 2.14-1.2l7.2 4.5c.9.56.9 1.84 0 2.4l-7.2 4.5A1.41 1.41 0 0 1 8.5 15.5v-9Z"/>
+                                </svg>
+                                {% endif %}
+                                <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
+                            </button>
+                        </form>
+                        <button
+                            type="button"
+                            aria-label="Monitor bearbeiten"
+                            title="Bearbeiten"
+                            data-monitor-id="{{ monitor.id }}"
+                            data-monitor-name="{{ monitor.name }}"
+                            data-monitor-type="{{ monitor.type }}"
+                            data-monitor-target="{{ monitor.target }}"
+                            data-monitor-interval="{{ monitor.interval }}"
+                            data-monitor-timeout="{{ monitor.timeout }}"
+                            onclick="openEditPanel(this)"
+                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/>
+                            </svg>
+                            <span class="sr-only">Bearbeiten</span>
+                        </button>
+                        <button type="button" onclick="toggleDetails('details-{{ monitor.id }}')" aria-label="Monitor-Details anzeigen" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-slate-100 transition hover:bg-white/15">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                            <span class="sr-only">Details</span>
+                        </button>
+                        <form action="/monitors/{{ monitor.id }}/delete" method="post" onsubmit="return confirm('Monitor wirklich löschen?');">
+                            <button type="submit" aria-label="Monitor löschen" title="Löschen" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-7 4v8m6-8v8M6 6l1 14h10l1-14"/>
+                                </svg>
+                                <span class="sr-only">Löschen</span>
+                            </button>
+                        </form>
+                    </div>
+
+                    <div id="details-{{ monitor.id }}" class="hidden">
+                        <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/55 p-4">
+                            <dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                                <div>
+                                    <dt class="text-slate-500">Letzter Check</dt>
+                                    <dd class="mt-1">{{ monitor.last_checked_at or "-" }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-slate-500">Letzter Statuswechsel</dt>
+                                    <dd class="mt-1">{{ monitor.last_change_at or "-" }}</dd>
+                                </div>
+                            </dl>
+
+                            <details class="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
+                                <summary class="cursor-pointer text-sm font-semibold">Technische Fehlerlogs</summary>
+                                <div class="mt-3 space-y-3 text-sm">
+                                    {% if monitor.logs %}
+                                        {% for log in monitor.logs %}
+                                        <div class="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
+                                            <div class="flex items-center justify-between gap-3">
+                                                <span class="uppercase tracking-wide text-slate-500">{{ log.status }}</span>
+                                                <span class="text-xs text-slate-500">{{ log.checked_at }}</span>
+                                            </div>
+                                            <p class="mt-2 break-words text-slate-300">{{ log.error_msg or "Kein Fehlertext" }}</p>
+                                        </div>
+                                        {% endfor %}
+                                    {% else %}
+                                        <p class="text-slate-500">Keine Fehlerprotokolle vorhanden.</p>
+                                    {% endif %}
+                                </div>
+                            </details>
+
+                            {% if monitor.last_error %}
+                            <div class="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm text-rose-100">
+                                {{ monitor.last_error }}
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+            </article>
+            {% else %}
+            <div class="rounded-3xl border border-dashed border-white/15 bg-white/5 p-6 text-center text-slate-400 md:col-span-2 xl:col-span-3">
+                Noch keine Monitore vorhanden. Lege oben den ersten Check an.
+            </div>
+            {% endfor %}
+        </section>
+    </section>
+{%- endmacro %}
+
+{% if not partial %}
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ settings.app_name }} Monitor</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["ui-sans-serif", "system-ui", "sans-serif"],
+                    },
+                    colors: {
+                        keepup: {
+                            bg: "#07111f",
+                            panel: "#111c31",
+                            panelAlt: "#16253f",
+                            line: "#253657",
+                            ok: "#22c55e",
+                            bad: "#ef4444",
+                            warm: "#f59e0b",
+                            accent: "#38bdf8",
+                        }
+                    },
+                    boxShadow: {
+                        panel: "0 18px 40px rgba(7, 17, 31, 0.28)",
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        :root { color-scheme: dark; }
+        html {
+            overflow-y: scroll;
+            scrollbar-gutter: stable;
+        }
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 30%),
+                radial-gradient(circle at top right, rgba(34,197,94,0.12), transparent 26%),
+                linear-gradient(180deg, #07111f 0%, #0b1424 45%, #09111d 100%);
+        }
+        .tap-target { min-width: 44px; min-height: 44px; }
+        .uptime-bar { width: 8px; height: 26px; border-radius: 999px; }
+        .card-sheen {
+            position: relative;
+            overflow: hidden;
+        }
+        .monitor-card.is-hidden {
+            display: none;
+        }
+        .status-filter-card.is-active {
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 18px 40px rgba(7, 17, 31, 0.28);
+            transform: translateY(-1px);
+        }
+        .card-sheen::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent 38%);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100">
+    <main class="mx-auto max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+        {% if toast %}
+        {% set toast_styles = {
+            "success": "border-emerald-400/30 bg-emerald-500/15 text-emerald-50",
+            "info": "border-sky-400/30 bg-sky-500/15 text-sky-50",
+            "warning": "border-amber-400/30 bg-amber-500/15 text-amber-50",
+            "error": "border-rose-400/30 bg-rose-500/15 text-rose-50"
+        } %}
+        <div id="toast" class="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-2xl border px-4 py-3 shadow-panel backdrop-blur transition duration-300 {{ toast_styles.get(toast.tone, toast_styles['success']) }}">
+            <div class="flex items-start justify-between gap-3">
+                <div>
+                    <p class="text-sm font-semibold">Status-Update</p>
+                    <p class="mt-1 text-sm/6 text-current/90">{{ toast.message }}</p>
+                </div>
+                <button type="button" onclick="dismissToast()" class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-current/80 transition hover:bg-white/10" aria-label="Meldung schliessen">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        {% endif %}
+{% endif %}
+        {% if partial == "top" %}
+        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
+            {{ render_dashboard_top(summary, active_page) }}
+        </section>
+        {% elif partial == "cards" %}
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="mt-5">
+            {{ render_monitor_cards(monitors) }}
+        </section>
+        {% else %}
+        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
+            {{ render_dashboard_top(summary, active_page) }}
+        </section>
+        <section class="mt-5">
+            {{ render_monitor_intro() }}
+        </section>
+        <section id="add-monitor-panel" class="mt-5 hidden rounded-3xl border border-white/10 bg-keepup-panel/85 p-4 shadow-panel">
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold">Neuen Monitor anlegen</h2>
+                    <p class="text-sm text-slate-400">HTTP/S-Webseiten oder IP-Adressen mit asynchronen Checks überwachen.</p>
+                </div>
+                <button type="button" onclick="togglePanel('add-monitor-panel')" class="tap-target rounded-2xl border border-white/10 px-4 text-sm font-semibold hover:bg-white/5">Schließen</button>
+            </div>
+            <form action="/monitors" method="post" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Name</span>
+                    <input name="name" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400" placeholder="Produktionsseite">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Typ</span>
+                    <select name="monitor_type" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                        <option value="http">HTTP/S</option>
+                        <option value="ping">Ping (IP/Host)</option>
+                    </select>
+                </label>
+                <label class="space-y-2 md:col-span-2">
+                    <span class="text-sm text-slate-300">Ziel</span>
+                    <input name="target" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400" placeholder="https://example.com oder 1.1.1.1">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
+                    <input type="number" min="10" step="10" name="interval" value="60" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Timeout (Sekunden)</span>
+                    <input type="number" min="2" step="1" name="timeout" value="10" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                </label>
+                <button type="submit" class="tap-target rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 md:col-span-2">
+                    Monitor speichern
+                </button>
+            </form>
+        </section>
+        <section id="edit-monitor-panel" class="mt-5 hidden rounded-3xl border border-white/10 bg-keepup-panel/85 p-4 shadow-panel">
+            <div class="mb-4 flex items-center justify-between gap-3">
+                <div>
+                    <h2 class="text-lg font-semibold">Monitor bearbeiten</h2>
+                    <p class="text-sm text-slate-400">Passe Ziel, Typ, Intervall oder Timeout direkt an.</p>
+                </div>
+                <button type="button" onclick="closeEditPanel()" class="tap-target rounded-2xl border border-white/10 px-4 text-sm font-semibold hover:bg-white/5">Schließen</button>
+            </div>
+            <form id="edit-monitor-form" action="/monitors/0/edit" method="post" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Name</span>
+                    <input id="edit-monitor-name" name="name" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Typ</span>
+                    <select id="edit-monitor-type" name="monitor_type" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                        <option value="http">HTTP/S</option>
+                        <option value="ping">Ping (IP/Host)</option>
+                    </select>
+                </label>
+                <label class="space-y-2 md:col-span-2">
+                    <span class="text-sm text-slate-300">Ziel</span>
+                    <input id="edit-monitor-target" name="target" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
+                    <input id="edit-monitor-interval" type="number" min="10" step="10" name="interval" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Timeout (Sekunden)</span>
+                    <input id="edit-monitor-timeout" type="number" min="2" step="1" name="timeout" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                </label>
+                <button type="submit" class="tap-target rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 md:col-span-2">
+                    Änderungen speichern
+                </button>
+            </form>
+        </section>
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="mt-5">
+            {{ render_monitor_cards(monitors) }}
+        </section>
+        {% endif %}
+{% if not partial %}
+    </main>
+
+    <script>
+        function togglePanel(id) {
+            document.getElementById(id)?.classList.toggle("hidden");
+        }
+
+        function getStatusFilter() {
+            return window.localStorage.getItem("keepup-status-filter") || "all";
+        }
+
+        function getOpenDetails() {
+            try {
+                return JSON.parse(window.localStorage.getItem("keepup-open-details") || "[]");
+            } catch {
+                return [];
+            }
+        }
+
+        function setOpenDetails(ids) {
+            window.localStorage.setItem("keepup-open-details", JSON.stringify(ids));
+        }
+
+        function setStatusFilter(filter) {
+            window.localStorage.setItem("keepup-status-filter", filter);
+            applyStatusFilter();
+        }
+
+        function applyStatusFilter() {
+            const filter = getStatusFilter();
+            document.querySelectorAll(".status-filter-card").forEach((card) => {
+                card.classList.toggle("is-active", card.dataset.filter === filter);
+            });
+            document.querySelectorAll(".monitor-card").forEach((card) => {
+                const matches = filter === "all" || card.dataset.monitorStatus === filter;
+                card.classList.toggle("is-hidden", !matches);
+            });
+        }
+
+        function toggleDetails(id) {
+            const panel = document.getElementById(id);
+            if (!panel) return;
+            panel.classList.toggle("hidden");
+            const openIds = new Set(getOpenDetails());
+            if (panel.classList.contains("hidden")) {
+                openIds.delete(id);
+            } else {
+                openIds.add(id);
+            }
+            setOpenDetails([...openIds]);
+        }
+
+        function restoreOpenDetails() {
+            const openIds = getOpenDetails();
+            document.querySelectorAll("[id^='details-']").forEach((panel) => {
+                panel.classList.toggle("hidden", !openIds.includes(panel.id));
+            });
+        }
+
+        function openEditPanel(button) {
+            const panel = document.getElementById("edit-monitor-panel");
+            const form = document.getElementById("edit-monitor-form");
+            if (!panel || !form) return;
+
+            form.action = `/monitors/${button.dataset.monitorId}/edit`;
+            document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
+            document.getElementById("edit-monitor-type").value = button.dataset.monitorType || "http";
+            document.getElementById("edit-monitor-target").value = button.dataset.monitorTarget || "";
+            document.getElementById("edit-monitor-interval").value = button.dataset.monitorInterval || "60";
+            document.getElementById("edit-monitor-timeout").value = button.dataset.monitorTimeout || "10";
+
+            panel.classList.remove("hidden");
+            panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
+        function closeEditPanel() {
+            document.getElementById("edit-monitor-panel")?.classList.add("hidden");
+        }
+
+        function dismissToast() {
+            const toast = document.getElementById("toast");
+            if (!toast) return;
+            toast.classList.add("translate-y-2", "opacity-0");
+            window.setTimeout(() => toast.remove(), 220);
+            if (window.location.search.includes("toast=")) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete("toast");
+                url.searchParams.delete("tone");
+                window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+            }
+        }
+
+        window.setTimeout(dismissToast, 4200);
+        applyStatusFilter();
+        restoreOpenDetails();
+        document.body.addEventListener("htmx:afterSwap", () => {
+            applyStatusFilter();
+            restoreOpenDetails();
+        });
+    </script>
+{% endif %}
+{% if not partial %}
+</body>
+</html>
+{% endif %}
