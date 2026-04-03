@@ -17,6 +17,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from database import (
+    cleanup_old_checks,
+    create_monitor,
+    delete_monitor,
     export_backup,
     get_monitor,
     get_recent_logs,
@@ -25,10 +28,8 @@ from database import (
     init_db,
     list_monitors,
     set_monitor_enabled,
-    update_settings,
-    create_monitor,
-    delete_monitor,
     update_monitor,
+    update_settings,
 )
 from monitor import (
     execute_monitor_check,
@@ -87,7 +88,7 @@ def format_timestamp(timestamp: Optional[str], timezone_name: str) -> Optional[s
         return timestamp
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%Y-%m-%d %H:%M:%S %Z")
+    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S %Z")
 
 
 def normalize_timezone(timezone_name: str) -> str:
@@ -186,6 +187,13 @@ def build_settings_context(request: Request) -> dict:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    scheduler.add_job(
+        lambda: asyncio.Task(asyncio.to_thread(cleanup_old_checks)),
+        "interval",
+        hours=12,
+        id="db-cleanup",
+        replace_existing=True,
+    )
     reschedule_monitor_jobs(scheduler)
     scheduler.start()
     asyncio.create_task(run_all_checks_once())
@@ -257,7 +265,7 @@ async def create_monitor_route(
     )
     reschedule_monitor_jobs(scheduler)
     await execute_monitor_check(monitor_id)
-    return flash_redirect("/", "Monitor wurde angelegt und sofort geprueft.")
+    return flash_redirect("/", "Monitor wurde angelegt und sofort geprüft.")
 
 
 @app.post("/monitors/{monitor_id}/edit")
@@ -303,7 +311,7 @@ async def toggle_monitor_route(monitor_id: int) -> RedirectResponse:
 async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
     delete_monitor(monitor_id)
     reschedule_monitor_jobs(scheduler)
-    return flash_redirect("/", "Monitor wurde geloescht.", "warning")
+    return flash_redirect("/", "Monitor wurde gelöscht.", "warning")
 
 
 @app.post("/monitors/{monitor_id}/run")
@@ -387,7 +395,7 @@ async def test_telegram_settings(
     update_settings(payload)
 
     if not payload["telegram_bot_token"] or not payload["telegram_chat_id"]:
-        return flash_redirect("/settings", "Bitte Bot-Token und Chat-ID fuer Telegram ausfuellen.", "error")
+        return flash_redirect("/settings", "Bitte Bot-Token und Chat-ID für Telegram ausfüllen.", "error")
 
     try:
         await send_test_telegram_notification(payload)
@@ -434,7 +442,7 @@ async def test_smtp_settings(
     update_settings(payload)
 
     if not payload["smtp_host"] or not payload["smtp_to_email"]:
-        return flash_redirect("/settings", "Bitte SMTP-Host und Ziel-E-Mail fuer den SMTP-Test ausfuellen.", "error")
+        return flash_redirect("/settings", "Bitte SMTP-Host und Ziel-E-Mail für den SMTP-Test ausfüllen.", "error")
 
     try:
         await asyncio.to_thread(send_test_email_notification, payload)

@@ -170,7 +170,7 @@ def list_monitors() -> list[dict[str, Any]]:
         for monitor in monitors:
             cursor.execute(
                 """
-                SELECT status
+                SELECT status, response_time, checked_at
                 FROM checks
                 WHERE monitor_id = ?
                 ORDER BY checked_at DESC, id DESC
@@ -178,7 +178,15 @@ def list_monitors() -> list[dict[str, Any]]:
                 """,
                 (monitor["id"], HISTORY_LIMIT),
             )
-            monitor["history"] = [row["status"] for row in reversed(cursor.fetchall())]
+            rows = list(reversed(cursor.fetchall()))
+            monitor["history"] = [r["status"] for r in rows]
+            
+            import json
+            monitor["chart_data_json"] = json.dumps([
+                {"x": r["checked_at"], "y": r["response_time"]}
+                for r in rows
+            ])
+
             cursor.execute(
                 """
                 SELECT status
@@ -265,6 +273,19 @@ def set_monitor_enabled(monitor_id: int, enabled: bool) -> None:
 def delete_monitor(monitor_id: int) -> None:
     with closing(get_db()) as conn:
         conn.execute("DELETE FROM monitors WHERE id = ?", (monitor_id,))
+        conn.commit()
+
+
+def cleanup_old_checks(days: int = 7) -> None:
+    with closing(get_db()) as conn:
+        conn.execute(
+            '''
+            DELETE FROM checks 
+            WHERE checked_at < datetime('now', ?) 
+              AND monitor_id NOT IN (SELECT id FROM monitors WHERE status = 'down')
+            ''',
+            (f"-{days} days",)
+        )
         conn.commit()
 
 

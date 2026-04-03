@@ -26,10 +26,25 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
     if not monitor.get("enabled", 1):
         return None
 
-    if monitor["type"] == "http":
-        result = await check_http_target(monitor)
-    else:
-        result = await check_ping_target(monitor)
+    for attempt in range(3):
+        if monitor["type"] == "http":
+            status, response_time, error_message = await check_http_target_raw(monitor)
+        else:
+            status, response_time, error_message = await check_ping_target_raw(monitor)
+        
+        if status == "up":
+            break
+            
+        if attempt < 2:
+            await asyncio.sleep(10)
+
+    result = await asyncio.to_thread(
+        log_check_result,
+        monitor["id"],
+        status,
+        response_time,
+        error_message,
+    )
 
     if result["status_changed"]:
         await send_status_change_notifications(monitor, result)
@@ -37,7 +52,7 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
     return result
 
 
-async def check_http_target(monitor: dict[str, Any]) -> dict[str, Any]:
+async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Optional[str]]:
     start = time.perf_counter()
     timeout = httpx.Timeout(monitor["timeout"])
     error_message = None
@@ -62,16 +77,10 @@ async def check_http_target(monitor: dict[str, Any]) -> dict[str, Any]:
         response_time = round((time.perf_counter() - start) * 1000, 2)
         error_message = f"Unexpected error: {exc}"
 
-    return await asyncio.to_thread(
-        log_check_result,
-        monitor["id"],
-        status,
-        response_time,
-        error_message,
-    )
+    return status, response_time, error_message
 
 
-async def check_ping_target(monitor: dict[str, Any]) -> dict[str, Any]:
+async def check_ping_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Optional[str]]:
     start = time.perf_counter()
     system = platform.system().lower()
     timeout = int(monitor["timeout"])
@@ -99,13 +108,7 @@ async def check_ping_target(monitor: dict[str, Any]) -> dict[str, Any]:
         status = "down"
         error_message = f"Ping error: {exc}"
 
-    return await asyncio.to_thread(
-        log_check_result,
-        monitor["id"],
-        status,
-        response_time,
-        error_message,
-    )
+    return status, response_time, error_message
 
 
 def _extract_ping_error(stdout: bytes, stderr: bytes) -> str:
@@ -157,7 +160,7 @@ def format_timestamp_for_notification(timestamp: str, timezone_name: str) -> str
         zone = ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
         zone = ZoneInfo("UTC")
-    return dt.astimezone(zone).strftime("%Y-%m-%d %H:%M:%S %Z")
+    return dt.astimezone(zone).strftime("%d.%m.%Y %H:%M:%S %Z")
 
 
 def build_notification_message(

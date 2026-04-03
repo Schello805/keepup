@@ -48,159 +48,151 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" class="monitor-card card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel transition">
-                    <div class="flex items-start justify-between gap-3">
-                        <div class="min-w-0">
-                            <div class="mb-2 flex items-center gap-2">
-                                <span class="inline-flex h-3 w-3 rounded-full {% if status == 'paused' %}bg-slate-400{% elif status == 'up' %}bg-emerald-400{% elif status == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}"></span>
-                                <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor.type | upper }}</p>
+            <article data-monitor-status="{{ status }}" class="monitor-card perspective h-full min-h-[340px]">
+                <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d cursor-pointer">
+                    <!-- VORDERSEITE -->
+                    <div class="absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto" onclick="flipCard('card-inner-{{ monitor.id }}')">
+                        <div class="flex items-start justify-between gap-3 flex-shrink-0">
+                            <div class="min-w-0">
+                                <div class="mb-2 flex items-center gap-2">
+                                    <span class="inline-flex h-3 w-3 rounded-full {% if status == 'paused' %}bg-slate-400{% elif status == 'up' %}bg-emerald-400{% elif status == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}"></span>
+                                    <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor.type | upper }}</p>
+                                </div>
+                                <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
+                                <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
                             </div>
-                            <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
-                            <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
+                            <div class="flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
+                                <div class="flex items-center gap-2">
+                                    <form action="/monitors/{{ monitor.id }}/run" method="post">
+                                        <button type="submit" aria-label="Monitor jetzt prüfen" title="Jetzt prüfen" class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-slate-100 transition hover:bg-white/15">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/>
+                                            </svg>
+                                            <span class="sr-only">Jetzt prüfen</span>
+                                        </button>
+                                    </form>
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {% if status == 'paused' %}bg-slate-500/20 text-slate-200{% elif status == 'up' %}bg-emerald-500/20 text-emerald-200{% elif status == 'down' %}bg-rose-500/20 text-rose-200{% else %}bg-amber-500/20 text-amber-200{% endif %}">
+                                        {{ status }}
+                                    </span>
+                                </div>
+                                {% if status == 'down' %}
+                                <span class="text-[10px] whitespace-nowrap text-rose-300 opacity-80" title="Offline seit">seit {{ monitor.last_change_at or "-" }}</span>
+                                {% endif %}
+                            </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                            <form action="/monitors/{{ monitor.id }}/run" method="post">
-                                <button type="submit" aria-label="Monitor jetzt prüfen" title="Jetzt prüfen" class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-slate-100 transition hover:bg-white/15">
-                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/>
-                                    </svg>
-                                    <span class="sr-only">Jetzt prüfen</span>
+
+                        <div class="mt-4 grid grid-cols-2 gap-3 text-sm flex-shrink-0">
+                            <div class="rounded-2xl bg-slate-950/45 p-3">
+                                <p class="text-slate-400">Antwortzeit</p>
+                                <p class="mt-1 text-lg font-semibold">
+                                    {% if monitor.last_response_time %}
+                                        {{ "%.0f"|format(monitor.last_response_time) }} ms
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="rounded-2xl bg-slate-950/45 p-3">
+                                <p class="text-slate-400">Uptime</p>
+                                <p class="mt-1 text-lg font-semibold">
+                                    {% if monitor.uptime_percentage is not none %}
+                                        {{ monitor.uptime_percentage }} %
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 flex-shrink-0">
+                            <div class="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
+                                <span>Letzte {{ monitor.history|length }} Checks</span>
+                                <span>{{ monitor.interval }}s Intervall</span>
+                            </div>
+                            <div class="flex items-end gap-1">
+                                {% if monitor.history %}
+                                    {% for item in monitor.history %}
+                                        <span class="uptime-bar {% if item == 'up' %}bg-emerald-400{% elif item == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}" title="{{ item }}"></span>
+                                    {% endfor %}
+                                {% else %}
+                                    <p class="text-sm text-slate-500">Noch keine Historie vorhanden.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mt-auto pt-4 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
+                            <form action="/monitors/{{ monitor.id }}/toggle" method="post">
+                                <button type="submit" aria-label="{% if monitor.enabled %}Monitor pausieren{% else %}Monitor fortsetzen{% endif %}" title="{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl {% if monitor.enabled %}bg-amber-500/15 text-amber-100 hover:bg-amber-500/25{% else %}bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25{% endif %} transition cursor-pointer">
+                                    {% if monitor.enabled %}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm10 0a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/></svg>
+                                    {% else %}
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 6.5c0-1.1 1.2-1.78 2.14-1.2l7.2 4.5c.9.56.9 1.84 0 2.4l-7.2 4.5A1.41 1.41 0 0 1 8.5 15.5v-9Z"/></svg>
+                                    {% endif %}
+                                    <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
                                 </button>
                             </form>
-                            <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {% if status == 'paused' %}bg-slate-500/20 text-slate-200{% elif status == 'up' %}bg-emerald-500/20 text-emerald-200{% elif status == 'down' %}bg-rose-500/20 text-rose-200{% else %}bg-amber-500/20 text-amber-200{% endif %}">
-                                {{ status }}
-                            </span>
-                        </div>
-                    </div>
-
-                    <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
-                        <div class="rounded-2xl bg-slate-950/45 p-3">
-                            <p class="text-slate-400">Antwortzeit</p>
-                            <p class="mt-1 text-lg font-semibold">
-                                {% if monitor.last_response_time %}
-                                    {{ "%.0f"|format(monitor.last_response_time) }} ms
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </p>
-                        </div>
-                        <div class="rounded-2xl bg-slate-950/45 p-3">
-                            <p class="text-slate-400">Uptime</p>
-                            <p class="mt-1 text-lg font-semibold">
-                                {% if monitor.uptime_percentage is not none %}
-                                    {{ monitor.uptime_percentage }} %
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="mt-4">
-                        <div class="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
-                            <span>Letzte {{ monitor.history|length }} Checks</span>
-                            <span>{{ monitor.interval }}s Intervall</span>
-                        </div>
-                        <div class="flex items-end gap-1">
-                            {% if monitor.history %}
-                                {% for item in monitor.history %}
-                                    <span class="uptime-bar {% if item == 'up' %}bg-emerald-400{% elif item == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}" title="{{ item }}"></span>
-                                {% endfor %}
-                            {% else %}
-                                <p class="text-sm text-slate-500">Noch keine Historie vorhanden.</p>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="mt-4 flex flex-wrap gap-2">
-                        <form action="/monitors/{{ monitor.id }}/toggle" method="post">
-                            <button type="submit" aria-label="{% if monitor.enabled %}Monitor pausieren{% else %}Monitor fortsetzen{% endif %}" title="{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl {% if monitor.enabled %}bg-amber-500/15 text-amber-100 hover:bg-amber-500/25{% else %}bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25{% endif %} transition">
-                                {% if monitor.enabled %}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm10 0a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/>
-                                </svg>
-                                {% else %}
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M8.5 6.5c0-1.1 1.2-1.78 2.14-1.2l7.2 4.5c.9.56.9 1.84 0 2.4l-7.2 4.5A1.41 1.41 0 0 1 8.5 15.5v-9Z"/>
-                                </svg>
-                                {% endif %}
-                                <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
+                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
+                                <span class="sr-only">Bearbeiten</span>
                             </button>
-                        </form>
-                        <button
-                            type="button"
-                            aria-label="Monitor bearbeiten"
-                            title="Bearbeiten"
-                            data-monitor-id="{{ monitor.id }}"
-                            data-monitor-name="{{ monitor.name }}"
-                            data-monitor-type="{{ monitor.type }}"
-                            data-monitor-target="{{ monitor.target }}"
-                            data-monitor-interval="{{ monitor.interval }}"
-                            data-monitor-timeout="{{ monitor.timeout }}"
-                            onclick="openEditPanel(this)"
-                            class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/>
-                            </svg>
-                            <span class="sr-only">Bearbeiten</span>
-                        </button>
-                        <button type="button" onclick="toggleDetails('details-{{ monitor.id }}')" aria-label="Monitor-Details anzeigen" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-slate-100 transition hover:bg-white/15">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/>
-                                <circle cx="12" cy="12" r="3"/>
-                            </svg>
-                            <span class="sr-only">Details</span>
-                        </button>
-                        <form action="/monitors/{{ monitor.id }}/delete" method="post" onsubmit="return confirm('Monitor wirklich löschen?');">
-                            <button type="submit" aria-label="Monitor löschen" title="Löschen" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-7 4v8m6-8v8M6 6l1 14h10l1-14"/>
-                                </svg>
-                                <span class="sr-only">Löschen</span>
-                            </button>
-                        </form>
+                            <form action="/monitors/{{ monitor.id }}/delete" method="post" onsubmit="return confirm('Monitor wirklich löschen?');" class="ml-auto">
+                                <button type="submit" aria-label="Monitor löschen" title="Löschen" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 cursor-pointer">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-7 4v8m6-8v8M6 6l1 14h10l1-14"/></svg>
+                                    <span class="sr-only">Löschen</span>
+                                </button>
+                            </form>
+                        </div>
                     </div>
 
-                    <div id="details-{{ monitor.id }}" class="hidden">
-                        <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/55 p-4">
-                            <dl class="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                                <div>
-                                    <dt class="text-slate-500">Letzter Check</dt>
-                                    <dd class="mt-1">{{ monitor.last_checked_at or "-" }}</dd>
+                    <!-- RÜCKSEITE -->
+                    <div class="absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden rotate-y-180 flex flex-col text-sm cursor-pointer pointer-events-auto" onclick="flipCard('card-inner-{{ monitor.id }}')">
+                        <div class="flex items-center justify-between mb-4 flex-shrink-0">
+                            <h3 class="font-semibold text-lg text-slate-100">Details & Logs</h3>
+                        </div>
+                        <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
+                            <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                                    <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Check</dt>
+                                    <dd class="mt-1 font-medium">{{ monitor.last_checked_at or "-" }}</dd>
                                 </div>
-                                <div>
-                                    <dt class="text-slate-500">Letzter Statuswechsel</dt>
-                                    <dd class="mt-1">{{ monitor.last_change_at or "-" }}</dd>
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                                    <dt class="text-slate-500 text-xs uppercase tracking-wide">Statuswechsel</dt>
+                                    <dd class="mt-1 font-medium">{{ monitor.last_change_at or "-" }}</dd>
                                 </div>
                             </dl>
-
-                            <details class="mt-4 rounded-2xl border border-white/10 bg-white/5 p-3">
-                                <summary class="cursor-pointer text-sm font-semibold">Technische Fehlerlogs</summary>
-                                <div class="mt-3 space-y-3 text-sm">
+                            {% if monitor.chart_data_json and monitor.chart_data_json != "[]" %}
+                            <div class="mb-2">
+                                <h4 class="font-medium text-slate-300 mb-2">Antwortzeiten (letzte Checks)</h4>
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-2 apex-chart-container h-36 w-full" data-chart-series='{{ monitor.chart_data_json }}' data-monitor-type='{{ monitor.type }}' id="chart-{{ monitor.id }}"></div>
+                            </div>
+                            {% endif %}
+                            
+                            <div>
+                                <h4 class="font-medium text-slate-300 mb-2">Technische Fehlerlogs</h4>
+                                <div class="space-y-3">
                                     {% if monitor.logs %}
                                         {% for log in monitor.logs %}
-                                        <div class="rounded-2xl border border-white/10 bg-slate-950/60 p-3">
-                                            <div class="flex items-center justify-between gap-3">
-                                                <span class="uppercase tracking-wide text-slate-500">{{ log.status }}</span>
+                                        <div class="rounded-2xl border border-white/5 bg-slate-950/60 p-3">
+                                            <div class="flex items-center justify-between gap-3 mb-1">
+                                                <span class="uppercase tracking-wide text-[10px] font-semibold text-slate-400">{{ log.status }}</span>
                                                 <span class="text-xs text-slate-500">{{ log.checked_at }}</span>
                                             </div>
-                                            <p class="mt-2 break-words text-slate-300">{{ log.error_msg or "Kein Fehlertext" }}</p>
+                                            <p class="break-words text-slate-300">{{ log.error_msg or "Kein Fehlertext" }}</p>
                                         </div>
                                         {% endfor %}
                                     {% else %}
-                                        <p class="text-slate-500">Keine Fehlerprotokolle vorhanden.</p>
+                                        <p class="text-slate-500 italic">Keine Fehlerprotokolle vorhanden.</p>
                                     {% endif %}
                                 </div>
-                            </details>
-
+                            </div>
                             {% if monitor.last_error %}
-                            <div class="mt-4 rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-sm text-rose-100">
+                            <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-rose-100">
                                 {{ monitor.last_error }}
                             </div>
                             {% endif %}
                         </div>
                     </div>
+                </div>
             </article>
             {% else %}
             <div class="rounded-3xl border border-dashed border-white/15 bg-white/5 p-6 text-center text-slate-400 md:col-span-2 xl:col-span-3">
@@ -209,6 +201,12 @@
             {% endfor %}
         </section>
     </section>
+    <script>
+        if (typeof restoreOpenDetails === 'function') {
+            applyStatusFilter();
+            restoreOpenDetails();
+        }
+    </script>
 {%- endmacro %}
 
 {% if not partial %}
@@ -221,6 +219,7 @@
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -280,6 +279,12 @@
             background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent 38%);
             pointer-events: none;
         }
+        .perspective { perspective: 1200px; }
+        .transform-style-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        .is-flipped { transform: rotateY(180deg); }
+        .scrollbar-thin { scrollbar-width: thin; }
     </style>
 </head>
 <body class="min-h-screen text-slate-100">
@@ -307,15 +312,15 @@
         {% endif %}
 {% endif %}
         {% if partial == "top" %}
-        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
+        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
         {% elif partial == "cards" %}
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="mt-5">
             {{ render_monitor_cards(monitors) }}
         </section>
         {% else %}
-        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
+        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
         <section class="mt-5">
@@ -395,7 +400,7 @@
                 </button>
             </form>
         </section>
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="mt-5">
             {{ render_monitor_cards(monitors) }}
         </section>
         {% endif %}
@@ -439,23 +444,23 @@
             });
         }
 
-        function toggleDetails(id) {
+        function flipCard(id) {
             const panel = document.getElementById(id);
             if (!panel) return;
-            panel.classList.toggle("hidden");
+            panel.classList.toggle("is-flipped");
             const openIds = new Set(getOpenDetails());
-            if (panel.classList.contains("hidden")) {
-                openIds.delete(id);
-            } else {
+            if (panel.classList.contains("is-flipped")) {
                 openIds.add(id);
+            } else {
+                openIds.delete(id);
             }
             setOpenDetails([...openIds]);
         }
 
         function restoreOpenDetails() {
             const openIds = getOpenDetails();
-            document.querySelectorAll("[id^='details-']").forEach((panel) => {
-                panel.classList.toggle("hidden", !openIds.includes(panel.id));
+            document.querySelectorAll("[id^='card-inner-']").forEach((inner) => {
+                inner.classList.toggle("is-flipped", openIds.includes(inner.id));
             });
         }
 
@@ -492,12 +497,69 @@
             }
         }
 
+        function renderCharts() {
+            if (typeof ApexCharts === 'undefined') return;
+            document.querySelectorAll('.apex-chart-container').forEach(el => {
+                if (el.dataset.chartRendered) return;
+                try {
+                    const data = JSON.parse(el.dataset.chartSeries || '[]');
+                    if (!data.length) return;
+                    const mType = el.dataset.monitorType || 'ping';
+                    const warnVal = mType === 'http' ? 300 : 60;
+                    const critVal = mType === 'http' ? 1000 : 200;
+                    const options = {
+                        series: [{ name: 'Latenz (ms)', data: data }],
+                        chart: { 
+                            type: 'area', 
+                            height: '100%', 
+                            sparkline: { enabled: false }, 
+                            background: 'transparent',
+                            animations: { enabled: false },
+                            toolbar: { show: false },
+                            zoom: { enabled: false }
+                        },
+                        dataLabels: { enabled: false },
+                        stroke: { curve: 'straight', width: 2 },
+                        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0, stops: [0, 100] } },
+                        colors: ['#38bdf8'],
+                        grid: { 
+                            show: true, 
+                            borderColor: 'rgba(255,255,255,0.08)', 
+                            strokeDashArray: 4, 
+                            padding: { top: 5, bottom: 15, left: 15, right: 5 } 
+                        },
+                        tooltip: { theme: 'dark', x: { format: 'HH:mm:ss' }, y: { formatter: (val) => val === null ? "offline" : val + " ms" } },
+                        yaxis: { 
+                            show: true, 
+                            min: 0, 
+                            tickAmount: 3, 
+                            labels: { style: { colors: '#64748b', fontSize: '10px' }, formatter: (val) => val.toFixed(0) + " ms" }
+                        },
+                        xaxis: { type: 'datetime', labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false }, crosshairs: { show: false } },
+                        annotations: {
+                            yaxis: [
+                                { y: warnVal, borderColor: '#f59e0b', strokeDashArray: 3, opacity: 0.5 },
+                                { y: critVal, borderColor: '#ef4444', strokeDashArray: 3, opacity: 0.5 }
+                            ]
+                        }
+                    };
+                    const chart = new ApexCharts(el, options);
+                    chart.render();
+                    el.dataset.chartRendered = 'true';
+                } catch (e) {
+                    console.error('Chart renderer error', e);
+                }
+            });
+        }
+
         window.setTimeout(dismissToast, 4200);
         applyStatusFilter();
         restoreOpenDetails();
+        renderCharts();
         document.body.addEventListener("htmx:afterSwap", () => {
             applyStatusFilter();
             restoreOpenDetails();
+            renderCharts();
         });
     </script>
 {% endif %}
