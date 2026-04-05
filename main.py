@@ -405,6 +405,17 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def render_template(request: Request, name: str, context: dict[str, Any]) -> HTMLResponse:
+    # Render templates via the Jinja2 environment directly to avoid
+    # passing the full request/context as "globals" to get_template()
+    # (which can trigger Jinja2 cache hashing errors for unhashable values).
+    if "request" not in context:
+        context = {**context, "request": request}
+    template = templates.env.get_template(name)
+    content = template.render(**context)
+    return HTMLResponse(content)
+
+
 @app.get("/health")
 async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
@@ -506,32 +517,32 @@ async def run_update(token: str = Form("")) -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", build_dashboard_context(request))
+    return render_template(request, "index.html", build_dashboard_context(request))
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("settings.html", build_settings_context(request))
+    return render_template(request, "settings.html", build_settings_context(request))
 
 
 @app.get("/incidents", response_class=HTMLResponse)
 async def incidents_page(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("incidents.html", build_incidents_context(request))
+    return render_template(request, "incidents.html", build_incidents_context(request))
 
 
 @app.get("/api/dashboard", response_class=HTMLResponse)
 async def dashboard_partial(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {**build_dashboard_context(request), "partial": True})
+    return render_template(request, "index.html", {**build_dashboard_context(request), "partial": True})
 
 
 @app.get("/api/live/top", response_class=HTMLResponse)
 async def live_top_partial(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {**build_dashboard_context(request), "partial": "top"})
+    return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "top"})
 
 
 @app.get("/api/live/cards", response_class=HTMLResponse)
 async def live_cards_partial(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("index.html", {**build_dashboard_context(request), "partial": "cards"})
+    return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "cards"})
 
 
 @app.get("/api/monitors")
