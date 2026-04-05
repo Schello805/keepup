@@ -36,6 +36,13 @@ fi
 echo "[keepup] Setting ownership of project files to $KEEPUP_USER..."
 run_as_root chown -R "$KEEPUP_USER":"$KEEPUP_USER" "$ROOT_DIR"
 
+echo "[keepup] Ensuring parent directory is accessible to $KEEPUP_USER..."
+PARENT_DIR="$(dirname "$ROOT_DIR")"
+if [ -d "$PARENT_DIR" ]; then
+  # Add execute permission for others on parent dir so keepup user can access subdirs
+  run_as_root chmod o+rx "$PARENT_DIR" || true
+fi
+
 echo "[keepup] Creating/updating systemd unit at $SERVICE_PATH"
 run_as_root tee "$SERVICE_PATH" > /dev/null <<EOF
 [Unit]

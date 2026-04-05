@@ -60,9 +60,13 @@ fi
 
 echo "[update] Running configuration checks and ensuring service is configured"
 if [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ]; then
-  sudo "$ROOT_DIR/scripts/check_and_configure.sh"
+  run_as_root "$ROOT_DIR/scripts/check_and_configure.sh"
 else
   echo "[update] Warning: check_and_configure.sh not found or not executable"
 fi
 
-echo "Update finished. If running via systemd: sudo systemctl status keepup.service"
+echo "[update] Restarting keepup service"
+run_as_root systemctl restart keepup.service || true
+
+echo "Update finished. Check status: systemctl status keepup.service"
+echo "View logs: journalctl -u keepup.service -f"
