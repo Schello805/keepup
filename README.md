@@ -112,3 +112,6 @@ Logs ansehen:
 ```bash
 journalctl -u keepup -f
 ```
+
+<img width="1249" height="656" alt="Bildschirmfoto 2026-04-05 um 12 50 06" src="https://github.com/user-attachments/assets/3a4668ed-3874-4f4e-b247-fd144e2ee606" />
+
