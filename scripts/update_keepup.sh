@@ -18,4 +18,11 @@ fi
 
 "$VENV_DIR/bin/python" -m py_compile "$ROOT_DIR/main.py" "$ROOT_DIR/database.py" "$ROOT_DIR/monitor.py"
 
-echo "Update finished. If running via systemd: sudo systemctl restart keepup"
+echo "[update] Running configuration checks and ensuring service is configured"
+if [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ]; then
+  sudo "$ROOT_DIR/scripts/check_and_configure.sh"
+else
+  echo "[update] Warning: check_and_configure.sh not found or not executable"
+fi
+
+echo "Update finished. If running via systemd: sudo systemctl status keepup.service"
