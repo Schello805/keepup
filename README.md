@@ -9,109 +9,107 @@ KeepUp ist eine leichtgewichtige, mobile-optimierte Self-Hosted-Monitoring-App m
 - SQLite als portable lokale Datenbank
 - Mobile-First-Dashboard mit Tailwind CSS per CDN und HTMX-Live-Updates
 - Separate Einstellungsseite für Telegram-, SMTP- und globale App-Einstellungen
-- Uptime-Historie als kompakte Balkenanzeige
-- Klappbare technische Fehlerlogs pro Monitor
-- Monitore direkt im Dashboard bearbeiten sowie pausieren/fortsetzen
-- Sofortiger Erst-Check nach dem Anlegen eines Monitors
-- Testversand für Telegram und SMTP direkt aus den Einstellungen
-- Zeitzonen-Auswahl für UI, Logs und Benachrichtigungen
-- Klickbare Summary-Karten mit Status-Filter für die Monitor-Ansicht
-- JSON-Export und JSON-Import für Migration und Backup
-- Telegram- und SMTP-Benachrichtigungen bei Down/Recovery
+# KeepUp
 
-## Projektstruktur
+KeepUp ist eine leichtgewichtige, mobile-optimierte Self-Hosted‑Monitoring‑App (lokale Nutzung) mit FastAPI, SQLite und APScheduler. Überwacht werden HTTP(S)‑Ziele sowie Hostnamen/IPs per Ping. Bei Statusänderungen können Telegram‑ und SMTP‑Benachrichtigungen verschickt werden.
 
-- `main.py`: FastAPI-App, Routen, UI-Rendering, Import/Export
-- `monitor.py`: Check-Logik, Scheduler-Registrierung, Notifications
-- `database.py`: SQLite-Schema, CRUD, Historie, Settings, Backup/Restore
-- `templates/index.html`: Mobile-optimiertes Dashboard via Jinja2 + Tailwind CDN
-- `templates/settings.html`: Separate Einstellungsseite für Benachrichtigungen
-- `templates/_shared.html`: Gemeinsamer Header für Dashboard und Einstellungen
-- `static/logo.png`: Logo und Favicon
-- `requirements.txt`: Pip-Abhängigkeiten
+## Wichtiger Hinweis
 
-## Installation
+Dieses Projekt ist für den lokalen Betrieb gedacht — es läuft also normalerweise nur auf einem einzelnen Host (z. B. einer LXC‑Instanz auf deinem Server). Die folgenden Schritte beschreiben, wie du es lokal installierst, als systemd‑Service betreibst und Updates automatisiert prüfst.
+
+## Projektstruktur (Kurz)
+
+- `main.py`: FastAPI‑App, Routen, UI‑Rendering
+- `monitor.py`: Check‑Logik, Scheduler, Notifications
+- `database.py`: SQLite‑Schema, CRUD, Backup/Restore
+- `templates/`, `static/`: UI‑Dateien
+- `scripts/`: Hilfs‑Skripte (`install_keepup.sh`, `update_keepup.sh`, `check_and_configure.sh`)
+
+## Lokale Entwicklung / Schneller Start
+
+1. Virtuelle Umgebung erstellen und aktivieren:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
-Danach ist die App unter [http://localhost:8000](http://localhost:8000) erreichbar.
-
-## Bedienung
-
-- Monitore können direkt im Dashboard angelegt, bearbeitet, pausiert, manuell geprüft oder gelöscht werden.
-- Der erste Check eines neuen Monitors läuft sofort nach dem Anlegen.
-- Die Summary-Karten im oberen Bereich filtern die darunterliegenden Monitor-Karten nach Status.
-- Detailansichten bleiben auch bei Live-Updates offen.
-- Telegram- und SMTP-Tests können auf der Einstellungsseite sofort ausgelöst werden.
-
-## Hinweise zu Checks
-
-- HTTP/S-Monitore erwarten eine Antwort kleiner als HTTP 400.
-- Ping-Monitore nutzen den lokalen `ping`-Befehl des Hosts.
-- Direkt nach dem Start werden alle aktiven Monitore einmal asynchron geprüft, danach übernimmt APScheduler die Intervalle.
-- Benachrichtigungen werden nur bei Statuswechseln versendet, nicht bei jedem einzelnen Check.
-
-## JSON-Backup und Migration
-
-- Auf der Einstellungsseite kann die komplette Konfiguration inklusive Monitore, Historie und Benachrichtigungseinstellungen als JSON exportiert werden.
-- Der Import ersetzt die bestehende Datenbank-Konfiguration vollständig und plant anschließend alle Jobs neu ein.
-
-## Entwicklung
-
-Syntax-Check:
+2. App lokal starten (nur lokal, Entwicklung):
 
 ```bash
-PYTHONPYCACHEPREFIX=/tmp/keepup-pyc python3 -m py_compile main.py database.py monitor.py
+uvicorn main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Lokaler Start für Entwicklung:
+Die Oberfläche ist dann unter `http://localhost:8000` erreichbar.
+
+## Automatisierte Installation (Debian LXC) — empfohlen
+
+Die im Repo enthaltenen Skripte automatisieren Einrichtung und Betrieb:
+
+- `scripts/install_keepup.sh` — Initialinstallation: legt System‑User `keepup` an, erstellt venv, installiert Abhängigkeiten, setzt Rechte und ruft die Konfig‑Prüfung auf.
+- `scripts/check_and_configure.sh` — Prüft/erstellt venv, installiert Abhängigkeiten, legt die `systemd`‑Unit `/etc/systemd/system/keepup.service` an/aktualisiert sie, aktiviert & startet den Service.
+- `scripts/update_keepup.sh` — Zieht ggf. Git‑Updates, installiert Abhängigkeiten und führt `check_and_configure.sh` aus.
+
+Beispiel: Erstinstallation (im Projektverzeichnis):
 
 ```bash
-./venv/bin/uvicorn main:app --host 127.0.0.1 --port 8123
+sudo ./scripts/install_keepup.sh
 ```
 
-## Start als Hintergrund-Prozess mit systemd
+Updates ausführen / prüfen:
 
-Beispiel für `/etc/systemd/system/keepup.service`:
-
-```ini
-[Unit]
-Description=KeepUp Monitoring Service
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=keepup
-Group=keepup
-WorkingDirectory=/opt/keepup
-ExecStart=/opt/keepup/.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
-
-[Install]
-WantedBy=multi-user.target
+```bash
+./scripts/update_keepup.sh
 ```
 
-Service aktivieren:
+## systemd Service
+
+Die Skripte legen eine systemd‑Unit `/etc/systemd/system/keepup.service` an. Die Unit startet `uvicorn` aus der Projekt‑`venv` als Benutzer `keepup`.
+
+Service managen:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now keepup
-sudo systemctl status keepup
+sudo systemctl enable --now keepup.service
+sudo systemctl status keepup.service
+sudo journalctl -u keepup.service -f
 ```
 
-Logs ansehen:
+Wenn du spezielle Umgebungsvariablen (z. B. `KEEPUP_UPDATE_TOKEN`) benötigst, kannst du sie in `scripts/check_and_configure.sh` in die Unit oder in eine `/etc/default/keepup`‑Datei einfügen.
+
+## Hinweise zur Konfiguration
+
+- Standardmäßig wird ein System‑User `keepup` angelegt und das Projektverzeichnis diesem User zugewiesen. Wenn du einen anderen Benutzer verwenden willst, passe `scripts/install_keepup.sh` / `scripts/check_and_configure.sh` entsprechend an.
+- Die Skripte verwenden `sudo` für Operationen, die Root‑Rechte benötigen (User anlegen, systemd‑Unit schreiben, service starten).
+
+## Lokaler Betrieb ohne systemd
+
+Wenn du nur temporär testen willst, kannst du `tmux` oder `nohup` verwenden:
 
 ```bash
-journalctl -u keepup -f
+# Mit tmux (empfohlen für interaktives Arbeiten)
+tmux new -s keepup
+# dann im tmux: source .venv/bin/activate && uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Mit nohup (einfacher Hintergrundprozess, kein Restart)
+nohup ./.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > keepup.log 2>&1 &
 ```
 
-<img width="1249" height="656" alt="Bildschirmfoto 2026-04-05 um 12 50 06" src="https://github.com/user-attachments/assets/3a4668ed-3874-4f4e-b247-fd144e2ee606" />
+## Update-/Rollback‑Hinweise
 
+- `./scripts/update_keepup.sh` führt nach Pull/Install eine Konfig‑Prüfung aus und versucht, den service/Setup zu korrigieren, falls nötig.
+- Backup vor größeren Änderungen: nutze den JSON‑Export in der UI oder sichere `keepup.db`.
+
+## Kurzer Troubleshooting‑Abschnitt
+
+- Service startet nicht: `sudo journalctl -u keepup.service -n 200` zeigt die letzten Logs.
+- Permission‑Fehler: stelle sicher, dass Dateien dem `keepup`‑User gehören (oder passe den User an).
+- Virtualenv fehlt/abhängigkeiten: `sudo ./scripts/check_and_configure.sh` nochmals ausführen.
+
+---
+
+Wenn du willst, passe ich die README noch an (z. B. Beispiel für `KEEPUP_UPDATE_TOKEN` in der Unit oder Hinweise für Reverse‑Proxy/nginx). 
+journalctl -u keepup -f
+
+```
