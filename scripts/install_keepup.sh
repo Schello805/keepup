@@ -40,4 +40,12 @@ run_as_root chown -R "$KEEPUP_USER":"$KEEPUP_USER" "$ROOT_DIR"
 echo "[install] Running configuration and service setup"
 run_as_root "$ROOT_DIR/scripts/check_and_configure.sh"
 
-echo "[install] Installation complete. Use: sudo journalctl -u keepup.service -f (or journalctl -u keepup.service -f as root)"
+echo "[install] Installation complete."
+echo ""
+
+# Show post-install info
+if [ -x "$ROOT_DIR/scripts/post_install_info.sh" ]; then
+  "$ROOT_DIR/scripts/post_install_info.sh"
+else
+  echo "[install] Warning: post_install_info.sh not found or not executable"
+fi
