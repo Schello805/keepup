@@ -70,11 +70,10 @@
                                     <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {{ status_pill_classes(status) }}">
                                         {{ status }}
                                     </span>
-                                    <button type="button" onclick="flipCard('card-inner-{{ monitor.id }}')" aria-label="Details anzeigen" title="Details" class="inline-flex h-10 items-center justify-center rounded-full bg-white/10 px-3 text-sm font-semibold text-slate-100 transition hover:bg-white/15">
-                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+                                    <button type="button" onclick="flipCard('card-inner-{{ monitor.id }}')" aria-label="Details anzeigen" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-slate-100 transition hover:bg-white/15">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 18l6-6-6-6" />
                                         </svg>
-                                        <span class="ml-2 hidden sm:inline">Details</span>
                                     </button>
                                 </div>
                                 {% if status == 'down' %}
