@@ -14,6 +14,29 @@ run_as_root() {
   fi
 }
 
+ensure_ping_capability() {
+  local ping_bin
+  ping_bin=$(command -v ping 2>/dev/null || true)
+  if [ -z "$ping_bin" ]; then
+    echo "[keepup] ping binary not found, skipping ping capability check."
+    return
+  fi
+
+  if command -v getcap >/dev/null 2>&1; then
+    if getcap "$ping_bin" | grep -q 'cap_net_raw\+p'; then
+      echo "[keepup] ping already has cap_net_raw+p capability."
+      return
+    fi
+  fi
+
+  echo "[keepup] Granting ping permission to use raw network sockets."
+  if command -v setcap >/dev/null 2>&1; then
+    run_as_root setcap cap_net_raw+p "$ping_bin" || true
+  else
+    run_as_root chmod u+s "$ping_bin" || true
+  fi
+}
+
 echo "[keepup] Checking virtualenv..."
 if [ ! -d "$VENV_DIR" ]; then
   echo "- virtualenv not found, creating..."
@@ -32,6 +55,8 @@ if ! id -u "$KEEPUP_USER" >/dev/null 2>&1; then
   echo "- user '$KEEPUP_USER' does not exist, creating system user"
   run_as_root useradd --system --no-create-home --shell /usr/sbin/nologin "$KEEPUP_USER" || true
 fi
+
+ensure_ping_capability
 
 echo "[keepup] Setting ownership of project files to $KEEPUP_USER..."
 run_as_root chown -R "$KEEPUP_USER":"$KEEPUP_USER" "$ROOT_DIR"

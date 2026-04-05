@@ -394,7 +394,7 @@ async def lifespan(app: FastAPI):
     )
     reschedule_monitor_jobs(scheduler)
     scheduler.start()
-    asyncio.create_task(run_all_checks_once())
+        await run_all_checks_once()
     yield
     scheduler.shutdown(wait=False)
     logger.info("shutdown")
