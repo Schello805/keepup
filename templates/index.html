@@ -44,10 +44,10 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" class="monitor-card perspective h-full min-h-[340px]">
-                <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d cursor-pointer">
+            <article data-monitor-status="{{ status }}" class="monitor-card perspective h-full min-h-[340px] touch-pan-y">
+                <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d">
                     <!-- VORDERSEITE -->
-                    <div class="absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto" onclick="flipCard('card-inner-{{ monitor.id }}')">
+                    <div class="absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
                             <div class="min-w-0">
                                 <div class="mb-2 flex items-center gap-2">
@@ -70,6 +70,12 @@
                                     <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {{ status_pill_classes(status) }}">
                                         {{ status }}
                                     </span>
+                                    <button type="button" onclick="flipCard('card-inner-{{ monitor.id }}')" aria-label="Details anzeigen" title="Details" class="inline-flex h-10 items-center justify-center rounded-full bg-white/10 px-3 text-sm font-semibold text-slate-100 transition hover:bg-white/15">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m7-7H5" />
+                                        </svg>
+                                        <span class="ml-2 hidden sm:inline">Details</span>
+                                    </button>
                                 </div>
                                 {% if status == 'down' %}
                                 <span class="text-[10px] whitespace-nowrap text-rose-300 opacity-80" title="Offline seit">seit {{ monitor.last_change_at or "-" }}</span>
@@ -141,9 +147,15 @@
                     </div>
 
                     <!-- RÜCKSEITE -->
-                    <div class="absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden rotate-y-180 flex flex-col text-sm cursor-pointer pointer-events-auto" onclick="flipCard('card-inner-{{ monitor.id }}')">
+                    <div class="absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden rotate-y-180 flex flex-col text-sm pointer-events-auto">
                         <div class="flex items-center justify-between mb-4 flex-shrink-0">
                             <h3 class="font-semibold text-lg text-slate-100">Details & Logs</h3>
+                            <button type="button" onclick="flipCard('card-inner-{{ monitor.id }}')" aria-label="Zurück zur Karte" title="Zurück" class="inline-flex h-10 items-center justify-center rounded-full bg-white/10 px-3 text-sm font-semibold text-slate-100 transition hover:bg-white/15">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6" />
+                                </svg>
+                                <span class="ml-2 hidden sm:inline">Zurück</span>
+                            </button>
                         </div>
                         <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
                             <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -298,6 +310,7 @@
         .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
         .rotate-y-180 { transform: rotateY(180deg); }
         .is-flipped { transform: rotateY(180deg); }
+        .touch-pan-y { touch-action: pan-y; }
         .scrollbar-thin { scrollbar-width: thin; }
     </style>
 </head>
@@ -307,15 +320,15 @@
         {{ render_page_header(summary.overall_status, active_page) }}
 {% endif %}
         {% if partial == "top" %}
-        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="space-y-5">
+        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
         {% elif partial == "cards" %}
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
             {{ render_monitor_cards(monitors) }}
         </section>
         {% else %}
-        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="space-y-5">
+        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
 
@@ -393,7 +406,7 @@
                 </button>
             </form>
         </section>
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
             {{ render_monitor_cards(monitors) }}
         </section>
         {% endif %}
