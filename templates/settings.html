@@ -171,6 +171,30 @@
                     <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Danach startet KeepUp die Checks für aktive Monitore erneut.</p>
                 {% endcall %}
 
+                {% call accordion_section('settings-help', 'Hilfe', 'Wie funktionieren Ping- und HTTP/S-Monitore und wann verwendet man sie?', False) %}
+                    <div class="space-y-4 text-sm text-slate-300">
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-100">Ping</h3>
+                            <p class="mt-2 text-slate-400">Ein Ping-Monitor prüft, ob ein Ziel im Netzwerk erreichbar ist, indem er ICMP-Pakete sendet. Er misst nur die Erreichbarkeit und Rundlaufzeit (Latenz), nicht aber Inhalte oder Webdienste.</p>
+                            <p class="mt-2 text-slate-300">Verwende Ping, wenn du Netzwerkknoten, Router, Switches, NAS-Geräte oder Hosts überwachen möchtest, bei denen eine Grundverbindung ausreicht.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-100">HTTP/S</h3>
+                            <p class="mt-2 text-slate-400">Ein HTTP/S-Monitor ruft eine URL auf und prüft, ob der Webdienst verfügbar ist. Zusätzlich lässt sich damit kontrollieren, ob der Webserver antwortet und ob die Seite korrekt erreichbar ist.</p>
+                            <p class="mt-2 text-slate-300">Verwende HTTP/S, wenn du Webseiten oder APIs überwachen möchtest, die über HTTP oder HTTPS erreichbar sind und nicht nur eine Netzwerkverbindung benötigen.</p>
+                        </div>
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-100">Wann nutze ich was?</h3>
+                            <ul class="mt-2 list-disc space-y-2 pl-5 text-slate-300">
+                                <li>Ping für allgemeine Netzwerkverfügbarkeit und Erreichbarkeit von Geräten.</li>
+                                <li>HTTP/S für Webserver, Web-Apps oder Dienste, bei denen ein funktionierender HTTP(S)-Endpunkt wichtig ist.</li>
+                                <li>Wenn ein Gerät nur reagiert, aber der Webservice nicht funktioniert, ist HTTP/S die bessere Wahl.</li>
+                                <li>Wenn ein Gerät keine Webschnittstelle hat oder du nur die Netzwerkverbindung prüfen willst, nimm Ping.</li>
+                            </ul>
+                        </div>
+                    </div>
+                {% endcall %}
+
                 <button type="submit" class="{{ btn_classes('primary') }} w-full">
                     Einstellungen speichern
                 </button>
