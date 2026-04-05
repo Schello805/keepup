@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import platform
 import smtplib
 import ssl
@@ -17,6 +18,7 @@ from database import get_monitor, get_settings, list_monitors, log_check_result
 
 
 HTTP_USER_AGENT = "KeepUp/1.0"
+logger = logging.getLogger("keepup.monitor")
 
 
 async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
@@ -25,6 +27,13 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
         return None
     if not monitor.get("enabled", 1):
         return None
+
+    logger.info(
+        "check_start monitor_id=%s type=%s target=%s",
+        monitor.get("id"),
+        monitor.get("type"),
+        monitor.get("target"),
+    )
 
     for attempt in range(3):
         if monitor["type"] == "http":
@@ -36,6 +45,13 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
             break
             
         if attempt < 2:
+            logger.warning(
+                "check_retry monitor_id=%s attempt=%s status=%s error=%s",
+                monitor.get("id"),
+                attempt + 1,
+                status,
+                (error_message or ""),
+            )
             await asyncio.sleep(10)
 
     result = await asyncio.to_thread(
@@ -47,7 +63,22 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
     )
 
     if result["status_changed"]:
+        logger.warning(
+            "status_change monitor_id=%s %s->%s response_time=%s error=%s",
+            monitor.get("id"),
+            result.get("previous_status"),
+            result.get("status"),
+            result.get("response_time"),
+            (result.get("error_msg") or ""),
+        )
         await send_status_change_notifications(monitor, result)
+    else:
+        logger.info(
+            "check_done monitor_id=%s status=%s response_time=%s",
+            monitor.get("id"),
+            result.get("status"),
+            result.get("response_time"),
+        )
 
     return result
 
@@ -129,7 +160,14 @@ async def send_status_change_notifications(monitor: dict[str, Any], result: dict
         tasks.append(asyncio.to_thread(send_email_notification, settings, monitor, result))
 
     if tasks:
-        await asyncio.gather(*tasks, return_exceptions=True)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for res in results:
+            if isinstance(res, Exception):
+                logger.error(
+                    "notification_error monitor_id=%s error=%s",
+                    monitor.get("id"),
+                    str(res),
+                )
 
 
 def build_test_notification_payload(channel: str) -> tuple[dict[str, Any], dict[str, Any]]:

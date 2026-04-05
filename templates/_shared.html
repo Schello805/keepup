@@ -3,6 +3,9 @@
         <a href="/" class="tap-target inline-flex items-center justify-center rounded-2xl px-4 text-sm font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
             Dashboard
         </a>
+        <a href="/incidents" class="tap-target inline-flex items-center justify-center rounded-2xl px-4 text-sm font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+            Incidents
+        </a>
         <a href="/settings" class="tap-target inline-flex items-center justify-center rounded-2xl px-4 text-sm font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
             Einstellungen
         </a>
@@ -10,19 +13,236 @@
 {%- endmacro %}
 
 {% macro render_page_header(title, active_page) -%}
-    <header class="rounded-3xl border border-white/10 bg-slate-950/85 px-4 py-3 backdrop-blur">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <div class="flex items-center gap-4">
-                <img src="/static/logo.png" alt="KeepUp Logo" class="h-16 w-16 rounded-2xl border border-white/10 bg-white/5 object-cover p-1.5 shadow-panel">
-                <div>
-                    <p class="text-xs uppercase tracking-[0.28em] text-sky-300/80">KeepUp Monitor</p>
-                    <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
+    <div class="sticky top-0 z-40 -mt-4 bg-gradient-to-b from-keepup-bg via-keepup-bg to-transparent pb-4">
+        <header class="rounded-3xl border border-white/10 bg-slate-950 px-4 py-3 shadow-panel">
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex items-center gap-4">
+                    <img src="/static/logo.png" alt="KeepUp Logo" class="h-16 w-16 rounded-2xl border border-white/10 bg-white/5 object-cover p-1.5 shadow-panel">
+                    <div>
+                        <p class="text-xs uppercase tracking-[0.28em] text-sky-300/80">KeepUp Monitor</p>
+                        <h1 class="text-2xl font-semibold tracking-tight">{{ title }}</h1>
+                    </div>
+                </div>
+
+                <div class="relative lg:ml-6">
+                    <div class="flex flex-wrap items-center gap-2">
+                        {{ render_nav(active_page) }}
+                        <button id="update-pill" type="button" class="hidden tap-target inline-flex items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">
+                            <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
+                            Update
+                        </button>
+                    </div>
+
+                    <div id="update-popover" class="hidden absolute right-0 mt-2 w-[min(28rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-4 shadow-panel">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-semibold text-slate-100">Update verfügbar</p>
+                                <p id="update-banner-text" class="mt-1 text-sm text-slate-300">Es gibt eine neuere Version auf GitHub.</p>
+                            </div>
+                            <button id="update-close" type="button" class="tap-target inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10" aria-label="Update Hinweis schließen">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form id="update-form" class="hidden mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <input id="update-token" type="password" placeholder="Update-Token" autocomplete="off" class="h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none transition focus:border-sky-400">
+                            <button id="update-run" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Update starten</button>
+                        </form>
+                    </div>
                 </div>
             </div>
+        </header>
 
-            <div class="lg:ml-6">
-                {{ render_nav(active_page) }}
+        <script>
+            (function () {
+                async function loadUpdateStatus() {
+                    try {
+                        const res = await fetch('/api/update/status', { cache: 'no-store' });
+                        if (!res.ok) return;
+                        const data = await res.json();
+                        if (!data || !data.update_available) return;
+
+                        const pill = document.getElementById('update-pill');
+                        const popover = document.getElementById('update-popover');
+                        const closeBtn = document.getElementById('update-close');
+                        const text = document.getElementById('update-banner-text');
+                        const form = document.getElementById('update-form');
+                        if (!pill || !popover || !text || !closeBtn) return;
+
+                        pill.classList.remove('hidden');
+                        const current = data.current_version ? `v${data.current_version}` : 'lokal';
+                        const remote = data.remote_sha_short ? data.remote_sha_short : 'GitHub';
+                        text.textContent = `Deine Version: ${current}. Neues Update: ${remote}.`;
+
+                        const hidePopover = () => popover.classList.add('hidden');
+                        const togglePopover = () => popover.classList.toggle('hidden');
+                        pill.addEventListener('click', togglePopover);
+                        closeBtn.addEventListener('click', hidePopover);
+                        document.addEventListener('click', (evt) => {
+                            const target = evt.target;
+                            if (!target) return;
+                            if (popover.contains(target) || pill.contains(target)) return;
+                            hidePopover();
+                        });
+
+                        if (data.update_enabled && form) {
+                            form.classList.remove('hidden');
+                            const runBtn = document.getElementById('update-run');
+                            const tokenInput = document.getElementById('update-token');
+                            if (runBtn) {
+                                runBtn.addEventListener('click', async () => {
+                                    const token = tokenInput ? tokenInput.value : '';
+                                    runBtn.disabled = true;
+                                    runBtn.textContent = 'Update läuft…';
+                                    try {
+                                        const runRes = await fetch('/api/update/run', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                                            body: new URLSearchParams({ token }),
+                                        });
+                                        if (!runRes.ok) {
+                                            const msg = await runRes.text();
+                                            runBtn.textContent = 'Fehlgeschlagen';
+                                            text.textContent = msg || 'Update fehlgeschlagen.';
+                                            return;
+                                        }
+                                        runBtn.textContent = 'Fertig – lade neu…';
+                                        window.setTimeout(() => window.location.reload(), 1200);
+                                    } catch (e) {
+                                        runBtn.textContent = 'Fehlgeschlagen';
+                                    } finally {
+                                        window.setTimeout(() => {
+                                            runBtn.disabled = false;
+                                            runBtn.textContent = 'Update starten';
+                                        }, 2500);
+                                    }
+                                }, { once: true });
+                            }
+                        }
+                    } catch (e) {
+                        return;
+                    }
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', loadUpdateStatus);
+                } else {
+                    loadUpdateStatus();
+                }
+            })();
+        </script>
+    </div>
+{%- endmacro %}
+
+{% macro btn_classes(variant) -%}
+    {%- if variant == 'primary' -%}
+        tap-target inline-flex items-center justify-center rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400
+    {%- elif variant == 'soft' -%}
+        tap-target inline-flex items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20
+    {%- elif variant == 'ghost' -%}
+        tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold transition hover:bg-white/10
+    {%- else -%}
+        tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold transition hover:bg-white/10
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro panel_classes() -%}
+    rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel
+{%- endmacro %}
+
+{% macro status_dot_classes(status) -%}
+    {%- if status == 'paused' -%}
+        bg-slate-400
+    {%- elif status == 'up' -%}
+        bg-emerald-400
+    {%- elif status == 'down' -%}
+        bg-rose-400
+    {%- else -%}
+        bg-amber-400
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro status_pill_classes(status) -%}
+    {%- if status == 'paused' -%}
+        bg-slate-500/20 text-slate-200
+    {%- elif status == 'up' -%}
+        bg-emerald-500/20 text-emerald-200
+    {%- elif status == 'down' -%}
+        bg-rose-500/20 text-rose-200
+    {%- else -%}
+        bg-amber-500/20 text-amber-200
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro input_classes() -%}
+    h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400
+{%- endmacro %}
+
+{% macro select_classes() -%}
+    h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400
+{%- endmacro %}
+
+{% macro checkbox_classes(size) -%}
+    {%- if size == 'sm' -%}
+        h-4 w-4 rounded border-white/20 bg-transparent text-sky-400
+    {%- else -%}
+        h-5 w-5 rounded border-white/20 bg-transparent text-sky-400
+    {%- endif -%}
+{%- endmacro %}
+
+{% macro render_toast(toast) -%}
+    {% if toast %}
+    {% set toast_styles = {
+        "success": "border-emerald-400/30 bg-emerald-500/15 text-emerald-50",
+        "info": "border-sky-400/30 bg-sky-500/15 text-sky-50",
+        "warning": "border-amber-400/30 bg-amber-500/15 text-amber-50",
+        "error": "border-rose-400/30 bg-rose-500/15 text-rose-50"
+    } %}
+    <div id="toast" class="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-2xl border px-4 py-3 shadow-panel backdrop-blur transition duration-300 {{ toast_styles.get(toast.tone, toast_styles['success']) }}">
+        <div class="flex items-start justify-between gap-3">
+            <div>
+                <p class="text-sm font-semibold">Status-Update</p>
+                <p class="mt-1 text-sm/6 text-current/90">{{ toast.message }}</p>
             </div>
+            <button type="button" onclick="dismissToast()" class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-current/80 transition hover:bg-white/10" aria-label="Meldung schliessen">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                </svg>
+            </button>
         </div>
-    </header>
+    </div>
+    {% endif %}
+{%- endmacro %}
+
+{% macro accordion_section(section_id, title, subtitle, open) -%}
+    <details id="{{ section_id }}" class="group rounded-3xl border border-white/10 bg-keepup-panel/90 shadow-panel" {% if open %}open{% endif %}>
+        <summary class="tap-target flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4">
+            <div>
+                <h3 class="text-lg font-semibold">{{ title }}</h3>
+                {% if subtitle %}<p class="mt-1 text-sm text-slate-400">{{ subtitle }}</p>{% endif %}
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-slate-400 transition group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/>
+            </svg>
+        </summary>
+        <div class="px-5 pb-5 pt-0">
+            {{ caller() }}
+        </div>
+    </details>
+{%- endmacro %}
+
+{% macro render_footer(repo_url, version) -%}
+    <footer class="mt-10 border-t border-white/10 pb-10 pt-6 text-sm text-slate-400">
+        <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+            <p class="text-xs">Self-hosted Monitoring mit KeepUp{% if version %} <span class="text-slate-500">v{{ version }}</span>{% endif %}</p>
+            <a href="{{ repo_url }}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-4 w-4" fill="currentColor" aria-hidden="true">
+                    <path d="M12 .5C5.73.5.75 5.62.75 12c0 5.1 3.29 9.43 7.86 10.96.58.11.8-.26.8-.57v-2.2c-3.2.7-3.88-1.6-3.88-1.6-.52-1.37-1.27-1.74-1.27-1.74-1.04-.73.08-.72.08-.72 1.15.08 1.75 1.2 1.75 1.2 1.02 1.79 2.68 1.27 3.33.97.1-.76.4-1.27.72-1.56-2.55-.3-5.23-1.32-5.23-5.86 0-1.29.44-2.35 1.17-3.18-.12-.3-.51-1.53.11-3.18 0 0 .95-.31 3.11 1.22a10.38 10.38 0 0 1 2.83-.39c.96 0 1.93.13 2.83.39 2.16-1.53 3.11-1.22 3.11-1.22.62 1.65.23 2.88.11 3.18.73.83 1.17 1.89 1.17 3.18 0 4.55-2.69 5.56-5.25 5.86.41.37.78 1.08.78 2.18v3.23c0 .31.21.69.8.57A11.3 11.3 0 0 0 23.25 12C23.25 5.62 18.27.5 12 .5Z"/>
+                </svg>
+                GitHub Repository
+            </a>
+        </div>
+    </footer>
 {%- endmacro %}

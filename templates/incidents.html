@@ -1,0 +1,168 @@
+{% from "_shared.html" import render_page_header, btn_classes, select_classes, render_toast, render_footer %}
+
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ settings.app_name }} Incidents</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ["ui-sans-serif", "system-ui", "sans-serif"],
+                    },
+                    colors: {
+                        keepup: {
+                            bg: "#07111f",
+                            panel: "#111c31",
+                            panelAlt: "#16253f",
+                            accent: "#38bdf8",
+                        }
+                    },
+                    boxShadow: {
+                        panel: "0 18px 40px rgba(7, 17, 31, 0.28)",
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        :root { color-scheme: dark; }
+        html {
+            overflow-y: scroll;
+            scrollbar-gutter: stable;
+        }
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 30%),
+                radial-gradient(circle at top right, rgba(34,197,94,0.12), transparent 26%),
+                linear-gradient(180deg, #07111f 0%, #0b1424 45%, #09111d 100%);
+        }
+        .tap-target { min-width: 44px; min-height: 44px; }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100">
+    <main class="mx-auto max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+        {{ render_toast(toast) }}
+        {{ render_page_header("Incidents", active_page) }}
+
+        <section class="mt-5 grid grid-cols-1 gap-5">
+            <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
+                <h2 class="text-lg font-semibold">Timeline</h2>
+                <p class="mt-1 text-sm text-slate-400">Hier siehst du Statuswechsel als Incident-Feed. Ein Incident startet bei <span class="font-semibold text-rose-200">up → down</span> und endet bei <span class="font-semibold text-emerald-200">down → up</span>.</p>
+            </div>
+
+            <form method="get" action="/incidents" class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel">
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
+                    <label class="space-y-2">
+                        <span class="text-sm text-slate-300">Monitor</span>
+                        <select name="monitor_id" class="{{ select_classes() }}">
+                            <option value="">Alle Monitore</option>
+                            {% for monitor in monitors %}
+                            <option value="{{ monitor.id }}" {% if filters.monitor_id == monitor.id %}selected{% endif %}>{{ monitor.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+
+                    <label class="space-y-2">
+                        <span class="text-sm text-slate-300">Status</span>
+                        <select name="status" class="{{ select_classes() }}">
+                            <option value="all" {% if filters.status == 'all' %}selected{% endif %}>Alle</option>
+                            <option value="open" {% if filters.status == 'open' %}selected{% endif %}>Offen</option>
+                            <option value="closed" {% if filters.status == 'closed' %}selected{% endif %}>Geschlossen</option>
+                        </select>
+                    </label>
+
+                    <label class="space-y-2">
+                        <span class="text-sm text-slate-300">Zeitraum</span>
+                        <select name="days" class="{{ select_classes() }}">
+                            <option value="1" {% if filters.days == 1 %}selected{% endif %}>Letzte 24h</option>
+                            <option value="7" {% if filters.days == 7 %}selected{% endif %}>Letzte 7 Tage</option>
+                            <option value="30" {% if filters.days == 30 %}selected{% endif %}>Letzte 30 Tage</option>
+                            <option value="all" {% if filters.days is none %}selected{% endif %}>Alle</option>
+                        </select>
+                    </label>
+
+                    <div class="flex items-end">
+                        <button type="submit" class="{{ btn_classes('primary') }} w-full">Filtern</button>
+                    </div>
+                </div>
+            </form>
+
+            <section class="space-y-3">
+                {% if feed_items %}
+                    {% for item in feed_items %}
+                    {% set is_selected = (selected_item and selected_item.item_id == item.item_id) %}
+                    {% set dot = 'bg-sky-400' if item.kind == 'created' else ('bg-rose-400' if item.is_open else 'bg-emerald-400') %}
+                    {% set border = 'border-sky-400/20 bg-sky-500/10' if item.kind == 'created' else ('border-rose-400/30 bg-rose-500/10' if item.is_open else 'border-emerald-400/20 bg-emerald-500/10') %}
+                    <details class="group rounded-3xl border {{ border }} p-5 shadow-panel" {% if is_selected %}open{% endif %}>
+                        <summary class="tap-target flex cursor-pointer list-none items-start justify-between gap-4">
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-3">
+                                    <span class="inline-flex h-3 w-3 rounded-full {{ dot }}"></span>
+                                    <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ item.monitor_type | upper }}</p>
+                                    <p class="truncate font-semibold">{{ item.monitor_name }}</p>
+                                    {% if item.kind == 'created' %}
+                                    <span class="rounded-xl border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-sky-100">Erstellt</span>
+                                    {% elif item.is_open %}
+                                    <span class="rounded-xl border border-rose-400/20 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-rose-100">Offen</span>
+                                    {% else %}
+                                    <span class="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-100">Geschlossen</span>
+                                    {% endif %}
+                                </div>
+                                <p class="mt-1 text-xs text-slate-400">{{ item.timestamp_display or '-' }}</p>
+                                <p class="mt-2 break-all text-sm text-slate-300">{{ item.monitor_target }}</p>
+                                {% if item.kind == 'created' %}
+                                <p class="mt-2 text-sm text-slate-300">Monitor erstellt</p>
+                                {% elif item.incident and item.incident.start_error_msg %}
+                                <p class="mt-2 text-sm text-slate-300 break-words">{{ item.incident.start_error_msg }}</p>
+                                {% endif %}
+                            </div>
+                            <a href="{{ item.select_url }}" class="shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">Link</a>
+                        </summary>
+
+                        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                            {% if item.kind == 'created' %}
+                                <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Info</p>
+                                    <p class="mt-2 text-sm text-slate-300">Monitor wurde erstellt und wird beim nächsten Run automatisch geprüft.</p>
+                                </div>
+                            {% else %}
+                                {% set incident = item.incident %}
+                                {% set is_open = (incident and incident.ended_at is none) %}
+                                <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Start</p>
+                                    <p class="mt-1 text-sm text-slate-100">{{ incident.started_at_display or '-' }}</p>
+                                    {% if incident.start_error_msg %}
+                                    <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.start_error_msg }}</p>
+                                    {% endif %}
+                                </div>
+
+                                <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Ende</p>
+                                    <p class="mt-1 text-sm text-slate-100">{{ incident.ended_at_display or ("Noch offen" if is_open else '-') }}</p>
+                                    {% if incident.end_error_msg %}
+                                    <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.end_error_msg }}</p>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        </div>
+                    </details>
+                    {% endfor %}
+                {% else %}
+                    <div class="rounded-3xl border border-dashed border-white/15 bg-white/5 p-6 text-center text-slate-400">
+                        Keine Einträge für diesen Filter.
+                    </div>
+                {% endif %}
+            </section>
+        </section>
+    </main>
+
+    {{ render_footer("https://github.com/Schello805/keepup", app_version) }}
+</body>
+</html>

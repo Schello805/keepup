@@ -1,4 +1,4 @@
-{% from "_shared.html" import render_page_header %}
+{% from "_shared.html" import render_page_header, btn_classes, input_classes, select_classes, checkbox_classes, render_toast, accordion_section, render_footer %}
 
 <!DOCTYPE html>
 <html lang="de" class="dark">
@@ -48,158 +48,130 @@
 </head>
 <body class="min-h-screen text-slate-100">
     <main class="mx-auto max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-        {% if toast %}
-        {% set toast_styles = {
-            "success": "border-emerald-400/30 bg-emerald-500/15 text-emerald-50",
-            "info": "border-sky-400/30 bg-sky-500/15 text-sky-50",
-            "warning": "border-amber-400/30 bg-amber-500/15 text-amber-50",
-            "error": "border-rose-400/30 bg-rose-500/15 text-rose-50"
-        } %}
-        <div id="toast" class="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-2xl border px-4 py-3 shadow-panel backdrop-blur transition duration-300 {{ toast_styles.get(toast.tone, toast_styles['success']) }}">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <p class="text-sm font-semibold">Status-Update</p>
-                    <p class="mt-1 text-sm/6 text-current/90">{{ toast.message }}</p>
-                </div>
-                <button type="button" onclick="dismissToast()" class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-current/80 transition hover:bg-white/10" aria-label="Meldung schliessen">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-        {% endif %}
+        {{ render_toast(toast) }}
         {{ render_page_header("Einstellungen", active_page) }}
 
         <section class="mt-5 grid grid-cols-1 gap-5">
             <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
-                <h2 class="text-lg font-semibold">Benachrichtigungen</h2>
-                <p class="mt-1 text-sm text-slate-400">Telegram und SMTP werden nur bei Statusänderungen ausgelöst. Diese Seite wird nicht live neu geladen, damit du Eingaben in Ruhe bearbeiten kannst.</p>
-                <p class="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">Benachrichtigungen werden nur versendet, wenn sich der Status eines Monitors ändert, zum Beispiel von <span class="font-semibold text-rose-200">down</span> auf <span class="font-semibold text-emerald-200">up</span> oder umgekehrt. Wiederholte Checks mit demselben Status senden keine neue Meldung.</p>
+                <h2 class="text-lg font-semibold">Benachrichtigungen & Konfiguration</h2>
+                <p class="mt-1 text-sm text-slate-400">Hier konfigurierst du Zeitzone und Benachrichtigungskanäle (Telegram / SMTP). Die Seite lädt nicht live neu, damit Eingaben nicht unterbrochen werden.</p>
+                <p class="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">Benachrichtigungen werden nur versendet, wenn sich der Status eines Monitors ändert, zum Beispiel von <span class="font-semibold text-rose-200">down</span> auf <span class="font-semibold text-emerald-200">up</span> oder umgekehrt.</p>
             </div>
 
-            <form action="/settings/notifications" method="post" class="space-y-5" autocomplete="off" data-lpignore="true">
-                <section class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel">
-                    <div class="mb-4">
-                        <h3 class="text-lg font-semibold">Allgemein</h3>
-                        <p class="text-sm text-slate-400">Lege fest, in welcher Zeitzone KeepUp Zeiten im UI und in Benachrichtigungen anzeigt.</p>
-                    </div>
-
+            <form action="/settings/notifications" method="post" class="space-y-4" autocomplete="off" data-lpignore="true">
+                {% call accordion_section('settings-general', 'Allgemein', 'Zeitzone für UI, Logs und Benachrichtigungen.', True) %}
                     <div class="grid grid-cols-1 gap-3">
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Zeitzone</span>
-                            <select name="app_timezone" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <select name="app_timezone" class="{{ select_classes() }}">
                                 {% for timezone_option in timezone_options %}
                                 <option value="{{ timezone_option }}" {% if settings.app_timezone == timezone_option %}selected{% endif %}>{{ timezone_option }}</option>
                                 {% endfor %}
                             </select>
                         </label>
                     </div>
-
                     <p class="mt-3 text-xs text-slate-500">Die Auswahl steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
-                </section>
+                {% endcall %}
 
-                <section class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel">
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <h3 class="text-lg font-semibold">Telegram</h3>
-                            <p class="text-sm text-slate-400">Bot-Token und Chat-ID für Statusmeldungen.</p>
-                        </div>
-                        <input type="checkbox" name="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %} class="h-5 w-5 rounded border-white/20 bg-transparent text-sky-400">
+                {% call accordion_section('settings-telegram', 'Telegram', 'Bot-Token und Chat-ID für Statusmeldungen.', False) %}
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm text-slate-400">Aktiviere Telegram und hinterlege Token/Chat-ID.</p>
+                        <input type="checkbox" name="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
                     </div>
-
-                    <div class="grid grid-cols-1 gap-3">
+                    <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                        <p class="text-sm font-semibold text-slate-200">BotFather-Anleitung</p>
+                        <p class="mt-1 text-sm text-slate-400">Wenn du Telegram zum ersten Mal einrichtest, geh diese Schritte einmal in Ruhe durch.</p>
+                        <ol class="mt-3 space-y-2 text-sm text-slate-300 list-decimal pl-5">
+                            <li>In Telegram <span class="font-semibold">@BotFather</span> öffnen.</li>
+                            <li>Mit <span class="font-semibold">/newbot</span> einen Bot erstellen und den Token kopieren.</li>
+                            <li>Dem Bot einmal schreiben (damit Telegram Updates erzeugt).</li>
+                            <li>Im Browser <span class="font-mono text-slate-200">https://api.telegram.org/botTOKEN/getUpdates</span> aufrufen und die <span class="font-semibold">chat.id</span> auslesen.</li>
+                            <li>Token und Chat ID oben speichern und anschließend mit <span class="font-semibold">Telegram testen</span> prüfen.</li>
+                        </ol>
+                    </div>
+                    <div class="mt-4 grid grid-cols-1 gap-3">
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Bot Token</span>
-                            <input name="telegram_bot_token" value="{{ settings.telegram_bot_token }}" placeholder="123456:ABC..." autocomplete="off" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="telegram_bot_token" value="{{ settings.telegram_bot_token }}" placeholder="123456:ABC..." autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Chat ID</span>
-                            <input name="telegram_chat_id" value="{{ settings.telegram_chat_id }}" placeholder="-1001234567890" autocomplete="off" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="telegram_chat_id" value="{{ settings.telegram_chat_id }}" placeholder="-1001234567890" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                     </div>
-
                     <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-                        <button type="submit" formaction="/settings/test/telegram" formmethod="post" class="tap-target inline-flex items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20">
+                        <button type="submit" formaction="/settings/test/telegram" formmethod="post" class="{{ btn_classes('soft') }}">
                             Telegram testen
                         </button>
                         <p class="text-sm text-slate-500">Verwendet die aktuell eingetragenen Werte und speichert sie vor dem Test.</p>
                     </div>
-                </section>
+                {% endcall %}
 
-                <section class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel">
-                    <div class="mb-4 flex items-center justify-between gap-3">
-                        <div>
-                            <h3 class="text-lg font-semibold">SMTP / E-Mail</h3>
-                            <p class="text-sm text-slate-400">Versand bei Down und Recovery über deinen Mailserver.</p>
-                        </div>
-                        <input type="checkbox" name="smtp_enabled" {% if settings.smtp_enabled %}checked{% endif %} class="h-5 w-5 rounded border-white/20 bg-transparent text-sky-400">
+                {% call accordion_section('settings-smtp', 'SMTP / E-Mail', 'Versand bei Down und Recovery über deinen Mailserver.', False) %}
+                    <div class="flex items-center justify-between gap-3">
+                        <p class="text-sm text-slate-400">Aktiviere SMTP und hinterlege Host/Empfänger.</p>
+                        <input type="checkbox" name="smtp_enabled" {% if settings.smtp_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
                     </div>
 
-                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <label class="space-y-2 sm:col-span-2">
                             <span class="text-sm text-slate-300">SMTP Host</span>
-                            <input name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.example.com" autocomplete="url" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.example.com" autocomplete="url" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Port</span>
-                            <input type="number" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="587" inputmode="numeric" autocomplete="off" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input type="number" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="587" inputmode="numeric" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Benutzername</span>
-                            <input name="smtp_username" value="{{ settings.smtp_username }}" placeholder="monitor@example.com" autocomplete="email" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="smtp_username" value="{{ settings.smtp_username }}" placeholder="monitor@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2 sm:col-span-2">
                             <span class="text-sm text-slate-300">Passwort</span>
-                            <input name="smtp_password" type="password" value="{{ settings.smtp_password }}" placeholder="SMTP Passwort" autocomplete="new-password" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="smtp_password" type="password" value="{{ settings.smtp_password }}" placeholder="SMTP Passwort" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Von E-Mail</span>
-                            <input name="smtp_from_email" value="{{ settings.smtp_from_email }}" placeholder="keepup@example.com" autocomplete="email" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="smtp_from_email" value="{{ settings.smtp_from_email }}" placeholder="keepup@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">An E-Mail</span>
-                            <input name="smtp_to_email" value="{{ settings.smtp_to_email }}" placeholder="admin@example.com" autocomplete="email" data-lpignore="true" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none focus:border-sky-400">
+                            <input name="smtp_to_email" value="{{ settings.smtp_to_email }}" placeholder="admin@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
                         </label>
                     </div>
 
                     <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
                         <label class="flex items-center gap-2">
-                            <input type="checkbox" name="smtp_use_tls" {% if settings.smtp_use_tls %}checked{% endif %} class="h-4 w-4 rounded border-white/20 bg-transparent text-sky-400">
+                            <input type="checkbox" name="smtp_use_tls" {% if settings.smtp_use_tls %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
                             STARTTLS
                         </label>
                         <label class="flex items-center gap-2">
-                            <input type="checkbox" name="smtp_use_ssl" {% if settings.smtp_use_ssl %}checked{% endif %} class="h-4 w-4 rounded border-white/20 bg-transparent text-sky-400">
+                            <input type="checkbox" name="smtp_use_ssl" {% if settings.smtp_use_ssl %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
                             SSL
                         </label>
                     </div>
 
                     <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <button type="submit" formaction="/settings/test/smtp" formmethod="post" class="tap-target inline-flex items-center justify-center rounded-2xl border border-sky-400/30 bg-sky-500/10 px-4 text-sm font-semibold text-sky-100 transition hover:bg-sky-500/20">
+                        <button type="submit" formaction="/settings/test/smtp" formmethod="post" class="{{ btn_classes('soft') }}">
                             SMTP testen
                         </button>
                         <p class="text-sm text-slate-500">Sendet eine Testmail an die eingetragene Empfängeradresse.</p>
                     </div>
-                </section>
+                {% endcall %}
 
-                <section class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel">
-                    <div class="mb-4">
-                        <h3 class="text-lg font-semibold">Backup & Migration</h3>
-                        <p class="text-sm text-slate-400">Exportiert oder importiert die gesamte Konfiguration inklusive Monitore, Historie und Einstellungen.</p>
-                    </div>
-
+                {% call accordion_section('settings-backup', 'Backup & Migration', 'Export/Import der kompletten Konfiguration.', False) %}
                     <div class="flex flex-col gap-3 sm:flex-row">
-                        <a href="/api/export" class="tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold transition hover:bg-white/10">
+                        <a href="/api/export" class="{{ btn_classes('ghost') }}">
                             JSON exportieren
                         </a>
-                        <button type="button" onclick="document.getElementById('import-file-input').click()" class="tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold transition hover:bg-white/10">
+                        <button type="button" onclick="document.getElementById('import-file-input').click()" class="{{ btn_classes('ghost') }}">
                             JSON importieren
                         </button>
                     </div>
                     <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Danach startet KeepUp die Checks für aktive Monitore erneut.</p>
-                </section>
+                {% endcall %}
 
-                <button type="submit" class="tap-target w-full rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">
+                <button type="submit" class="{{ btn_classes('primary') }} w-full">
                     Einstellungen speichern
                 </button>
             </form>
@@ -208,6 +180,8 @@
             </form>
         </section>
     </main>
+
+    {{ render_footer("https://github.com/Schello805/keepup", app_version) }}
 
     <script>
         function dismissToast() {

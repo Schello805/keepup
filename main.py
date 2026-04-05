@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
+import subprocess
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -15,14 +18,17 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+import httpx
 
 from database import (
     cleanup_old_checks,
     create_monitor,
     delete_monitor,
     export_backup,
+    get_db,
     get_monitor,
     get_recent_logs,
+    list_incidents,
     get_settings,
     import_backup,
     init_db,
@@ -39,9 +45,16 @@ from monitor import (
     send_test_telegram_notification,
 )
 
+from keepup_version import __version__
+
 
 BASE_DIR = Path(__file__).resolve().parent
 scheduler = AsyncIOScheduler()
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger("keepup")
 APP_TIMEZONE_OPTIONS = [
     "UTC",
     "Europe/Berlin",
@@ -155,6 +168,7 @@ def build_dashboard_context(request: Request) -> dict:
         "request": request,
         "monitors": monitors,
         "settings": settings,
+        "app_version": __version__,
         "active_page": "dashboard",
         "toast": get_toast(request),
         "summary": {
@@ -178,14 +192,198 @@ def build_settings_context(request: Request) -> dict:
     return {
         "request": request,
         "settings": settings,
+        "app_version": __version__,
         "timezone_options": timezone_options,
         "active_page": "settings",
         "toast": get_toast(request),
     }
 
 
+def build_incidents_context(request: Request) -> dict:
+    settings = get_settings()
+    app_timezone = settings.get("app_timezone", "UTC")
+    monitors = list_monitors()
+
+    monitor_id_raw = request.query_params.get("monitor_id", "").strip()
+    status = request.query_params.get("status", "all").strip().lower() or "all"
+    days_raw = request.query_params.get("days", "7").strip()
+    item_raw = request.query_params.get("item", "").strip()
+
+    monitor_id: Optional[int] = None
+    if monitor_id_raw:
+        try:
+            monitor_id = int(monitor_id_raw)
+        except ValueError:
+            monitor_id = None
+
+    since_days: Optional[int] = 7
+    if days_raw in {"all", "0", ""}:
+        since_days = None
+    else:
+        try:
+            since_days = max(1, int(days_raw))
+        except ValueError:
+            since_days = 7
+
+    incidents = list_incidents(monitor_id=monitor_id, status=status, since_days=since_days)
+
+    base_query: dict[str, str] = {}
+    if monitor_id is not None:
+        base_query["monitor_id"] = str(monitor_id)
+    if status and status != "all":
+        base_query["status"] = status
+    base_query["days"] = "all" if since_days is None else str(since_days)
+
+    feed_items: list[dict[str, Any]] = []
+
+    for incident in incidents:
+        incident["started_at_display"] = format_timestamp(incident.get("started_at"), app_timezone)
+        incident["ended_at_display"] = format_timestamp(incident.get("ended_at"), app_timezone)
+
+        incident_item_id = f"incident:{incident.get('id')}"
+        incident["item_id"] = incident_item_id
+        incident["select_url"] = "/incidents?" + urlencode({**base_query, "item": incident_item_id})
+
+        duration_seconds: Optional[int] = None
+        started_at = incident.get("started_at")
+        ended_at = incident.get("ended_at")
+        try:
+            if started_at:
+                start_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+                end_dt = (
+                    datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
+                    if ended_at
+                    else datetime.now(timezone.utc)
+                )
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=timezone.utc)
+                if end_dt.tzinfo is None:
+                    end_dt = end_dt.replace(tzinfo=timezone.utc)
+                duration_seconds = max(0, int((end_dt - start_dt).total_seconds()))
+        except Exception:
+            duration_seconds = None
+
+        incident["duration_seconds"] = duration_seconds
+
+        feed_items.append(
+            {
+                "kind": "incident",
+                "item_id": incident_item_id,
+                "timestamp": incident.get("started_at"),
+                "timestamp_display": incident.get("started_at_display"),
+                "monitor_id": incident.get("monitor_id"),
+                "monitor_name": incident.get("monitor_name"),
+                "monitor_type": incident.get("monitor_type"),
+                "monitor_target": incident.get("monitor_target"),
+                "is_open": incident.get("ended_at") is None,
+                "incident": incident,
+                "select_url": incident.get("select_url"),
+            }
+        )
+
+    if since_days is not None:
+        cutoff_dt = datetime.now(timezone.utc) - timedelta(days=since_days)
+    else:
+        cutoff_dt = None
+
+    for monitor in monitors:
+        if monitor_id is not None and int(monitor.get("id")) != monitor_id:
+            continue
+
+        created_at = monitor.get("created_at")
+        if not created_at:
+            continue
+
+        try:
+            created_dt = datetime.fromisoformat(str(created_at).replace("Z", "+00:00"))
+            if created_dt.tzinfo is None:
+                created_dt = created_dt.replace(tzinfo=timezone.utc)
+            if cutoff_dt is not None and created_dt < cutoff_dt:
+                continue
+        except Exception:
+            pass
+
+        created_item_id = f"created:{monitor.get('id')}"
+        feed_items.append(
+            {
+                "kind": "created",
+                "item_id": created_item_id,
+                "timestamp": created_at,
+                "timestamp_display": format_timestamp(str(created_at), app_timezone),
+                "monitor_id": monitor.get("id"),
+                "monitor_name": monitor.get("name"),
+                "monitor_type": monitor.get("type"),
+                "monitor_target": monitor.get("target"),
+                "select_url": "/incidents?" + urlencode({**base_query, "item": created_item_id}),
+            }
+        )
+
+    def _sort_key(item: dict[str, Any]) -> str:
+        return str(item.get("timestamp") or "")
+
+    feed_items.sort(key=_sort_key, reverse=True)
+
+    selected_item: Optional[dict[str, Any]] = None
+    if item_raw:
+        for item in feed_items:
+            if item.get("item_id") == item_raw:
+                selected_item = item
+                break
+    if selected_item is None and feed_items:
+        selected_item = feed_items[0]
+
+    return {
+        "request": request,
+        "settings": settings,
+        "app_version": __version__,
+        "active_page": "incidents",
+        "toast": get_toast(request),
+        "monitors": monitors,
+        "incidents": incidents,
+        "feed_items": feed_items,
+        "selected_item": selected_item,
+        "filters": {
+            "monitor_id": monitor_id,
+            "status": status,
+            "days": since_days,
+        },
+    }
+
+
+def _run_git_command(args: list[str]) -> Optional[str]:
+    try:
+        result = subprocess.run(
+            args,
+            cwd=str(BASE_DIR),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=3,
+        )
+        return (result.stdout or "").strip() or None
+    except Exception:
+        return None
+
+
+async def _get_remote_main_sha() -> Optional[str]:
+    url = "https://api.github.com/repos/Schello805/keepup/commits/main"
+    headers = {"User-Agent": "KeepUp"}
+    try:
+        async with httpx.AsyncClient(timeout=6.0, headers=headers) as client:
+            res = await client.get(url)
+        if res.status_code != 200:
+            return None
+        payload = res.json()
+        sha = payload.get("sha")
+        return sha.strip() if isinstance(sha, str) and sha.strip() else None
+    except Exception:
+        return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("startup")
     init_db()
     scheduler.add_job(
         lambda: asyncio.Task(asyncio.to_thread(cleanup_old_checks)),
@@ -199,11 +397,111 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(run_all_checks_once())
     yield
     scheduler.shutdown(wait=False)
+    logger.info("shutdown")
 
 
 app = FastAPI(title="KeepUp", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+
+
+@app.get("/health")
+async def health() -> JSONResponse:
+    return JSONResponse({"status": "ok"})
+
+
+@app.get("/ready")
+async def readiness() -> JSONResponse:
+    db_ok = True
+    db_error: Optional[str] = None
+    try:
+        conn = get_db()
+        try:
+            conn.execute("SELECT 1")
+        finally:
+            conn.close()
+    except Exception as exc:
+        db_ok = False
+        db_error = str(exc)
+
+    scheduler_running = bool(getattr(scheduler, "running", False))
+    job_count = 0
+    try:
+        job_count = len(scheduler.get_jobs())
+    except Exception:
+        job_count = 0
+
+    ready = db_ok and scheduler_running
+    payload = {
+        "ready": ready,
+        "db": {"ok": db_ok, "error": db_error},
+        "scheduler": {"running": scheduler_running, "jobs": job_count},
+    }
+    return JSONResponse(payload, status_code=200 if ready else 503)
+
+
+@app.get("/api/update/status")
+async def update_status() -> JSONResponse:
+    local_sha = _run_git_command(["git", "rev-parse", "HEAD"])
+    remote_sha = await _get_remote_main_sha()
+    update_available = bool(local_sha and remote_sha and local_sha != remote_sha)
+
+    token = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
+    update_enabled = bool(token)
+
+    payload = {
+        "current_version": __version__,
+        "local_sha": local_sha,
+        "local_sha_short": (local_sha[:7] if local_sha else None),
+        "remote_sha": remote_sha,
+        "remote_sha_short": (remote_sha[:7] if remote_sha else None),
+        "update_available": update_available,
+        "update_enabled": update_enabled,
+    }
+    return JSONResponse(payload)
+
+
+@app.post("/api/update/run")
+async def run_update(token: str = Form("")) -> JSONResponse:
+    expected = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(status_code=403, detail="Update ist nicht aktiviert (KEEPUP_UPDATE_TOKEN fehlt).")
+    if token.strip() != expected:
+        raise HTTPException(status_code=403, detail="Ungültiger Update-Token.")
+
+    script_path = BASE_DIR / "scripts" / "update_keepup.sh"
+    if not script_path.exists():
+        raise HTTPException(status_code=500, detail="Update-Script fehlt.")
+
+    try:
+        result = await asyncio.to_thread(
+            lambda: subprocess.run(
+                ["bash", str(script_path)],
+                cwd=str(BASE_DIR),
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=240,
+            )
+        )
+    except subprocess.TimeoutExpired:
+        raise HTTPException(status_code=500, detail="Update-Script timeout.")
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Update fehlgeschlagen: {exc}")
+
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    ok = result.returncode == 0
+    return JSONResponse(
+        {
+            "ok": ok,
+            "returncode": result.returncode,
+            "stdout": stdout,
+            "stderr": stderr,
+        },
+        status_code=200 if ok else 500,
+    )
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -214,6 +512,11 @@ async def dashboard(request: Request) -> HTMLResponse:
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse("settings.html", build_settings_context(request))
+
+
+@app.get("/incidents", response_class=HTMLResponse)
+async def incidents_page(request: Request) -> HTMLResponse:
+    return templates.TemplateResponse("incidents.html", build_incidents_context(request))
 
 
 @app.get("/api/dashboard", response_class=HTMLResponse)

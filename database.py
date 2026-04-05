@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -77,6 +77,22 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS incidents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                monitor_id INTEGER NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                start_check_id INTEGER,
+                end_check_id INTEGER,
+                start_error_msg TEXT,
+                end_error_msg TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE,
+                FOREIGN KEY (start_check_id) REFERENCES checks(id) ON DELETE SET NULL,
+                FOREIGN KEY (end_check_id) REFERENCES checks(id) ON DELETE SET NULL
             );
             """
         )
@@ -327,6 +343,19 @@ def log_check_result(
             """,
             (monitor_id, new_status, response_time, error_msg, timestamp),
         )
+
+        check_id = cursor.lastrowid
+
+        _update_incidents_for_status_change(
+            cursor,
+            monitor_id=monitor_id,
+            previous_status=previous_status,
+            new_status=new_status,
+            timestamp=timestamp,
+            check_id=check_id,
+            error_msg=error_msg,
+        )
+
         cursor.execute(
             """
             UPDATE monitors
@@ -351,9 +380,131 @@ def log_check_result(
         "status": new_status,
         "status_changed": status_changed,
         "checked_at": timestamp,
+        "check_id": check_id,
         "error_msg": error_msg,
         "response_time": response_time,
     }
+
+
+def _update_incidents_for_status_change(
+    cursor: sqlite3.Cursor,
+    monitor_id: int,
+    previous_status: str,
+    new_status: str,
+    timestamp: str,
+    check_id: int,
+    error_msg: Optional[str],
+) -> None:
+    if previous_status == new_status:
+        return
+    if previous_status == "unknown":
+        return
+
+    now = timestamp
+
+    if new_status == "down" and previous_status != "down":
+        cursor.execute(
+            """
+            SELECT id
+            FROM incidents
+            WHERE monitor_id = ? AND ended_at IS NULL
+            ORDER BY started_at DESC, id DESC
+            LIMIT 1
+            """,
+            (monitor_id,),
+        )
+        existing = cursor.fetchone()
+        if existing is None:
+            cursor.execute(
+                """
+                INSERT INTO incidents (
+                    monitor_id, started_at, ended_at, start_check_id, end_check_id,
+                    start_error_msg, end_error_msg, updated_at
+                ) VALUES (?, ?, NULL, ?, NULL, ?, NULL, ?)
+                """,
+                (monitor_id, now, check_id, error_msg, now),
+            )
+        return
+
+    if new_status == "up" and previous_status == "down":
+        cursor.execute(
+            """
+            SELECT id
+            FROM incidents
+            WHERE monitor_id = ? AND ended_at IS NULL
+            ORDER BY started_at DESC, id DESC
+            LIMIT 1
+            """,
+            (monitor_id,),
+        )
+        open_row = cursor.fetchone()
+        if open_row is not None:
+            cursor.execute(
+                """
+                UPDATE incidents
+                SET ended_at = ?,
+                    end_check_id = ?,
+                    end_error_msg = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (now, check_id, error_msg, now, open_row["id"]),
+            )
+
+
+def list_incidents(
+    monitor_id: Optional[int] = None,
+    status: str = "all",
+    since_days: Optional[int] = 7,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    status = (status or "all").strip().lower()
+    if status not in {"all", "open", "closed"}:
+        status = "all"
+    since_days = since_days if since_days is None else max(1, since_days)
+
+    where_parts: list[str] = []
+    params: list[Any] = []
+
+    if monitor_id is not None:
+        where_parts.append("i.monitor_id = ?")
+        params.append(monitor_id)
+
+    if status == "open":
+        where_parts.append("i.ended_at IS NULL")
+    elif status == "closed":
+        where_parts.append("i.ended_at IS NOT NULL")
+
+    if since_days is not None:
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=since_days)).replace(microsecond=0).isoformat()
+        where_parts.append("i.started_at >= ?")
+        params.append(cutoff)
+
+    where_sql = " WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT
+                i.id,
+                i.monitor_id,
+                i.started_at,
+                i.ended_at,
+                i.start_error_msg,
+                i.end_error_msg,
+                m.name AS monitor_name,
+                m.type AS monitor_type,
+                m.target AS monitor_target
+            FROM incidents i
+            JOIN monitors m ON m.id = i.monitor_id
+            {where_sql}
+            ORDER BY COALESCE(i.ended_at, i.started_at) DESC, i.id DESC
+            LIMIT ?
+            """,
+            (*params, limit),
+        )
+        return [dict(row) for row in cursor.fetchall()]
 
 
 def export_backup() -> dict[str, Any]:
@@ -363,6 +514,8 @@ def export_backup() -> dict[str, Any]:
         monitors = [dict(row) for row in cursor.fetchall()]
         cursor.execute("SELECT * FROM checks ORDER BY id ASC")
         checks = [dict(row) for row in cursor.fetchall()]
+        cursor.execute("SELECT * FROM incidents ORDER BY id ASC")
+        incidents = [dict(row) for row in cursor.fetchall()]
         cursor.execute("SELECT key, value FROM settings ORDER BY key ASC")
         settings = {row["key"]: deserialize_setting(row["value"]) for row in cursor.fetchall()}
 
@@ -371,6 +524,7 @@ def export_backup() -> dict[str, Any]:
         "exported_at": utc_now(),
         "monitors": monitors,
         "checks": checks,
+        "incidents": incidents,
         "settings": settings,
     }
 
@@ -378,11 +532,13 @@ def export_backup() -> dict[str, Any]:
 def import_backup(payload: dict[str, Any]) -> None:
     monitors = payload.get("monitors", [])
     checks = payload.get("checks", [])
+    incidents = payload.get("incidents", [])
     settings = payload.get("settings", {})
 
     with closing(get_db()) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM checks")
+        cursor.execute("DELETE FROM incidents")
         cursor.execute("DELETE FROM monitors")
         cursor.execute("DELETE FROM settings")
         _seed_default_settings(cursor)
@@ -433,6 +589,28 @@ def import_backup(payload: dict[str, Any]) -> None:
                     check.get("response_time"),
                     check.get("error_msg"),
                     check.get("checked_at", utc_now()),
+                ),
+            )
+
+        for incident in incidents:
+            cursor.execute(
+                """
+                INSERT INTO incidents (
+                    id, monitor_id, started_at, ended_at, start_check_id, end_check_id,
+                    start_error_msg, end_error_msg, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    incident.get("id"),
+                    incident["monitor_id"],
+                    incident.get("started_at", utc_now()),
+                    incident.get("ended_at"),
+                    incident.get("start_check_id"),
+                    incident.get("end_check_id"),
+                    incident.get("start_error_msg"),
+                    incident.get("end_error_msg"),
+                    incident.get("created_at", utc_now()),
+                    incident.get("updated_at", utc_now()),
                 ),
             )
 

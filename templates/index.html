@@ -1,31 +1,27 @@
-{% from "_shared.html" import render_page_header %}
+{% from "_shared.html" import render_page_header, btn_classes, panel_classes, status_dot_classes, status_pill_classes, input_classes, select_classes, render_toast, render_footer %}
 
 {% macro render_dashboard_top(summary, active_page) -%}
-    <div class="space-y-3">
-        {{ render_page_header(summary.overall_status, active_page) }}
-
-        <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <button type="button" data-filter="all" onclick="setStatusFilter('all')" class="status-filter-card rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-sky-300/30 hover:bg-white/10">
-                <p class="text-xs uppercase tracking-wide text-slate-400">Monitore</p>
-                <p class="mt-1 text-2xl font-semibold">{{ summary.total }}</p>
-            </button>
-            <button type="button" data-filter="up" onclick="setStatusFilter('up')" class="status-filter-card rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-left transition hover:border-emerald-300/40 hover:bg-emerald-500/20">
-                <p class="text-xs uppercase tracking-wide text-emerald-200/80">Up</p>
-                <p class="mt-1 text-2xl font-semibold text-emerald-300">{{ summary.up }}</p>
-            </button>
-            <button type="button" data-filter="down" onclick="setStatusFilter('down')" class="status-filter-card rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-left transition hover:border-rose-300/40 hover:bg-rose-500/20">
-                <p class="text-xs uppercase tracking-wide text-rose-200/80">Down</p>
-                <p class="mt-1 text-2xl font-semibold text-rose-300">{{ summary.down }}</p>
-            </button>
-            <button type="button" data-filter="unknown" onclick="setStatusFilter('unknown')" class="status-filter-card rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-left transition hover:border-amber-300/40 hover:bg-amber-500/20">
-                <p class="text-xs uppercase tracking-wide text-amber-200/80">Unknown</p>
-                <p class="mt-1 text-2xl font-semibold text-amber-300">{{ summary.unknown }}</p>
-            </button>
-            <button type="button" data-filter="paused" onclick="setStatusFilter('paused')" class="status-filter-card rounded-2xl border border-slate-300/20 bg-slate-400/10 p-3 text-left transition hover:border-slate-200/30 hover:bg-slate-400/20">
-                <p class="text-xs uppercase tracking-wide text-slate-300/80">Pausiert</p>
-                <p class="mt-1 text-2xl font-semibold text-slate-200">{{ summary.paused }}</p>
-            </button>
-        </div>
+    <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <button type="button" data-filter="all" onclick="setStatusFilter('all')" class="status-filter-card rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-sky-300/30 hover:bg-white/10">
+            <p class="text-xs uppercase tracking-wide text-slate-400">Monitore</p>
+            <p class="mt-1 text-2xl font-semibold">{{ summary.total }}</p>
+        </button>
+        <button type="button" data-filter="up" onclick="setStatusFilter('up')" class="status-filter-card rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-left transition hover:border-emerald-300/40 hover:bg-emerald-500/20">
+            <p class="text-xs uppercase tracking-wide text-emerald-200/80">Up</p>
+            <p class="mt-1 text-2xl font-semibold text-emerald-300">{{ summary.up }}</p>
+        </button>
+        <button type="button" data-filter="down" onclick="setStatusFilter('down')" class="status-filter-card rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-left transition hover:border-rose-300/40 hover:bg-rose-500/20">
+            <p class="text-xs uppercase tracking-wide text-rose-200/80">Down</p>
+            <p class="mt-1 text-2xl font-semibold text-rose-300">{{ summary.down }}</p>
+        </button>
+        <button type="button" data-filter="unknown" onclick="setStatusFilter('unknown')" class="status-filter-card rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-left transition hover:border-amber-300/40 hover:bg-amber-500/20">
+            <p class="text-xs uppercase tracking-wide text-amber-200/80">Unknown</p>
+            <p class="mt-1 text-2xl font-semibold text-amber-300">{{ summary.unknown }}</p>
+        </button>
+        <button type="button" data-filter="paused" onclick="setStatusFilter('paused')" class="status-filter-card rounded-2xl border border-slate-300/20 bg-slate-400/10 p-3 text-left transition hover:border-slate-200/30 hover:bg-slate-400/20">
+            <p class="text-xs uppercase tracking-wide text-slate-300/80">Pausiert</p>
+            <p class="mt-1 text-2xl font-semibold text-slate-200">{{ summary.paused }}</p>
+        </button>
     </div>
 {%- endmacro %}
 
@@ -35,7 +31,7 @@
             <p class="text-sm text-slate-300">Leichtgewichtiges Self-Hosted Monitoring für HTTP/S und Ping mit automatischen Statuswechsel-Benachrichtigungen.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            <button type="button" onclick="togglePanel('add-monitor-panel')" class="tap-target rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">
+            <button type="button" onclick="togglePanel('add-monitor-panel')" class="{{ btn_classes('primary') }}">
                 Monitor anlegen
             </button>
         </div>
@@ -55,7 +51,7 @@
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
                             <div class="min-w-0">
                                 <div class="mb-2 flex items-center gap-2">
-                                    <span class="inline-flex h-3 w-3 rounded-full {% if status == 'paused' %}bg-slate-400{% elif status == 'up' %}bg-emerald-400{% elif status == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}"></span>
+                                    <span class="inline-flex h-3 w-3 rounded-full {{ status_dot_classes(status) }}"></span>
                                     <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor.type | upper }}</p>
                                 </div>
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
@@ -71,7 +67,7 @@
                                             <span class="sr-only">Jetzt prüfen</span>
                                         </button>
                                     </form>
-                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {% if status == 'paused' %}bg-slate-500/20 text-slate-200{% elif status == 'up' %}bg-emerald-500/20 text-emerald-200{% elif status == 'down' %}bg-rose-500/20 text-rose-200{% else %}bg-amber-500/20 text-amber-200{% endif %}">
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {{ status_pill_classes(status) }}">
                                         {{ status }}
                                     </span>
                                 </div>
@@ -153,17 +149,33 @@
                             <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
                                     <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Check</dt>
-                                    <dd class="mt-1 font-medium">{{ monitor.last_checked_at or "-" }}</dd>
+                                    {% set _checked_parts = (monitor.last_checked_at or '').split(' ') %}
+                                    <dd class="mt-1 font-medium tabular-nums leading-tight">
+                                        {% if _checked_parts|length >= 2 %}
+                                            <span class="block">{{ _checked_parts[0] }}</span>
+                                            <span class="block text-sm text-slate-200">{{ _checked_parts[1] }}{% if _checked_parts|length >= 3 %} {{ _checked_parts[2] }}{% endif %}</span>
+                                        {% else %}
+                                            {{ monitor.last_checked_at or "-" }}
+                                        {% endif %}
+                                    </dd>
                                 </div>
                                 <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
                                     <dt class="text-slate-500 text-xs uppercase tracking-wide">Statuswechsel</dt>
-                                    <dd class="mt-1 font-medium">{{ monitor.last_change_at or "-" }}</dd>
+                                    {% set _change_parts = (monitor.last_change_at or '').split(' ') %}
+                                    <dd class="mt-1 font-medium tabular-nums leading-tight">
+                                        {% if _change_parts|length >= 2 %}
+                                            <span class="block">{{ _change_parts[0] }}</span>
+                                            <span class="block text-sm text-slate-200">{{ _change_parts[1] }}{% if _change_parts|length >= 3 %} {{ _change_parts[2] }}{% endif %}</span>
+                                        {% else %}
+                                            {{ monitor.last_change_at or "-" }}
+                                        {% endif %}
+                                    </dd>
                                 </div>
                             </dl>
                             {% if monitor.chart_data_json and monitor.chart_data_json != "[]" %}
                             <div class="mb-2">
                                 <h4 class="font-medium text-slate-300 mb-2">Antwortzeiten (letzte Checks)</h4>
-                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-2 apex-chart-container h-36 w-full" data-chart-series='{{ monitor.chart_data_json }}' data-monitor-type='{{ monitor.type }}' id="chart-{{ monitor.id }}"></div>
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 overflow-hidden apex-chart-container h-36 w-full" data-chart-series='{{ monitor.chart_data_json }}' data-monitor-type='{{ monitor.type }}' id="chart-{{ monitor.id }}"></div>
                             </div>
                             {% endif %}
                             
@@ -177,7 +189,9 @@
                                                 <span class="uppercase tracking-wide text-[10px] font-semibold text-slate-400">{{ log.status }}</span>
                                                 <span class="text-xs text-slate-500">{{ log.checked_at }}</span>
                                             </div>
-                                            <p class="break-words text-slate-300">{{ log.error_msg or "Kein Fehlertext" }}</p>
+                                            {% if log.error_msg %}
+                                            <p class="break-words text-slate-300">{{ log.error_msg }}</p>
+                                            {% endif %}
                                         </div>
                                         {% endfor %}
                                     {% else %}
@@ -289,27 +303,8 @@
 </head>
 <body class="min-h-screen text-slate-100">
     <main class="mx-auto max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
-        {% if toast %}
-        {% set toast_styles = {
-            "success": "border-emerald-400/30 bg-emerald-500/15 text-emerald-50",
-            "info": "border-sky-400/30 bg-sky-500/15 text-sky-50",
-            "warning": "border-amber-400/30 bg-amber-500/15 text-amber-50",
-            "error": "border-rose-400/30 bg-rose-500/15 text-rose-50"
-        } %}
-        <div id="toast" class="fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-2xl border px-4 py-3 shadow-panel backdrop-blur transition duration-300 {{ toast_styles.get(toast.tone, toast_styles['success']) }}">
-            <div class="flex items-start justify-between gap-3">
-                <div>
-                    <p class="text-sm font-semibold">Status-Update</p>
-                    <p class="mt-1 text-sm/6 text-current/90">{{ toast.message }}</p>
-                </div>
-                <button type="button" onclick="dismissToast()" class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-current/80 transition hover:bg-white/10" aria-label="Meldung schliessen">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
-                    </svg>
-                </button>
-            </div>
-        </div>
-        {% endif %}
+        {{ render_toast(toast) }}
+        {{ render_page_header(summary.overall_status, active_page) }}
 {% endif %}
         {% if partial == "top" %}
         <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="space-y-5">
@@ -323,42 +318,38 @@
         <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.rotate-y-180')]" hx-swap="outerHTML" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
-        <section class="mt-5">
+
+        <div class="mt-5">
             {{ render_monitor_intro() }}
-        </section>
-        <section id="add-monitor-panel" class="mt-5 hidden rounded-3xl border border-white/10 bg-keepup-panel/85 p-4 shadow-panel">
-            <div class="mb-4 flex items-center justify-between gap-3">
-                <div>
-                    <h2 class="text-lg font-semibold">Neuen Monitor anlegen</h2>
-                    <p class="text-sm text-slate-400">HTTP/S-Webseiten oder IP-Adressen mit asynchronen Checks überwachen.</p>
-                </div>
-                <button type="button" onclick="togglePanel('add-monitor-panel')" class="tap-target rounded-2xl border border-white/10 px-4 text-sm font-semibold hover:bg-white/5">Schließen</button>
-            </div>
-            <form action="/monitors" method="post" class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <label class="space-y-2">
+        </div>
+
+        <section id="add-monitor-panel" class="mt-5 hidden {{ panel_classes() }}">
+            <h2 class="text-lg font-semibold">Neuen Monitor anlegen</h2>
+            <form action="/monitors" method="post" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2" autocomplete="off" data-lpignore="true">
+                <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300">Name</span>
-                    <input name="name" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400" placeholder="Produktionsseite">
+                    <input name="name" required class="{{ input_classes() }}" placeholder="Produktionsseite">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Typ</span>
-                    <select name="monitor_type" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <select name="monitor_type" class="{{ select_classes() }}">
                         <option value="http">HTTP/S</option>
                         <option value="ping">Ping (IP/Host)</option>
                     </select>
                 </label>
-                <label class="space-y-2 md:col-span-2">
+                <label class="space-y-2">
                     <span class="text-sm text-slate-300">Ziel</span>
-                    <input name="target" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400" placeholder="https://example.com oder 1.1.1.1">
+                    <input name="target" required class="{{ input_classes() }}" placeholder="https://example.com oder 1.1.1.1">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
-                    <input type="number" min="10" step="10" name="interval" value="60" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <input type="number" min="10" step="10" name="interval" value="60" class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Timeout (Sekunden)</span>
-                    <input type="number" min="2" step="1" name="timeout" value="10" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <input type="number" min="2" step="1" name="timeout" value="10" class="{{ input_classes() }}">
                 </label>
-                <button type="submit" class="tap-target rounded-2xl bg-emerald-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400 md:col-span-2">
+                <button type="submit" class="{{ btn_classes('primary') }} md:col-span-2">
                     Monitor speichern
                 </button>
             </form>
@@ -369,33 +360,35 @@
                     <h2 class="text-lg font-semibold">Monitor bearbeiten</h2>
                     <p class="text-sm text-slate-400">Passe Ziel, Typ, Intervall oder Timeout direkt an.</p>
                 </div>
-                <button type="button" onclick="closeEditPanel()" class="tap-target rounded-2xl border border-white/10 px-4 text-sm font-semibold hover:bg-white/5">Schließen</button>
+                <button type="button" onclick="closeEditPanel()" class="{{ btn_classes('ghost') }}">
+                    Schließen
+                </button>
             </div>
             <form id="edit-monitor-form" action="/monitors/0/edit" method="post" class="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Name</span>
-                    <input id="edit-monitor-name" name="name" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <input id="edit-monitor-name" name="name" required class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Typ</span>
-                    <select id="edit-monitor-type" name="monitor_type" class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <select id="edit-monitor-type" name="monitor_type" class="{{ select_classes() }}">
                         <option value="http">HTTP/S</option>
                         <option value="ping">Ping (IP/Host)</option>
                     </select>
                 </label>
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300">Ziel</span>
-                    <input id="edit-monitor-target" name="target" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <input id="edit-monitor-target" name="target" required class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
-                    <input id="edit-monitor-interval" type="number" min="10" step="10" name="interval" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <input id="edit-monitor-interval" type="number" min="10" step="10" name="interval" required class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Timeout (Sekunden)</span>
-                    <input id="edit-monitor-timeout" type="number" min="2" step="1" name="timeout" required class="h-12 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-base outline-none transition focus:border-sky-400">
+                    <input id="edit-monitor-timeout" type="number" min="2" step="1" name="timeout" required class="{{ input_classes() }}">
                 </label>
-                <button type="submit" class="tap-target rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 md:col-span-2">
+                <button type="submit" class="{{ btn_classes('primary') }} md:col-span-2">
                     Änderungen speichern
                 </button>
             </form>
@@ -406,6 +399,8 @@
         {% endif %}
 {% if not partial %}
     </main>
+
+    {{ render_footer("https://github.com/Schello805/keepup", app_version) }}
 
     <script>
         function togglePanel(id) {
@@ -514,6 +509,7 @@
                             height: '100%', 
                             sparkline: { enabled: false }, 
                             background: 'transparent',
+                            offsetY: -4,
                             animations: { enabled: false },
                             toolbar: { show: false },
                             zoom: { enabled: false }
@@ -526,14 +522,14 @@
                             show: true, 
                             borderColor: 'rgba(255,255,255,0.08)', 
                             strokeDashArray: 4, 
-                            padding: { top: 5, bottom: 15, left: 15, right: 5 } 
+                            padding: { top: 0, bottom: 22, left: 15, right: 5 } 
                         },
                         tooltip: { theme: 'dark', x: { format: 'HH:mm:ss' }, y: { formatter: (val) => val === null ? "offline" : val + " ms" } },
                         yaxis: { 
                             show: true, 
                             min: 0, 
                             tickAmount: 3, 
-                            labels: { style: { colors: '#64748b', fontSize: '10px' }, formatter: (val) => val.toFixed(0) + " ms" }
+                            labels: { offsetY: -2, style: { colors: '#64748b', fontSize: '10px' }, formatter: (val) => val.toFixed(0) + " ms" }
                         },
                         xaxis: { type: 'datetime', labels: { show: false }, axisBorder: { show: false }, axisTicks: { show: false }, tooltip: { enabled: false }, crosshairs: { show: false } },
                         annotations: {
@@ -562,8 +558,6 @@
             renderCharts();
         });
     </script>
-{% endif %}
-{% if not partial %}
 </body>
 </html>
 {% endif %}
