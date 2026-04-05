@@ -12,6 +12,7 @@ from typing import Any, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
+import html
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from database import get_monitor, get_settings, list_monitors, log_check_result
@@ -201,6 +202,21 @@ def format_timestamp_for_notification(timestamp: str, timezone_name: str) -> str
     return dt.astimezone(zone).strftime("%d.%m.%Y %H:%M:%S %Z")
 
 
+def format_timestamp_without_tz(timestamp: str, timezone_name: str) -> str:
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return timestamp
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    try:
+        zone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        zone = ZoneInfo("UTC")
+    # Do not include timezone abbreviation per user request
+    return dt.astimezone(zone).strftime("%d.%m.%Y %H:%M:%S")
+
+
 def build_notification_message(
     settings: dict[str, Any],
     monitor: dict[str, Any],
@@ -242,11 +258,40 @@ async def send_telegram_notification(
     monitor: dict[str, Any],
     result: dict[str, Any],
 ) -> None:
-    subject, body = build_notification_message(settings, monitor, result)
+    # Build an HTML-formatted message suitable for Telegram
+    # First line: icon + bold monitor name + status
+    status_icon = "✅" if result.get("status") == "up" else "❌"
+    status_text = "UP" if result.get("status") == "up" else "DOWN"
+
+    # Escape user-provided fields to avoid HTML injection
+    monitor_name = html.escape(str(monitor.get("name", "")))
+    monitor_target = html.escape(str(monitor.get("target", "")))
+    monitor_type = html.escape(str(monitor.get("type", "")).upper())
+    transition = html.escape(f"{result.get('previous_status')} -> {result.get('status')}")
+
+    checked_at = format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
+    checked_at = html.escape(checked_at)
+
+    # Compose Telegram HTML message. Note: Telegram does not support smaller font sizes,
+    # so we use italics for the "Powered by" footer as a visual de-emphasis.
+    telegram_lines = [
+        f"{status_icon} <b>{monitor_name} {status_text}</b>",
+        f"Monitor: {monitor_name}",
+        f"Target: {monitor_target}",
+        f"Type: {monitor_type}",
+        f"Transition: {transition}",
+        f"Checked at: {checked_at}",
+        "",
+        "<i>Powered by KeepUp</i>",
+    ]
+
+    text = "\n".join(telegram_lines)
+
     url = f"https://api.telegram.org/bot{settings['telegram_bot_token']}/sendMessage"
     payload = {
         "chat_id": settings["telegram_chat_id"],
-        "text": f"{subject}\n\n{body}",
+        "text": text,
+        "parse_mode": "HTML",
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
