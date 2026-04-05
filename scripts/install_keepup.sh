@@ -7,9 +7,22 @@ KEEPUP_USER="keepup"
 
 echo "[install] Starting KeepUp initial installation"
 
+run_as_root() {
+  if [ "$(id -u)" -ne 0 ]; then
+    if command -v sudo >/dev/null 2>&1; then
+      sudo "$@"
+    else
+      echo "This script requires root privileges (no sudo available). Please run as root." >&2
+      exit 1
+    fi
+  else
+    "$@"
+  fi
+}
+
 if ! id -u "$KEEPUP_USER" >/dev/null 2>&1; then
   echo "[install] Creating system user '$KEEPUP_USER'"
-  sudo useradd --system --no-create-home --shell /usr/sbin/nologin "$KEEPUP_USER"
+  run_as_root useradd --system --no-create-home --shell /usr/sbin/nologin "$KEEPUP_USER"
 fi
 
 echo "[install] Creating virtual environment (if missing)"
@@ -22,9 +35,9 @@ echo "[install] Installing Python dependencies"
 "$VENV_DIR/bin/pip" install -r "$ROOT_DIR/requirements.txt"
 
 echo "[install] Setting ownership to $KEEPUP_USER"
-sudo chown -R "$KEEPUP_USER":"$KEEPUP_USER" "$ROOT_DIR"
+run_as_root chown -R "$KEEPUP_USER":"$KEEPUP_USER" "$ROOT_DIR"
 
 echo "[install] Running configuration and service setup"
-sudo "$ROOT_DIR/scripts/check_and_configure.sh"
+run_as_root "$ROOT_DIR/scripts/check_and_configure.sh"
 
-echo "[install] Installation complete. Use: sudo journalctl -u keepup.service -f"
+echo "[install] Installation complete. Use: sudo journalctl -u keepup.service -f (or journalctl -u keepup.service -f as root)"
