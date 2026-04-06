@@ -25,12 +25,39 @@
                 </div>
 
                 <div class="relative lg:ml-6">
-                    <div class="flex flex-wrap items-center gap-2">
-                        {{ render_nav(active_page) }}
-                        <button id="update-pill" type="button" class="hidden tap-target inline-flex items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">
-                            <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
-                            Update
+                    <div class="flex items-center justify-between gap-2 lg:justify-end">
+                        <div class="hidden items-center gap-2 lg:flex">
+                            {{ render_nav(active_page) }}
+                            <button id="update-pill" type="button" class="hidden tap-target inline-flex items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">
+                                <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
+                                Update
+                            </button>
+                        </div>
+
+                        <button id="mobile-menu-btn" type="button" class="tap-target inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10 lg:hidden" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-menu-popover">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
+                            </svg>
                         </button>
+                    </div>
+
+                    <div id="mobile-menu-popover" class="hidden absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-3 shadow-panel lg:hidden">
+                        <div class="flex flex-col gap-2" onclick="event.stopPropagation()">
+                            <a href="/" class="tap-target inline-flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                                <span>Dashboard</span>
+                            </a>
+                            <a href="/incidents" class="tap-target inline-flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                                <span>Incidents</span>
+                            </a>
+                            <a href="/settings" class="tap-target inline-flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                                <span>Einstellungen</span>
+                            </a>
+
+                            <button id="update-pill-mobile" type="button" class="hidden tap-target inline-flex items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">
+                                <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
+                                Update
+                            </button>
+                        </div>
                     </div>
 
                     <div id="update-popover" class="hidden absolute right-0 mt-2 w-[min(28rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-4 shadow-panel">
@@ -65,6 +92,7 @@
                         if (!data || !data.update_available) return;
 
                         const pill = document.getElementById('update-pill');
+                        const mobilePill = document.getElementById('update-pill-mobile');
                         const popover = document.getElementById('update-popover');
                         const closeBtn = document.getElementById('update-close');
                         const text = document.getElementById('update-banner-text');
@@ -72,6 +100,7 @@
                         if (!pill || !popover || !text || !closeBtn) return;
 
                         pill.classList.remove('hidden');
+                        if (mobilePill) mobilePill.classList.remove('hidden');
                         const current = data.current_version ? `v${data.current_version}` : 'lokal';
                         const remote = data.remote_sha_short ? data.remote_sha_short : 'GitHub';
                         text.textContent = `Deine Version: ${current}. Neues Update: ${remote}.`;
@@ -79,11 +108,13 @@
                         const hidePopover = () => popover.classList.add('hidden');
                         const togglePopover = () => popover.classList.toggle('hidden');
                         pill.addEventListener('click', togglePopover);
+                        if (mobilePill) mobilePill.addEventListener('click', togglePopover);
                         closeBtn.addEventListener('click', hidePopover);
                         document.addEventListener('click', (evt) => {
                             const target = evt.target;
                             if (!target) return;
                             if (popover.contains(target) || pill.contains(target)) return;
+                            if (mobilePill && mobilePill.contains(target)) return;
                             hidePopover();
                         });
 
@@ -130,6 +161,39 @@
                     document.addEventListener('DOMContentLoaded', loadUpdateStatus);
                 } else {
                     loadUpdateStatus();
+                }
+
+                function initMobileMenu() {
+                    const btn = document.getElementById('mobile-menu-btn');
+                    const menu = document.getElementById('mobile-menu-popover');
+                    if (!btn || !menu) return;
+
+                    const closeMenu = () => {
+                        menu.classList.add('hidden');
+                        btn.setAttribute('aria-expanded', 'false');
+                    };
+                    const toggleMenu = () => {
+                        const willOpen = menu.classList.contains('hidden');
+                        menu.classList.toggle('hidden');
+                        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+                    };
+
+                    btn.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        toggleMenu();
+                    });
+                    document.addEventListener('click', (evt) => {
+                        const target = evt.target;
+                        if (!target) return;
+                        if (menu.contains(target) || btn.contains(target)) return;
+                        closeMenu();
+                    });
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initMobileMenu);
+                } else {
+                    initMobileMenu();
                 }
             })();
         </script>
