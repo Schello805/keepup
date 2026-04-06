@@ -44,7 +44,7 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" class="monitor-card perspective h-full min-h-[340px] touch-pan-y" onclick="flipCard('card-inner-{{ monitor.id }}')">
+            <article data-monitor-status="{{ status }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] touch-pan-y">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d">
                     <!-- VORDERSEITE -->
                     <div class="card-front absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto touch-pan-y">
@@ -149,7 +149,7 @@
                         <div class="flex items-center justify-between mb-4 flex-shrink-0">
                             <h3 class="font-semibold text-lg text-slate-100">Details & Logs</h3>
                         </div>
-                        <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl" onclick="event.stopPropagation()">
+                        <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
                             <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
                                     <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Check</dt>
@@ -560,6 +560,60 @@
         applyStatusFilter();
         restoreOpenDetails();
         renderCharts();
+        if (!window.__keepupCardFlipInstallerInstalled) {
+            window.__keepupCardFlipInstallerInstalled = true;
+            window.bindCardFlipHandlers = function bindCardFlipHandlers() {
+                const interactiveSelector = "button, a, input, select, textarea, label, form";
+                const tapMoveThreshold = 10;
+                const tapTimeThreshold = 600;
+
+                document.querySelectorAll(".monitor-card").forEach((card) => {
+                    if (!(card instanceof HTMLElement)) return;
+                    if (card.dataset.flipBound) return;
+                    card.dataset.flipBound = "true";
+
+                    let startX = 0;
+                    let startY = 0;
+                    let startT = 0;
+                    let startTarget = null;
+
+                    const innerId = card.dataset.innerId;
+                    if (!innerId) return;
+
+                    card.addEventListener(
+                        "pointerdown",
+                        (ev) => {
+                            if (!(ev.target instanceof Element)) return;
+                            if (ev.target.closest(interactiveSelector)) return;
+                            startX = ev.clientX;
+                            startY = ev.clientY;
+                            startT = Date.now();
+                            startTarget = ev.target;
+                        },
+                        { passive: true }
+                    );
+
+                    card.addEventListener(
+                        "pointerup",
+                        (ev) => {
+                            if (!(ev.target instanceof Element)) return;
+                            if (ev.target.closest(interactiveSelector)) return;
+                            if (startTarget && ev.target !== startTarget && !startTarget.contains(ev.target)) {
+                                return;
+                            }
+                            const dt = Date.now() - startT;
+                            const dx = Math.abs(ev.clientX - startX);
+                            const dy = Math.abs(ev.clientY - startY);
+                            if (dt > tapTimeThreshold) return;
+                            if (dx > tapMoveThreshold || dy > tapMoveThreshold) return;
+                            flipCard(innerId);
+                        },
+                        { passive: true }
+                    );
+                });
+            };
+        }
+        window.bindCardFlipHandlers?.();
         if (!window.__keepupWheelFixInstalled) {
             window.__keepupWheelFixInstalled = true;
             document.addEventListener(
@@ -582,6 +636,7 @@
             applyStatusFilter();
             restoreOpenDetails();
             renderCharts();
+            window.bindCardFlipHandlers?.();
         });
     </script>
 </body>
