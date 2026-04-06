@@ -109,7 +109,5 @@ nohup ./.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > keepup.log 2>&1 
 
 ---
 
-Wenn du willst, passe ich die README noch an (z. B. Beispiel für `KEEPUP_UPDATE_TOKEN` in der Unit oder Hinweise für Reverse‑Proxy/nginx). 
-journalctl -u keepup -f
+<img width="1261" height="662" alt="Bildschirmfoto 2026-04-06 um 11 10 33" src="https://github.com/user-attachments/assets/1c8492ca-8874-4676-b36a-fe19c770a3e0" />
 
-```
