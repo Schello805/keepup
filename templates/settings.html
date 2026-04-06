@@ -44,6 +44,15 @@
                 linear-gradient(180deg, #07111f 0%, #0b1424 45%, #09111d 100%);
         }
         .tap-target { min-width: 44px; min-height: 44px; }
+        input[type="number"]::-webkit-outer-spin-button,
+        input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type="number"] {
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-100">
@@ -71,7 +80,7 @@
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Alarm erst nach X Fehlschlägen (DOWN)</span>
-                            <input type="number" min="1" step="1" name="down_failures_threshold" value="{{ settings.down_failures_threshold or 3 }}" class="{{ input_classes() }}">
+                            <input type="number" min="1" step="1" name="down_failures_threshold" value="{{ settings.down_failures_threshold or 3 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                     </div>
                     <p class="mt-3 text-xs text-slate-500">Die Auswahl steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
