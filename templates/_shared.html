@@ -73,6 +73,18 @@
                             </button>
                         </div>
 
+                        <div id="update-disabled" class="hidden mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                            <p class="font-semibold text-slate-100">Update ist auf diesem System nicht aktiviert</p>
+                            <p class="mt-1 text-slate-400">Damit du Updates aus dem Browser starten kannst, muss die Umgebungsvariable <span class="font-mono text-slate-200">KEEPUP_UPDATE_TOKEN</span> im <span class="font-mono text-slate-200">keepup.service</span> gesetzt sein.</p>
+                            <p class="mt-2 text-slate-400">Beispiel (systemd Override):</p>
+                            <p class="mt-1 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200">systemctl edit keepup.service</p>
+                            <p class="mt-2 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200">[Service]
+Environment=KEEPUP_UPDATE_TOKEN=DEIN_TOKEN</p>
+                            <p class="mt-2 text-slate-400">Danach:</p>
+                            <p class="mt-1 rounded-xl border border-white/10 bg-slate-950/50 px-3 py-2 font-mono text-xs text-slate-200">systemctl daemon-reload
+systemctl restart keepup.service</p>
+                        </div>
+
                         <form id="update-form" class="hidden mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
                             <input id="update-token" type="password" placeholder="Update-Token" autocomplete="off" class="h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none transition focus:border-sky-400">
                             <button id="update-run" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Update starten</button>
@@ -97,6 +109,7 @@
                         const closeBtn = document.getElementById('update-close');
                         const text = document.getElementById('update-banner-text');
                         const form = document.getElementById('update-form');
+                        const disabledPanel = document.getElementById('update-disabled');
                         if (!pill || !popover || !text || !closeBtn) return;
 
                         pill.classList.remove('hidden');
@@ -120,6 +133,7 @@
 
                         if (data.update_enabled && form) {
                             form.classList.remove('hidden');
+                            if (disabledPanel) disabledPanel.classList.add('hidden');
                             const runBtn = document.getElementById('update-run');
                             const tokenInput = document.getElementById('update-token');
                             if (runBtn) {
@@ -155,6 +169,8 @@
                                     }
                                 }, { once: true });
                             }
+                        } else {
+                            if (disabledPanel) disabledPanel.classList.remove('hidden');
                         }
                     } catch (e) {
                         return;
