@@ -176,6 +176,34 @@
                                     </dd>
                                 </div>
                             </dl>
+                            {% if monitor.sla %}
+                            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                                <h4 class="font-medium text-slate-300 mb-2">SLA / Uptime</h4>
+                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                    <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">7 Tage</div>
+                                        <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['7d'].uptime_pct }}%</div>
+                                        <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['7d'].incident_count }}</div>
+                                        <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['7d'].downtime_human or '0s' }}</div>
+                                        <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['7d'].mttr_human or '-' }}</div>
+                                    </div>
+                                    <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">30 Tage</div>
+                                        <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['30d'].uptime_pct }}%</div>
+                                        <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['30d'].incident_count }}</div>
+                                        <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['30d'].downtime_human or '0s' }}</div>
+                                        <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['30d'].mttr_human or '-' }}</div>
+                                    </div>
+                                    <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">90 Tage</div>
+                                        <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['90d'].uptime_pct }}%</div>
+                                        <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['90d'].incident_count }}</div>
+                                        <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['90d'].downtime_human or '0s' }}</div>
+                                        <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['90d'].mttr_human or '-' }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endif %}
                             {% if monitor.chart_data_json and monitor.chart_data_json != "[]" %}
                             <div class="mb-2">
                                 <h4 class="font-medium text-slate-300 mb-2">Antwortzeiten (letzte Checks)</h4>

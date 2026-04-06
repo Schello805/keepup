@@ -115,6 +115,7 @@ def normalize_timezone(timezone_name: str) -> str:
 
 def build_notification_settings_payload(
     app_timezone: str,
+    down_failures_threshold: int,
     telegram_enabled: Optional[str],
     telegram_bot_token: str,
     telegram_chat_id: str,
@@ -128,8 +129,12 @@ def build_notification_settings_payload(
     smtp_use_tls: Optional[str],
     smtp_use_ssl: Optional[str],
 ) -> dict:
+    down_failures_threshold = int(down_failures_threshold)
+    if down_failures_threshold < 1:
+        raise ValueError("Fehlschlag-Schwelle muss mindestens 1 sein.")
     return {
         "app_timezone": normalize_timezone(app_timezone),
+        "down_failures_threshold": down_failures_threshold,
         "telegram_enabled": telegram_enabled == "on",
         "telegram_bot_token": telegram_bot_token.strip(),
         "telegram_chat_id": telegram_chat_id.strip(),
@@ -643,6 +648,7 @@ async def run_monitor_route(monitor_id: int) -> RedirectResponse:
 @app.post("/settings/notifications")
 async def update_notification_settings(
     app_timezone: str = Form("UTC"),
+    down_failures_threshold: int = Form(3),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -659,6 +665,7 @@ async def update_notification_settings(
     try:
         payload = build_notification_settings_payload(
             app_timezone,
+            down_failures_threshold,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -681,6 +688,7 @@ async def update_notification_settings(
 @app.post("/settings/test/telegram")
 async def test_telegram_settings(
     app_timezone: str = Form("UTC"),
+    down_failures_threshold: int = Form(3),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -697,6 +705,7 @@ async def test_telegram_settings(
     try:
         payload = build_notification_settings_payload(
             app_timezone,
+            down_failures_threshold,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -728,6 +737,7 @@ async def test_telegram_settings(
 @app.post("/settings/test/smtp")
 async def test_smtp_settings(
     app_timezone: str = Form("UTC"),
+    down_failures_threshold: int = Form(3),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -744,6 +754,7 @@ async def test_smtp_settings(
     try:
         payload = build_notification_settings_payload(
             app_timezone,
+            down_failures_threshold,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,

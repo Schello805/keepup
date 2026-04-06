@@ -16,6 +16,7 @@ DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
     "refresh_interval": 10,
     "app_timezone": "UTC",
+    "down_failures_threshold": 3,
     "telegram_enabled": False,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
@@ -33,6 +34,92 @@ DEFAULT_SETTINGS = {
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _format_duration_seconds(seconds: Optional[float]) -> Optional[str]:
+    if seconds is None:
+        return None
+    seconds = max(0, int(round(seconds)))
+    mins, sec = divmod(seconds, 60)
+    hrs, mins = divmod(mins, 60)
+    days, hrs = divmod(hrs, 24)
+    if days:
+        return f"{days}d {hrs}h"
+    if hrs:
+        return f"{hrs}h {mins}m"
+    if mins:
+        return f"{mins}m"
+    return f"{sec}s"
+
+
+def _compute_sla_window(
+    cursor: sqlite3.Cursor,
+    monitor_id: int,
+    window_days: int,
+    now: datetime,
+) -> dict[str, Any]:
+    window_days = max(1, int(window_days))
+    window_start = now - timedelta(days=window_days)
+    window_seconds = (now - window_start).total_seconds()
+
+    cursor.execute(
+        """
+        SELECT started_at, ended_at
+        FROM incidents
+        WHERE monitor_id = ?
+          AND started_at <= ?
+          AND (ended_at IS NULL OR ended_at >= ?)
+        ORDER BY started_at ASC, id ASC
+        """,
+        (monitor_id, now.isoformat(), window_start.isoformat()),
+    )
+    incidents = cursor.fetchall()
+
+    downtime_seconds = 0.0
+    incident_count = 0
+    mttr_durations: list[float] = []
+
+    for row in incidents:
+        started = _parse_iso(row["started_at"]) or window_start
+        ended = _parse_iso(row["ended_at"]) or now
+
+        overlap_start = max(started, window_start)
+        overlap_end = min(ended, now)
+        if overlap_end <= overlap_start:
+            continue
+
+        incident_count += 1
+        downtime_seconds += (overlap_end - overlap_start).total_seconds()
+
+        if row["ended_at"] is not None:
+            mttr_durations.append((ended - started).total_seconds())
+
+    downtime_seconds = min(downtime_seconds, window_seconds)
+    uptime_ratio = 1.0 if window_seconds <= 0 else max(0.0, (window_seconds - downtime_seconds) / window_seconds)
+    uptime_pct = round(uptime_ratio * 100.0, 3)
+    mttr_seconds = (sum(mttr_durations) / len(mttr_durations)) if mttr_durations else None
+
+    return {
+        "window_days": window_days,
+        "uptime_pct": uptime_pct,
+        "incident_count": incident_count,
+        "downtime_seconds": int(round(downtime_seconds)),
+        "downtime_human": _format_duration_seconds(downtime_seconds),
+        "mttr_seconds": int(round(mttr_seconds)) if mttr_seconds is not None else None,
+        "mttr_human": _format_duration_seconds(mttr_seconds),
+    }
 
 
 def get_db() -> sqlite3.Connection:
@@ -112,11 +199,26 @@ def _ensure_monitor_columns(cursor: sqlite3.Cursor) -> None:
         "last_response_time": "REAL",
         "last_checked_at": "TEXT",
         "last_change_at": "TEXT",
+        "consecutive_failures": "INTEGER NOT NULL DEFAULT 0",
         "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
     }
     for column_name, column_type in required_columns.items():
         if column_name not in existing_columns:
             cursor.execute(f"ALTER TABLE monitors ADD COLUMN {column_name} {column_type}")
+
+
+def _get_int_setting(cursor: sqlite3.Cursor, key: str, default: int) -> int:
+    try:
+        cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = cursor.fetchone()
+        if not row:
+            return default
+        raw = row["value"]
+        parsed = deserialize_setting(raw)
+        val = int(parsed)
+        return val if val > 0 else default
+    except Exception:
+        return default
 
 
 def _seed_default_settings(cursor: sqlite3.Cursor) -> None:
@@ -183,6 +285,8 @@ def list_monitors() -> list[dict[str, Any]]:
         cursor.execute("SELECT * FROM monitors ORDER BY id DESC")
         monitors = [dict(row) for row in cursor.fetchall()]
 
+        now_dt = datetime.now(timezone.utc).replace(microsecond=0)
+
         for monitor in monitors:
             cursor.execute(
                 """
@@ -217,6 +321,12 @@ def list_monitors() -> list[dict[str, Any]]:
             total = len(recent_statuses)
             up_count = sum(1 for status in recent_statuses if status == "up")
             monitor["uptime_percentage"] = round((up_count / total) * 100, 1) if total else None
+
+            monitor["sla"] = {
+                "7d": _compute_sla_window(cursor, monitor["id"], 7, now_dt),
+                "30d": _compute_sla_window(cursor, monitor["id"], 30, now_dt),
+                "90d": _compute_sla_window(cursor, monitor["id"], 90, now_dt),
+            }
 
     return monitors
 
@@ -331,17 +441,40 @@ def log_check_result(
     timestamp = checked_at or utc_now()
     with closing(get_db()) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT status FROM monitors WHERE id = ?", (monitor_id,))
+        cursor.execute("SELECT status, consecutive_failures FROM monitors WHERE id = ?", (monitor_id,))
         current_row = cursor.fetchone()
         previous_status = current_row["status"] if current_row else "unknown"
-        status_changed = previous_status != new_status and previous_status != "unknown"
+        previous_failures = int(current_row["consecutive_failures"] or 0) if current_row else 0
+        threshold = _get_int_setting(
+            cursor,
+            "down_failures_threshold",
+            int(DEFAULT_SETTINGS.get("down_failures_threshold", 3)),
+        )
+
+        raw_status = (new_status or "unknown").strip().lower()
+        effective_status = previous_status
+
+        if raw_status == "up":
+            effective_status = "up"
+            consecutive_failures = 0
+        elif raw_status == "down":
+            consecutive_failures = previous_failures + 1
+            if previous_status == "down" or consecutive_failures >= threshold:
+                effective_status = "down"
+            else:
+                effective_status = previous_status
+        else:
+            consecutive_failures = previous_failures
+            effective_status = previous_status
+
+        status_changed = previous_status != effective_status and previous_status != "unknown"
 
         cursor.execute(
             """
             INSERT INTO checks (monitor_id, status, response_time, error_msg, checked_at)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (monitor_id, new_status, response_time, error_msg, timestamp),
+            (monitor_id, raw_status, response_time, error_msg, timestamp),
         )
 
         check_id = cursor.lastrowid
@@ -350,7 +483,7 @@ def log_check_result(
             cursor,
             monitor_id=monitor_id,
             previous_status=previous_status,
-            new_status=new_status,
+            new_status=effective_status,
             timestamp=timestamp,
             check_id=check_id,
             error_msg=error_msg,
@@ -367,22 +500,36 @@ def log_check_result(
                     WHEN status <> ? THEN ?
                     ELSE last_change_at
                 END,
+                consecutive_failures = ?,
                 updated_at = ?
             WHERE id = ?
             """,
-            (new_status, error_msg, response_time, timestamp, new_status, timestamp, timestamp, monitor_id),
+            (
+                effective_status,
+                error_msg,
+                response_time,
+                timestamp,
+                effective_status,
+                timestamp,
+                consecutive_failures,
+                timestamp,
+                monitor_id,
+            ),
         )
         conn.commit()
 
     return {
         "monitor_id": monitor_id,
         "previous_status": previous_status,
-        "status": new_status,
+        "status": effective_status,
         "status_changed": status_changed,
         "checked_at": timestamp,
         "check_id": check_id,
         "error_msg": error_msg,
         "response_time": response_time,
+        "raw_status": raw_status,
+        "consecutive_failures": consecutive_failures,
+        "down_failures_threshold": threshold,
     }
 
 
