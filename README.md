@@ -109,5 +109,5 @@ nohup ./.venv/bin/uvicorn main:app --host 0.0.0.0 --port 8000 > keepup.log 2>&1 
 
 ---
 
-<img width="1261" height="662" alt="Bildschirmfoto 2026-04-06 um 11 10 33" src="https://github.com/user-attachments/assets/1c8492ca-8874-4676-b36a-fe19c770a3e0" />
+<img width="1238" height="787" alt="Bildschirmfoto 2026-04-06 um 11 11 41" src="https://github.com/user-attachments/assets/7ec23fc3-0afb-4380-becc-e7786fe682e0" />
 
