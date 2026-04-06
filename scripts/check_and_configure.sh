@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
 SERVICE_PATH="/etc/systemd/system/keepup.service"
 KEEPUP_USER="keepup"
+ENV_DIR="/etc/keepup"
+ENV_FILE="$ENV_DIR/keepup.env"
 
 run_as_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -56,6 +58,32 @@ if ! id -u "$KEEPUP_USER" >/dev/null 2>&1; then
   run_as_root useradd --system --no-create-home --shell /usr/sbin/nologin "$KEEPUP_USER" || true
 fi
 
+echo "[keepup] Ensuring update token exists (KEEPUP_UPDATE_TOKEN)..."
+run_as_root mkdir -p "$ENV_DIR"
+if [ ! -f "$ENV_FILE" ] || ! grep -q '^KEEPUP_UPDATE_TOKEN=' "$ENV_FILE" 2>/dev/null; then
+  token=""
+  if command -v openssl >/dev/null 2>&1; then
+    token="$(openssl rand -hex 24 2>/dev/null || true)"
+  fi
+  if [ -z "$token" ]; then
+    token="$(python3 -c "import secrets; print(secrets.token_hex(24))" 2>/dev/null || true)"
+  fi
+  if [ -z "$token" ]; then
+    echo "[keepup] Warning: Could not generate update token automatically. Browser updates will remain disabled." >&2
+  else
+    run_as_root tee "$ENV_FILE" >/dev/null <<EOF
+KEEPUP_UPDATE_TOKEN=$token
+EOF
+    run_as_root chown root:"$KEEPUP_USER" "$ENV_FILE" || true
+    run_as_root chmod 640 "$ENV_FILE" || true
+    echo "[keepup] Update token generated and stored in $ENV_FILE"
+  fi
+else
+  run_as_root chown root:"$KEEPUP_USER" "$ENV_FILE" || true
+  run_as_root chmod 640 "$ENV_FILE" || true
+  echo "[keepup] Update token already present in $ENV_FILE"
+fi
+
 ensure_ping_capability
 
 echo "[keepup] Setting ownership of project files to $KEEPUP_USER..."
@@ -83,6 +111,7 @@ ExecStart=$VENV_DIR/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --log-level 
 Restart=on-failure
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-$ENV_FILE
 
 [Install]
 WantedBy=multi-user.target
