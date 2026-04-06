@@ -21,6 +21,15 @@ BACKUP_DIR="$ROOT_DIR/backups"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP="$(date +%F-%H%M%S)"
 
+run_with_timeout() {
+  local seconds="$1"; shift
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "${seconds}s" "$@"
+  else
+    "$@"
+  fi
+}
+
 if ! command -v timeout >/dev/null 2>&1; then
   echo "[update] 'timeout' not found. Attempting to install coreutils..."
   if command -v apt-get >/dev/null 2>&1; then
@@ -41,12 +50,36 @@ fi
 echo "[update] Creating pre-update backups"
 # copy sqlite DB if present (prefer sqlite3 .backup)
 if [ -f "$ROOT_DIR/keepup.db" ]; then
+  echo "[update] Backing up SQLite DB"
   if command -v sqlite3 >/dev/null 2>&1; then
-    sqlite3 "$ROOT_DIR/keepup.db" ".backup '$BACKUP_DIR/keepup-db-$TIMESTAMP.db'" || true
-    echo "[update] SQLite backup created: $BACKUP_DIR/keepup-db-$TIMESTAMP.db"
+    set +e
+    run_with_timeout 15 sqlite3 "$ROOT_DIR/keepup.db" "PRAGMA busy_timeout=2000; .backup '$BACKUP_DIR/keepup-db-$TIMESTAMP.db'" 2>/dev/null
+    db_backup_rc=$?
+    set -e
+    if [ $db_backup_rc -eq 0 ]; then
+      echo "[update] SQLite backup created: $BACKUP_DIR/keepup-db-$TIMESTAMP.db"
+    else
+      echo "[update] SQLite backup failed or timed out (rc=$db_backup_rc). Trying file copy fallback."
+      set +e
+      run_with_timeout 15 cp "$ROOT_DIR/keepup.db" "$BACKUP_DIR/keepup-db-$TIMESTAMP.db" 2>/dev/null
+      cp_rc=$?
+      set -e
+      if [ $cp_rc -eq 0 ]; then
+        echo "[update] Copied keepup.db -> $BACKUP_DIR/keepup-db-$TIMESTAMP.db"
+      else
+        echo "[update] File copy fallback failed (rc=$cp_rc). Skipping DB backup."
+      fi
+    fi
   else
-    cp "$ROOT_DIR/keepup.db" "$BACKUP_DIR/keepup-db-$TIMESTAMP.db" || true
-    echo "[update] Copied keepup.db -> $BACKUP_DIR/keepup-db-$TIMESTAMP.db"
+    set +e
+    run_with_timeout 15 cp "$ROOT_DIR/keepup.db" "$BACKUP_DIR/keepup-db-$TIMESTAMP.db" 2>/dev/null
+    cp_rc=$?
+    set -e
+    if [ $cp_rc -eq 0 ]; then
+      echo "[update] Copied keepup.db -> $BACKUP_DIR/keepup-db-$TIMESTAMP.db"
+    else
+      echo "[update] File copy backup failed or timed out (rc=$cp_rc). Skipping DB backup."
+    fi
   fi
 fi
 
