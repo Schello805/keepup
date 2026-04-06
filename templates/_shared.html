@@ -139,8 +139,12 @@
                                             text.textContent = msg || 'Update fehlgeschlagen.';
                                             return;
                                         }
-                                        runBtn.textContent = 'Fertig – lade neu…';
-                                        window.setTimeout(() => window.location.reload(), 1200);
+                                        runBtn.textContent = 'Fertig – lade JSON…';
+                                        text.textContent = 'Update erfolgreich. JSON wird heruntergeladen…';
+                                        window.setTimeout(() => {
+                                            window.location.href = '/api/export';
+                                        }, 800);
+                                        window.setTimeout(() => window.location.reload(), 2200);
                                     } catch (e) {
                                         runBtn.textContent = 'Fehlgeschlagen';
                                     } finally {
