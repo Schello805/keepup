@@ -491,12 +491,10 @@ async def update_status() -> JSONResponse:
 
 
 @app.post("/api/update/run")
-async def run_update(token: str = Form("")) -> JSONResponse:
+async def run_update() -> JSONResponse:
     expected = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
     if not expected:
         raise HTTPException(status_code=403, detail="Update ist nicht aktiviert (KEEPUP_UPDATE_TOKEN fehlt).")
-    if token.strip() != expected:
-        raise HTTPException(status_code=403, detail="Ungültiger Update-Token.")
 
     script_path = BASE_DIR / "scripts" / "update_keepup.sh"
     if not script_path.exists():

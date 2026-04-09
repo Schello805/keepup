@@ -85,10 +85,10 @@ Environment=KEEPUP_UPDATE_TOKEN=DEIN_TOKEN</p>
 systemctl restart keepup.service</p>
                         </div>
 
-                        <form id="update-form" class="hidden mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <input id="update-token" type="password" placeholder="Update-Token" autocomplete="off" class="h-11 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 text-sm outline-none transition focus:border-sky-400">
+                        <div id="update-form" class="hidden mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <p class="text-sm text-slate-300">Update ist auf diesem System aktiviert und kann direkt aus dem Browser gestartet werden.</p>
                             <button id="update-run" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Update starten</button>
-                        </form>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -135,20 +135,22 @@ systemctl restart keepup.service</p>
                             form.classList.remove('hidden');
                             if (disabledPanel) disabledPanel.classList.add('hidden');
                             const runBtn = document.getElementById('update-run');
-                            const tokenInput = document.getElementById('update-token');
                             if (runBtn) {
                                 runBtn.addEventListener('click', async () => {
-                                    const token = tokenInput ? tokenInput.value : '';
                                     runBtn.disabled = true;
                                     runBtn.textContent = 'Update läuft…';
                                     try {
                                         const runRes = await fetch('/api/update/run', {
                                             method: 'POST',
-                                            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                                            body: new URLSearchParams({ token }),
                                         });
                                         if (!runRes.ok) {
-                                            const msg = await runRes.text();
+                                            let msg = 'Update fehlgeschlagen.';
+                                            try {
+                                                const errorPayload = await runRes.json();
+                                                msg = errorPayload.detail || msg;
+                                            } catch (_) {
+                                                msg = await runRes.text() || msg;
+                                            }
                                             runBtn.textContent = 'Fehlgeschlagen';
                                             text.textContent = msg || 'Update fehlgeschlagen.';
                                             return;
@@ -167,7 +169,7 @@ systemctl restart keepup.service</p>
                                             runBtn.textContent = 'Update starten';
                                         }, 2500);
                                     }
-                                }, { once: true });
+                                });
                             }
                         } else {
                             if (disabledPanel) disabledPanel.classList.remove('hidden');
