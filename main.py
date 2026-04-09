@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import subprocess
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -385,6 +386,15 @@ def get_app_version_display() -> str:
     return __version__
 
 
+def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
+    def _restart() -> None:
+        os._exit(1)
+
+    timer = threading.Timer(delay_seconds, _restart)
+    timer.daemon = True
+    timer.start()
+
+
 def _get_update_commit_summaries(previous_sha: Optional[str], current_sha: Optional[str], limit: int = 8) -> list[str]:
     if not previous_sha or not current_sha or previous_sha == current_sha:
         return []
@@ -556,6 +566,9 @@ async def run_update() -> JSONResponse:
     ok = result.returncode == 0
     current_sha = _run_git_command(["git", "rev-parse", "HEAD"])
     changes = _get_update_commit_summaries(previous_sha, current_sha)
+    restart_scheduled = bool(ok and current_sha and current_sha != previous_sha)
+    if restart_scheduled:
+        _schedule_self_restart()
     return JSONResponse(
         {
             "ok": ok,
@@ -565,6 +578,7 @@ async def run_update() -> JSONResponse:
             "previous_sha_short": (previous_sha[:7] if previous_sha else None),
             "current_sha_short": (current_sha[:7] if current_sha else None),
             "changes": changes,
+            "restart_scheduled": restart_scheduled,
             "stdout": stdout,
             "stderr": stderr,
         },

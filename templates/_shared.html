@@ -134,7 +134,7 @@ systemctl restart keepup.service</p>
                     return false;
                 }
 
-                async function downloadBackupAfterUpdate() {
+                async function downloadBackupAfterUpdate(reloadAfter = false) {
                     const ready = await waitForServiceReady();
                     if (!ready) return false;
                     try {
@@ -151,6 +151,9 @@ systemctl restart keepup.service</p>
                         link.click();
                         link.remove();
                         window.URL.revokeObjectURL(downloadUrl);
+                        if (reloadAfter) {
+                            window.setTimeout(() => window.location.reload(), 1200);
+                        }
                         return true;
                     } catch (_) {
                         return false;
@@ -191,7 +194,7 @@ systemctl restart keepup.service</p>
                     downloadBtn.onclick = async () => {
                         downloadBtn.disabled = true;
                         downloadBtn.textContent = 'Lade Backup…';
-                        const ok = await downloadBackupAfterUpdate();
+                        const ok = await downloadBackupAfterUpdate(true);
                         downloadBtn.textContent = ok ? 'Backup geladen' : 'Download erneut versuchen';
                         downloadBtn.disabled = false;
                     };
@@ -262,7 +265,7 @@ systemctl restart keepup.service</p>
                                         hidePopover();
                                         showUpdateResult(payload);
                                         window.setTimeout(() => {
-                                            downloadBackupAfterUpdate();
+                                            downloadBackupAfterUpdate(true);
                                         }, 600);
                                     } catch (e) {
                                         runBtn.textContent = 'Fehlgeschlagen';
