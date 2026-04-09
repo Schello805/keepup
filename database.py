@@ -17,6 +17,7 @@ DEFAULT_SETTINGS = {
     "refresh_interval": 10,
     "app_timezone": "UTC",
     "down_failures_threshold": 3,
+    "retention_days": 7,
     "telegram_enabled": False,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
@@ -446,7 +447,13 @@ def delete_monitor(monitor_id: int) -> None:
         conn.commit()
 
 
-def cleanup_old_checks(days: int = 7) -> None:
+def cleanup_old_checks(days: Optional[int] = None) -> None:
+    if days is None:
+        try:
+            settings = get_settings()
+            days = max(1, int(settings.get("retention_days", DEFAULT_SETTINGS["retention_days"])))
+        except Exception:
+            days = int(DEFAULT_SETTINGS["retention_days"])
     with closing(get_db()) as conn:
         conn.execute(
             '''

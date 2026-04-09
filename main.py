@@ -117,6 +117,7 @@ def normalize_timezone(timezone_name: str) -> str:
 def build_notification_settings_payload(
     app_timezone: str,
     down_failures_threshold: int,
+    retention_days: int,
     telegram_enabled: Optional[str],
     telegram_bot_token: str,
     telegram_chat_id: str,
@@ -131,11 +132,15 @@ def build_notification_settings_payload(
     smtp_use_ssl: Optional[str],
 ) -> dict:
     down_failures_threshold = int(down_failures_threshold)
+    retention_days = int(retention_days)
     if down_failures_threshold < 1:
         raise ValueError("Fehlschlag-Schwelle muss mindestens 1 sein.")
+    if retention_days < 1:
+        raise ValueError("Aufbewahrungszeit muss mindestens 1 Tag sein.")
     return {
         "app_timezone": normalize_timezone(app_timezone),
         "down_failures_threshold": down_failures_threshold,
+        "retention_days": retention_days,
         "telegram_enabled": telegram_enabled == "on",
         "telegram_bot_token": telegram_bot_token.strip(),
         "telegram_chat_id": telegram_chat_id.strip(),
@@ -663,6 +668,7 @@ async def run_monitor_route(monitor_id: int) -> RedirectResponse:
 async def update_notification_settings(
     app_timezone: str = Form("UTC"),
     down_failures_threshold: int = Form(3),
+    retention_days: int = Form(7),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -680,6 +686,7 @@ async def update_notification_settings(
         payload = build_notification_settings_payload(
             app_timezone,
             down_failures_threshold,
+            retention_days,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -703,6 +710,7 @@ async def update_notification_settings(
 async def test_telegram_settings(
     app_timezone: str = Form("UTC"),
     down_failures_threshold: int = Form(3),
+    retention_days: int = Form(7),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -720,6 +728,7 @@ async def test_telegram_settings(
         payload = build_notification_settings_payload(
             app_timezone,
             down_failures_threshold,
+            retention_days,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -752,6 +761,7 @@ async def test_telegram_settings(
 async def test_smtp_settings(
     app_timezone: str = Form("UTC"),
     down_failures_threshold: int = Form(3),
+    retention_days: int = Form(7),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -769,6 +779,7 @@ async def test_smtp_settings(
         payload = build_notification_settings_payload(
             app_timezone,
             down_failures_threshold,
+            retention_days,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -800,7 +811,8 @@ async def test_smtp_settings(
 @app.get("/api/export")
 async def export_configuration() -> JSONResponse:
     payload = export_backup()
-    headers = {"Content-Disposition": 'attachment; filename="keepup-backup.json"'}
+    export_date = datetime.now().strftime("%Y-%m-%d")
+    headers = {"Content-Disposition": f'attachment; filename="keepup-backup-{export_date}.json"'}
     return JSONResponse(content=payload, headers=headers)
 
 

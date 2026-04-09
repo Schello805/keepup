@@ -82,9 +82,14 @@
                             <span class="text-sm text-slate-300">Alarm erst nach X Fehlschlägen (DOWN)</span>
                             <input type="number" min="1" step="1" name="down_failures_threshold" value="{{ settings.down_failures_threshold or 3 }}" class="{{ input_classes() }} appearance-none">
                         </label>
+                        <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Checks aufbewahren (Tage)</span>
+                            <input type="number" min="1" step="1" name="retention_days" value="{{ settings.retention_days or 7 }}" class="{{ input_classes() }} appearance-none">
+                        </label>
                     </div>
                     <p class="mt-3 text-xs text-slate-500">Die Auswahl steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
                     <p class="mt-2 text-xs text-slate-500">Benachrichtigungen und Incidents werden erst ausgelöst, wenn ein Monitor X Mal in Folge als <span class="font-semibold text-rose-200">down</span> gemessen wurde. Empfehlung: 3.</p>
+                    <p class="mt-2 text-xs text-slate-500">Die Aufbewahrungszeit legt fest, wie lange alte Check-Einträge in der Datenbank bleiben, bevor KeepUp sie automatisch bereinigt.</p>
                 {% endcall %}
 
                 {% call accordion_section('settings-telegram', 'Telegram', 'Bot-Token und Chat-ID für Statusmeldungen.', False) %}
@@ -227,7 +232,7 @@
                             <p class="mt-2 text-slate-400">KeepUp räumt alte Prüfungen automatisch auf, damit die lokale SQLite-Datenbank schlank bleibt.</p>
                             <ul class="mt-2 list-disc space-y-2 pl-5 text-slate-300">
                                 <li>Auf den Monitor-Karten werden die letzten 30 Checks als Historie angezeigt.</li>
-                                <li>Ältere Check-Einträge werden standardmäßig nach 7 Tagen bereinigt.</li>
+                                <li>Ältere Check-Einträge werden nach der unter <span class="font-semibold text-slate-100">Allgemein</span> eingestellten Anzahl an Tagen bereinigt.</li>
                                 <li>Offene Down-Phasen bleiben für Incident- und SLA-Auswertungen erhalten.</li>
                             </ul>
                         </div>
