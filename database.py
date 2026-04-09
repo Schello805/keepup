@@ -139,6 +139,8 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 type TEXT NOT NULL CHECK(type IN ('http', 'ping')),
                 target TEXT NOT NULL,
+                http_method TEXT NOT NULL DEFAULT 'GET',
+                retry_count INTEGER NOT NULL DEFAULT 2,
                 interval INTEGER NOT NULL DEFAULT 60,
                 timeout INTEGER NOT NULL DEFAULT 10,
                 enabled INTEGER NOT NULL DEFAULT 1,
@@ -193,6 +195,8 @@ def _ensure_monitor_columns(cursor: sqlite3.Cursor) -> None:
     cursor.execute("PRAGMA table_info(monitors)")
     existing_columns = {row["name"] for row in cursor.fetchall()}
     required_columns = {
+        "http_method": "TEXT NOT NULL DEFAULT 'GET'",
+        "retry_count": "INTEGER NOT NULL DEFAULT 2",
         "timeout": "INTEGER NOT NULL DEFAULT 10",
         "enabled": "INTEGER NOT NULL DEFAULT 1",
         "last_error": "TEXT",
@@ -335,6 +339,8 @@ def create_monitor(
     name: str,
     monitor_type: str,
     target: str,
+    http_method: str,
+    retry_count: int,
     interval: int,
     timeout: int,
     enabled: bool = True,
@@ -345,10 +351,21 @@ def create_monitor(
         cursor.execute(
             """
             INSERT INTO monitors (
-                name, type, target, interval, timeout, enabled, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+                name, type, target, http_method, retry_count, interval, timeout, enabled, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
             """,
-            (name.strip(), monitor_type, target.strip(), interval, timeout, int(enabled), now, now),
+            (
+                name.strip(),
+                monitor_type,
+                target.strip(),
+                http_method.strip().upper(),
+                max(0, int(retry_count)),
+                interval,
+                timeout,
+                int(enabled),
+                now,
+                now,
+            ),
         )
         monitor_id = cursor.lastrowid
         conn.commit()
@@ -360,6 +377,8 @@ def update_monitor(
     name: str,
     monitor_type: str,
     target: str,
+    http_method: str,
+    retry_count: int,
     interval: int,
     timeout: int,
 ) -> None:
@@ -371,12 +390,24 @@ def update_monitor(
             SET name = ?,
                 type = ?,
                 target = ?,
+                http_method = ?,
+                retry_count = ?,
                 interval = ?,
                 timeout = ?,
                 updated_at = ?
             WHERE id = ?
             """,
-            (name.strip(), monitor_type, target.strip(), interval, timeout, now, monitor_id),
+            (
+                name.strip(),
+                monitor_type,
+                target.strip(),
+                http_method.strip().upper(),
+                max(0, int(retry_count)),
+                interval,
+                timeout,
+                now,
+                monitor_id,
+            ),
         )
         conn.commit()
 
@@ -701,15 +732,17 @@ def import_backup(payload: dict[str, Any]) -> None:
             cursor.execute(
                 """
                 INSERT INTO monitors (
-                    id, name, type, target, interval, timeout, enabled, status, last_error,
+                    id, name, type, target, http_method, retry_count, interval, timeout, enabled, status, last_error,
                     last_response_time, last_checked_at, last_change_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     monitor.get("id"),
                     monitor["name"],
                     monitor["type"],
                     monitor["target"],
+                    str(monitor.get("http_method", "GET")).upper(),
+                    int(monitor.get("retry_count", 2) or 0),
                     monitor.get("interval", 60),
                     monitor.get("timeout", 10),
                     int(bool(monitor.get("enabled", True))),

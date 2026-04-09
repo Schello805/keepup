@@ -131,7 +131,7 @@
                                     <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
                                 </button>
                             </form>
-                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
                                 <span class="sr-only">Bearbeiten</span>
                             </button>
@@ -382,6 +382,20 @@
                     <input type="number" min="10" step="10" name="interval" value="60" class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
+                    <span class="text-sm text-slate-300">HTTP-Methode</span>
+                    <select name="http_method" class="{{ select_classes() }}">
+                        <option value="GET">GET</option>
+                        <option value="HEAD">HEAD</option>
+                    </select>
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Retries</span>
+                    <input type="number" min="0" max="5" step="1" name="retry_count" value="2" class="{{ input_classes() }}">
+                </label>
+                <label class="space-y-2 md:col-span-2">
+                    <p class="text-xs text-slate-500">`HEAD` ist fuer viele Webseiten schonender. `Retries` steuert, wie oft KeepUp nach einem HTTP- oder Ping-Fehler direkt erneut prueft.</p>
+                </label>
+                <label class="space-y-2">
                     <span class="text-sm text-slate-300">Timeout (Sekunden)</span>
                     <input type="number" min="2" step="1" name="timeout" value="10" class="{{ input_classes() }}">
                 </label>
@@ -415,6 +429,17 @@
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300">Ziel</span>
                     <input id="edit-monitor-target" name="target" required class="{{ input_classes() }}">
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">HTTP-Methode</span>
+                    <select id="edit-monitor-http-method" name="http_method" class="{{ select_classes() }}">
+                        <option value="GET">GET</option>
+                        <option value="HEAD">HEAD</option>
+                    </select>
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300">Retries</span>
+                    <input id="edit-monitor-retry-count" type="number" min="0" max="5" step="1" name="retry_count" required class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
@@ -504,6 +529,8 @@
             document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
             document.getElementById("edit-monitor-type").value = button.dataset.monitorType || "http";
             document.getElementById("edit-monitor-target").value = button.dataset.monitorTarget || "";
+            document.getElementById("edit-monitor-http-method").value = button.dataset.monitorHttpMethod || "GET";
+            document.getElementById("edit-monitor-retry-count").value = button.dataset.monitorRetryCount || "2";
             document.getElementById("edit-monitor-interval").value = button.dataset.monitorInterval || "60";
             document.getElementById("edit-monitor-timeout").value = button.dataset.monitorTimeout || "10";
 

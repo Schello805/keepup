@@ -576,15 +576,21 @@ async def create_monitor_route(
     name: str = Form(...),
     monitor_type: str = Form(...),
     target: str = Form(...),
+    http_method: str = Form("GET"),
+    retry_count: int = Form(2),
     interval: int = Form(...),
     timeout: int = Form(...),
 ) -> RedirectResponse:
     if monitor_type not in {"http", "ping"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
+    if http_method not in {"GET", "HEAD"}:
+        raise HTTPException(status_code=400, detail="Unsupported HTTP method")
     monitor_id = create_monitor(
         name=name,
         monitor_type=monitor_type,
         target=target,
+        http_method=http_method,
+        retry_count=max(0, min(5, retry_count)),
         interval=max(10, interval),
         timeout=max(2, timeout),
     )
@@ -599,6 +605,8 @@ async def edit_monitor_route(
     name: str = Form(...),
     monitor_type: str = Form(...),
     target: str = Form(...),
+    http_method: str = Form("GET"),
+    retry_count: int = Form(2),
     interval: int = Form(...),
     timeout: int = Form(...),
 ) -> RedirectResponse:
@@ -607,12 +615,16 @@ async def edit_monitor_route(
         raise HTTPException(status_code=404, detail="Monitor not found")
     if monitor_type not in {"http", "ping"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
+    if http_method not in {"GET", "HEAD"}:
+        raise HTTPException(status_code=400, detail="Unsupported HTTP method")
 
     update_monitor(
         monitor_id=monitor_id,
         name=name,
         monitor_type=monitor_type,
         target=target,
+        http_method=http_method,
+        retry_count=max(0, min(5, retry_count)),
         interval=max(10, interval),
         timeout=max(2, timeout),
     )

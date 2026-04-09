@@ -85,6 +85,14 @@
                     </div>
                     <p class="mt-3 text-xs text-slate-500">Die Auswahl steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
                     <p class="mt-2 text-xs text-slate-500">Benachrichtigungen und Incidents werden erst ausgelöst, wenn ein Monitor X Mal in Folge als <span class="font-semibold text-rose-200">down</span> gemessen wurde. Empfehlung: 3.</p>
+                    <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                        <p class="text-sm font-semibold text-slate-200">HTTP-Methode erklärt</p>
+                        <div class="mt-2 space-y-2 text-sm text-slate-300">
+                            <p><span class="font-semibold text-slate-100">GET</span> lädt die Seite vollständig an und prüft, ob der eigentliche Inhalt erreichbar ist. Das ist am zuverlässigsten, erzeugt aber auch die meiste Last.</p>
+                            <p><span class="font-semibold text-slate-100">HEAD</span> prüft nur die Antwort-Header und lädt den Seiteninhalt nicht vollständig. Das ist deutlich schonender und oft die bessere Wahl für häufige Checks.</p>
+                            <p class="text-slate-400">Empfehlung: Für normale Webseiten zuerst <span class="font-semibold text-slate-200">HEAD</span> verwenden. Wenn eine Seite damit nicht korrekt reagiert, auf <span class="font-semibold text-slate-200">GET</span> umstellen.</p>
+                        </div>
+                    </div>
                 {% endcall %}
 
                 {% call accordion_section('settings-telegram', 'Telegram', 'Bot-Token und Chat-ID für Statusmeldungen.', False) %}

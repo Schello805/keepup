@@ -36,7 +36,10 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
         monitor.get("target"),
     )
 
-    for attempt in range(3):
+    retry_count = max(0, int(monitor.get("retry_count") or 0))
+    total_attempts = 1 + retry_count
+
+    for attempt in range(total_attempts):
         if monitor["type"] == "http":
             status, response_time, error_message = await check_http_target_raw(monitor)
         else:
@@ -45,7 +48,7 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
         if status == "up":
             break
             
-        if attempt < 2:
+        if attempt < total_attempts - 1:
             logger.warning(
                 "check_retry monitor_id=%s attempt=%s status=%s error=%s",
                 monitor.get("id"),
@@ -53,7 +56,7 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
                 status,
                 (error_message or ""),
             )
-            await asyncio.sleep(10)
+            await asyncio.sleep(5)
 
     result = await asyncio.to_thread(
         log_check_result,
@@ -89,6 +92,9 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
     timeout = httpx.Timeout(monitor["timeout"])
     error_message = None
     status = "down"
+    method = str(monitor.get("http_method") or "GET").upper()
+    if method not in {"GET", "HEAD"}:
+        method = "GET"
 
     try:
         async with httpx.AsyncClient(
@@ -96,7 +102,9 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
             headers={"User-Agent": HTTP_USER_AGENT},
             follow_redirects=True,
         ) as client:
-            response = await client.get(monitor["target"])
+            response = await client.request(method, monitor["target"])
+            if method == "HEAD" and response.status_code == 405:
+                response = await client.get(monitor["target"])
         response_time = round((time.perf_counter() - start) * 1000, 2)
         if 200 <= response.status_code < 400:
             status = "up"
