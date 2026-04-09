@@ -7,7 +7,7 @@ VENV_DIR="$ROOT_DIR/.venv"
 run_as_root() {
   if [ "$(id -u)" -ne 0 ]; then
     if command -v sudo >/dev/null 2>&1; then
-      sudo "$@"
+      sudo -n "$@"
     else
       echo "This script requires root privileges for some operations (no sudo available)." >&2
       exit 1
@@ -15,6 +15,16 @@ run_as_root() {
   else
     "$@"
   fi
+}
+
+can_run_as_root() {
+  if [ "$(id -u)" -eq 0 ]; then
+    return 0
+  fi
+  if command -v sudo >/dev/null 2>&1 && sudo -n true >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
 }
 
 BACKUP_DIR="$ROOT_DIR/backups"
@@ -118,25 +128,31 @@ if [ ! -d "$VENV_DIR" ]; then
   python3 -m venv "$VENV_DIR"
 fi
 
-"$VENV_DIR/bin/python" -m pip install --upgrade pip
-"$VENV_DIR/bin/pip" install -r "$ROOT_DIR/requirements.txt"
-
 if [ -d "$ROOT_DIR/.git" ]; then
   git -C "$ROOT_DIR" fetch --prune
   git -C "$ROOT_DIR" pull --ff-only
 fi
 
+"$VENV_DIR/bin/python" -m pip install --upgrade pip
+"$VENV_DIR/bin/pip" install -r "$ROOT_DIR/requirements.txt"
+
 "$VENV_DIR/bin/python" -m py_compile "$ROOT_DIR/main.py" "$ROOT_DIR/database.py" "$ROOT_DIR/monitor.py"
 
 echo "[update] Running configuration checks and ensuring service is configured"
-if [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ]; then
+if [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ] && can_run_as_root; then
   run_as_root "$ROOT_DIR/scripts/check_and_configure.sh"
+elif [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ]; then
+  echo "[update] Skipping root-only configuration checks (no passwordless sudo available)."
 else
   echo "[update] Warning: check_and_configure.sh not found or not executable"
 fi
 
-echo "[update] Restarting keepup service"
-run_as_root systemctl restart keepup.service || true
+if command -v systemctl >/dev/null 2>&1 && can_run_as_root; then
+  echo "[update] Restarting keepup service"
+  run_as_root systemctl restart keepup.service || true
+else
+  echo "[update] Update completed, but service restart was skipped. Please restart keepup.service manually."
+fi
 
 echo "Update finished. Check status: systemctl status keepup.service"
 echo "View logs: journalctl -u keepup.service -f"

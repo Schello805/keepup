@@ -147,7 +147,7 @@ systemctl restart keepup.service</p>
                                             let msg = 'Update fehlgeschlagen.';
                                             try {
                                                 const errorPayload = await runRes.json();
-                                                msg = errorPayload.detail || msg;
+                                                msg = errorPayload.detail || errorPayload.stderr || errorPayload.stdout || msg;
                                             } catch (_) {
                                                 msg = await runRes.text() || msg;
                                             }
