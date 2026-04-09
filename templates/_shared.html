@@ -89,6 +89,11 @@ systemctl restart keepup.service</p>
                             <p class="text-sm text-slate-300">Update ist auf diesem System aktiviert und kann direkt aus dem Browser gestartet werden.</p>
                             <button id="update-run" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Update starten</button>
                         </div>
+
+                        <div id="update-changes" class="hidden mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-slate-200">
+                            <p class="font-semibold text-emerald-100">Änderungen im Update</p>
+                            <ul id="update-changes-list" class="mt-2 list-disc space-y-1 pl-5 text-slate-200"></ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -110,6 +115,8 @@ systemctl restart keepup.service</p>
                         const text = document.getElementById('update-banner-text');
                         const form = document.getElementById('update-form');
                         const disabledPanel = document.getElementById('update-disabled');
+                        const changesPanel = document.getElementById('update-changes');
+                        const changesList = document.getElementById('update-changes-list');
                         if (!pill || !popover || !text || !closeBtn) return;
 
                         pill.classList.remove('hidden');
@@ -155,12 +162,28 @@ systemctl restart keepup.service</p>
                                             text.textContent = msg || 'Update fehlgeschlagen.';
                                             return;
                                         }
-                                        runBtn.textContent = 'Fertig – lade JSON…';
-                                        text.textContent = 'Update erfolgreich. JSON wird heruntergeladen…';
+                                        const payload = await runRes.json();
+                                        runBtn.textContent = 'Aktualisiert';
+                                        text.textContent = 'Update erfolgreich. Das Backup wird jetzt heruntergeladen. Bitte die Seite danach manuell neu laden.';
+                                        if (changesPanel && changesList) {
+                                            const changes = Array.isArray(payload.changes) ? payload.changes : [];
+                                            changesList.innerHTML = '';
+                                            if (changes.length) {
+                                                changes.forEach((entry) => {
+                                                    const li = document.createElement('li');
+                                                    li.textContent = entry;
+                                                    changesList.appendChild(li);
+                                                });
+                                            } else {
+                                                const li = document.createElement('li');
+                                                li.textContent = 'Keine Commit-Änderungen ermittelt.';
+                                                changesList.appendChild(li);
+                                            }
+                                            changesPanel.classList.remove('hidden');
+                                        }
                                         window.setTimeout(() => {
                                             window.location.href = '/api/export';
-                                        }, 800);
-                                        window.setTimeout(() => window.location.reload(), 2200);
+                                        }, 700);
                                     } catch (e) {
                                         runBtn.textContent = 'Fehlgeschlagen';
                                     } finally {

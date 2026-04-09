@@ -378,6 +378,31 @@ def _run_git_command(args: list[str]) -> Optional[str]:
         return None
 
 
+def _get_update_commit_summaries(previous_sha: Optional[str], current_sha: Optional[str], limit: int = 8) -> list[str]:
+    if not previous_sha or not current_sha or previous_sha == current_sha:
+        return []
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(BASE_DIR),
+                "log",
+                "--pretty=format:%h %s",
+                f"{previous_sha}..{current_sha}",
+                f"-n{max(1, limit)}",
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=4,
+        )
+    except Exception:
+        return []
+    return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+
+
 async def _get_remote_main_sha() -> Optional[str]:
     url = "https://api.github.com/repos/Schello805/keepup/commits/main"
     headers = {"User-Agent": "KeepUp"}
@@ -500,6 +525,8 @@ async def run_update() -> JSONResponse:
     if not script_path.exists():
         raise HTTPException(status_code=500, detail="Update-Script fehlt.")
 
+    previous_sha = _run_git_command(["git", "rev-parse", "HEAD"])
+
     try:
         result = await asyncio.to_thread(
             lambda: subprocess.run(
@@ -520,10 +547,17 @@ async def run_update() -> JSONResponse:
     stdout = (result.stdout or "").strip()
     stderr = (result.stderr or "").strip()
     ok = result.returncode == 0
+    current_sha = _run_git_command(["git", "rev-parse", "HEAD"])
+    changes = _get_update_commit_summaries(previous_sha, current_sha)
     return JSONResponse(
         {
             "ok": ok,
             "returncode": result.returncode,
+            "previous_sha": previous_sha,
+            "current_sha": current_sha,
+            "previous_sha_short": (previous_sha[:7] if previous_sha else None),
+            "current_sha_short": (current_sha[:7] if current_sha else None),
+            "changes": changes,
             "stdout": stdout,
             "stderr": stderr,
         },
