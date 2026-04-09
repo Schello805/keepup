@@ -180,7 +180,7 @@ def build_dashboard_context(request: Request) -> dict:
         "request": request,
         "monitors": monitors,
         "settings": settings,
-        "app_version": __version__,
+        "app_version": get_app_version_display(),
         "active_page": "dashboard",
         "toast": get_toast(request),
         "summary": {
@@ -204,7 +204,7 @@ def build_settings_context(request: Request) -> dict:
     return {
         "request": request,
         "settings": settings,
-        "app_version": __version__,
+        "app_version": get_app_version_display(),
         "timezone_options": timezone_options,
         "active_page": "settings",
         "toast": get_toast(request),
@@ -347,7 +347,7 @@ def build_incidents_context(request: Request) -> dict:
     return {
         "request": request,
         "settings": settings,
-        "app_version": __version__,
+        "app_version": get_app_version_display(),
         "active_page": "incidents",
         "toast": get_toast(request),
         "monitors": monitors,
@@ -376,6 +376,13 @@ def _run_git_command(args: list[str]) -> Optional[str]:
         return (result.stdout or "").strip() or None
     except Exception:
         return None
+
+
+def get_app_version_display() -> str:
+    revision = _run_git_command(["git", "rev-list", "--count", "HEAD"])
+    if revision and revision.isdigit():
+        return f"{__version__} rev.{revision}"
+    return __version__
 
 
 def _get_update_commit_summaries(previous_sha: Optional[str], current_sha: Optional[str], limit: int = 8) -> list[str]:
@@ -504,7 +511,7 @@ async def update_status() -> JSONResponse:
     update_enabled = bool(token)
 
     payload = {
-        "current_version": __version__,
+        "current_version": get_app_version_display(),
         "local_sha": local_sha,
         "local_sha_short": (local_sha[:7] if local_sha else None),
         "remote_sha": remote_sha,
