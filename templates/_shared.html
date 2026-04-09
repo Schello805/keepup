@@ -90,17 +90,113 @@ systemctl restart keepup.service</p>
                             <button id="update-run" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Update starten</button>
                         </div>
 
-                        <div id="update-changes" class="hidden mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-slate-200">
-                            <p class="font-semibold text-emerald-100">Änderungen im Update</p>
-                            <ul id="update-changes-list" class="mt-2 list-disc space-y-1 pl-5 text-slate-200"></ul>
-                        </div>
                     </div>
                 </div>
             </div>
         </header>
 
+        <div id="update-result-modal" class="hidden fixed inset-0 z-50">
+            <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+            <div class="relative mx-auto mt-16 w-[min(42rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-keepup-panel p-5 shadow-panel">
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-semibold text-emerald-100">Update erfolgreich</p>
+                        <p id="update-result-text" class="mt-1 text-sm text-slate-300">KeepUp wurde aktualisiert.</p>
+                    </div>
+                    <button id="update-result-close" type="button" class="tap-target inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-200 transition hover:bg-white/10" aria-label="Update-Ergebnis schließen">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-slate-200">
+                    <p class="font-semibold text-emerald-100">Änderungen im Update</p>
+                    <ul id="update-result-list" class="mt-2 list-disc space-y-1 pl-5 text-slate-200"></ul>
+                </div>
+                <div class="mt-4 flex flex-wrap gap-3">
+                    <button id="update-download-backup" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">Backup herunterladen</button>
+                    <button id="update-reload-page" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/10">Seite neu laden</button>
+                </div>
+            </div>
+        </div>
+
         <script>
             (function () {
+                async function waitForServiceReady(maxAttempts = 20, delayMs = 900) {
+                    for (let i = 0; i < maxAttempts; i += 1) {
+                        try {
+                            const res = await fetch('/health', { cache: 'no-store' });
+                            if (res.ok) return true;
+                        } catch (_) {
+                        }
+                        await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+                    }
+                    return false;
+                }
+
+                async function downloadBackupAfterUpdate() {
+                    const ready = await waitForServiceReady();
+                    if (!ready) return false;
+                    try {
+                        const res = await fetch('/api/export', { cache: 'no-store' });
+                        if (!res.ok) return false;
+                        const blob = await res.blob();
+                        const downloadUrl = window.URL.createObjectURL(blob);
+                        const link = document.createElement('a');
+                        link.href = downloadUrl;
+                        const disposition = res.headers.get('Content-Disposition') || '';
+                        const match = disposition.match(/filename="([^"]+)"/);
+                        link.download = match ? match[1] : 'keepup-backup.json';
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        window.URL.revokeObjectURL(downloadUrl);
+                        return true;
+                    } catch (_) {
+                        return false;
+                    }
+                }
+
+                function showUpdateResult(payload) {
+                    const modal = document.getElementById('update-result-modal');
+                    const closeBtn = document.getElementById('update-result-close');
+                    const reloadBtn = document.getElementById('update-reload-page');
+                    const downloadBtn = document.getElementById('update-download-backup');
+                    const resultText = document.getElementById('update-result-text');
+                    const resultList = document.getElementById('update-result-list');
+                    if (!modal || !resultText || !resultList || !downloadBtn || !reloadBtn) return;
+
+                    resultText.textContent = 'KeepUp wurde aktualisiert. Das Backup kannst du jetzt herunterladen und danach die Seite neu laden.';
+                    resultList.innerHTML = '';
+                    const changes = Array.isArray(payload.changes) ? payload.changes : [];
+                    if (changes.length) {
+                        changes.forEach((entry) => {
+                            const li = document.createElement('li');
+                            li.textContent = entry;
+                            resultList.appendChild(li);
+                        });
+                    } else {
+                        const li = document.createElement('li');
+                        li.textContent = 'Keine Commit-Änderungen ermittelt.';
+                        resultList.appendChild(li);
+                    }
+
+                    modal.classList.remove('hidden');
+
+                    const hideModal = () => modal.classList.add('hidden');
+                    if (closeBtn) {
+                        closeBtn.onclick = hideModal;
+                    }
+                    reloadBtn.onclick = () => window.location.reload();
+                    downloadBtn.onclick = async () => {
+                        downloadBtn.disabled = true;
+                        downloadBtn.textContent = 'Lade Backup…';
+                        const ok = await downloadBackupAfterUpdate();
+                        downloadBtn.textContent = ok ? 'Backup geladen' : 'Download erneut versuchen';
+                        downloadBtn.disabled = false;
+                    };
+                }
+
                 async function loadUpdateStatus() {
                     try {
                         const res = await fetch('/api/update/status', { cache: 'no-store' });
@@ -115,8 +211,6 @@ systemctl restart keepup.service</p>
                         const text = document.getElementById('update-banner-text');
                         const form = document.getElementById('update-form');
                         const disabledPanel = document.getElementById('update-disabled');
-                        const changesPanel = document.getElementById('update-changes');
-                        const changesList = document.getElementById('update-changes-list');
                         if (!pill || !popover || !text || !closeBtn) return;
 
                         pill.classList.remove('hidden');
@@ -164,26 +258,12 @@ systemctl restart keepup.service</p>
                                         }
                                         const payload = await runRes.json();
                                         runBtn.textContent = 'Aktualisiert';
-                                        text.textContent = 'Update erfolgreich. Das Backup wird jetzt heruntergeladen. Bitte die Seite danach manuell neu laden.';
-                                        if (changesPanel && changesList) {
-                                            const changes = Array.isArray(payload.changes) ? payload.changes : [];
-                                            changesList.innerHTML = '';
-                                            if (changes.length) {
-                                                changes.forEach((entry) => {
-                                                    const li = document.createElement('li');
-                                                    li.textContent = entry;
-                                                    changesList.appendChild(li);
-                                                });
-                                            } else {
-                                                const li = document.createElement('li');
-                                                li.textContent = 'Keine Commit-Änderungen ermittelt.';
-                                                changesList.appendChild(li);
-                                            }
-                                            changesPanel.classList.remove('hidden');
-                                        }
+                                        text.textContent = 'Update erfolgreich abgeschlossen.';
+                                        hidePopover();
+                                        showUpdateResult(payload);
                                         window.setTimeout(() => {
-                                            window.location.href = '/api/export';
-                                        }, 700);
+                                            downloadBackupAfterUpdate();
+                                        }, 600);
                                     } catch (e) {
                                         runBtn.textContent = 'Fehlgeschlagen';
                                     } finally {
