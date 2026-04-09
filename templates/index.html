@@ -118,6 +118,10 @@
                                     <p class="text-sm text-slate-500">Noch keine Historie vorhanden.</p>
                                 {% endif %}
                             </div>
+                            <div class="mt-3 text-xs text-slate-300">
+                                <span class="text-slate-400">Letzter Erfolg:</span>
+                                <span class="ml-1 font-medium text-slate-200">{{ monitor.last_success_at or "-" }}</span>
+                            </div>
                         </div>
 
                         <div class="mt-auto pt-4 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
@@ -172,6 +176,18 @@
                                             <span class="block text-sm text-slate-200">{{ _change_parts[1] }}{% if _change_parts|length >= 3 %} {{ _change_parts[2] }}{% endif %}</span>
                                         {% else %}
                                             {{ monitor.last_change_at or "-" }}
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                                    <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Erfolg</dt>
+                                    {% set _success_parts = (monitor.last_success_at or '').split(' ') %}
+                                    <dd class="mt-1 font-medium tabular-nums leading-tight">
+                                        {% if _success_parts|length >= 2 %}
+                                            <span class="block">{{ _success_parts[0] }}</span>
+                                            <span class="block text-sm text-slate-200">{{ _success_parts[1] }}{% if _success_parts|length >= 3 %} {{ _success_parts[2] }}{% endif %}</span>
+                                        {% else %}
+                                            {{ monitor.last_success_at or "-" }}
                                         {% endif %}
                                     </dd>
                                 </div>

@@ -222,6 +222,15 @@
                                 <li>Wenn ein Gerät keine Webschnittstelle hat oder du nur die Netzwerkverbindung prüfen willst, nimm Ping.</li>
                             </ul>
                         </div>
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-100">Datenaufbewahrung</h3>
+                            <p class="mt-2 text-slate-400">KeepUp räumt alte Prüfungen automatisch auf, damit die lokale SQLite-Datenbank schlank bleibt.</p>
+                            <ul class="mt-2 list-disc space-y-2 pl-5 text-slate-300">
+                                <li>Auf den Monitor-Karten werden die letzten 30 Checks als Historie angezeigt.</li>
+                                <li>Ältere Check-Einträge werden standardmäßig nach 7 Tagen bereinigt.</li>
+                                <li>Offene Down-Phasen bleiben für Incident- und SLA-Auswertungen erhalten.</li>
+                            </ul>
+                        </div>
                     </div>
                 {% endcall %}
 

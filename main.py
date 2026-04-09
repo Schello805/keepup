@@ -39,6 +39,7 @@ from database import (
 )
 from monitor import (
     execute_monitor_check,
+    format_notification_error,
     reschedule_monitor_jobs,
     run_all_checks_once,
     send_test_email_notification,
@@ -159,6 +160,7 @@ def build_dashboard_context(request: Request) -> dict:
         monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
+        monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
         for log in monitor["logs"]:
             log["checked_at"] = format_timestamp(log.get("checked_at"), app_timezone)
 
@@ -741,7 +743,7 @@ async def test_telegram_settings(
     try:
         await send_test_telegram_notification(payload)
     except Exception as exc:
-        return flash_redirect("/settings", f"Telegram-Test fehlgeschlagen: {exc}", "error")
+        return flash_redirect("/settings", f"Telegram-Test fehlgeschlagen: {format_notification_error('telegram', exc)}", "error")
 
     return flash_redirect("/settings", "Telegram-Test wurde erfolgreich versendet.")
 
@@ -790,7 +792,7 @@ async def test_smtp_settings(
     try:
         await asyncio.to_thread(send_test_email_notification, payload)
     except Exception as exc:
-        return flash_redirect("/settings", f"SMTP-Test fehlgeschlagen: {exc}", "error")
+        return flash_redirect("/settings", f"SMTP-Test fehlgeschlagen: {format_notification_error('smtp', exc)}", "error")
 
     return flash_redirect("/settings", "SMTP-Test wurde erfolgreich versendet.")
 

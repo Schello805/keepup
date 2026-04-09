@@ -326,6 +326,19 @@ def list_monitors() -> list[dict[str, Any]]:
             up_count = sum(1 for status in recent_statuses if status == "up")
             monitor["uptime_percentage"] = round((up_count / total) * 100, 1) if total else None
 
+            cursor.execute(
+                """
+                SELECT checked_at
+                FROM checks
+                WHERE monitor_id = ? AND status = 'up'
+                ORDER BY checked_at DESC, id DESC
+                LIMIT 1
+                """,
+                (monitor["id"],),
+            )
+            last_success_row = cursor.fetchone()
+            monitor["last_success_at"] = last_success_row["checked_at"] if last_success_row else None
+
             monitor["sla"] = {
                 "7d": _compute_sla_window(cursor, monitor["id"], 7, now_dt),
                 "30d": _compute_sla_window(cursor, monitor["id"], 30, now_dt),

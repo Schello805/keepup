@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import platform
+import socket
 import smtplib
 import ssl
 import time
@@ -20,6 +21,69 @@ from database import get_monitor, get_settings, list_monitors, log_check_result
 
 HTTP_USER_AGENT = "KeepUp/1.0"
 logger = logging.getLogger("keepup.monitor")
+
+
+def normalize_monitor_error(message: Optional[str]) -> Optional[str]:
+    if not message:
+        return message
+
+    lowered = message.lower()
+    replacements = [
+        ("nodename nor servname provided, or not known", "Hostname konnte nicht aufgelöst werden."),
+        ("name or service not known", "Hostname konnte nicht aufgelöst werden."),
+        ("temporary failure in name resolution", "DNS-Auflösung ist fehlgeschlagen."),
+        ("all connection attempts failed", "Verbindung zum Ziel konnte nicht aufgebaut werden."),
+        ("connection refused", "Verbindung wurde vom Zielsystem abgelehnt."),
+        ("no route to host", "Kein Netzwerkpfad zum Ziel verfügbar."),
+        ("network is unreachable", "Netzwerk ist nicht erreichbar."),
+        ("operation timed out", "Zeitüberschreitung beim Verbindungsaufbau."),
+        ("timed out", "Zeitüberschreitung beim Warten auf die Antwort."),
+        ("ping failed or timed out", "Ping fehlgeschlagen oder Zeitlimit überschritten."),
+    ]
+    for needle, friendly in replacements:
+        if needle in lowered:
+            return friendly
+    return message
+
+
+def format_notification_error(channel: str, exc: Exception) -> str:
+    message = str(exc).strip()
+
+    if channel == "telegram":
+        if isinstance(exc, httpx.HTTPStatusError):
+            status = exc.response.status_code
+            try:
+                payload = exc.response.json()
+                description = payload.get("description")
+            except Exception:
+                description = None
+            if description:
+                return f"Telegram API meldet Fehler {status}: {description}"
+            return f"Telegram API meldet Fehler {status}."
+        if isinstance(exc, (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout)):
+            return "Zeitüberschreitung beim Kontaktieren der Telegram API."
+        if isinstance(exc, httpx.ConnectError):
+            return "Telegram API konnte nicht erreicht werden."
+        return message or "Unbekannter Telegram-Fehler."
+
+    if channel == "smtp":
+        if isinstance(exc, smtplib.SMTPAuthenticationError):
+            return "SMTP-Login fehlgeschlagen. Bitte Benutzername und Passwort prüfen."
+        if isinstance(exc, smtplib.SMTPConnectError):
+            return "Verbindung zum SMTP-Server konnte nicht aufgebaut werden."
+        if isinstance(exc, smtplib.SMTPServerDisconnected):
+            return "SMTP-Server hat die Verbindung unerwartet geschlossen."
+        if isinstance(exc, smtplib.SMTPRecipientsRefused):
+            return "Empfängeradresse wurde vom SMTP-Server abgelehnt."
+        if isinstance(exc, smtplib.SMTPException):
+            return message or "SMTP-Fehler beim Senden der E-Mail."
+        if isinstance(exc, socket.gaierror):
+            return "SMTP-Hostname konnte nicht aufgelöst werden."
+        if isinstance(exc, TimeoutError):
+            return "Zeitüberschreitung beim SMTP-Server."
+        return message or "Unbekannter SMTP-Fehler."
+
+    return message or "Unbekannter Fehler."
 
 
 async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
@@ -109,13 +173,13 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
         if 200 <= response.status_code < 400:
             status = "up"
         else:
-            error_message = f"HTTP status {response.status_code}"
+            error_message = f"HTTP-Status {response.status_code}"
     except httpx.HTTPError as exc:
         response_time = round((time.perf_counter() - start) * 1000, 2)
-        error_message = str(exc)
+        error_message = normalize_monitor_error(str(exc))
     except Exception as exc:
         response_time = round((time.perf_counter() - start) * 1000, 2)
-        error_message = f"Unexpected error: {exc}"
+        error_message = normalize_monitor_error(f"Unerwarteter Fehler: {exc}")
 
     return status, response_time, error_message
 
@@ -142,11 +206,11 @@ async def check_ping_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
         response_time = round((time.perf_counter() - start) * 1000, 2)
 
         status = "up" if process.returncode == 0 else "down"
-        error_message = None if status == "up" else _extract_ping_error(stdout, stderr)
+        error_message = None if status == "up" else normalize_monitor_error(_extract_ping_error(stdout, stderr))
     except Exception as exc:
         response_time = round((time.perf_counter() - start) * 1000, 2)
         status = "down"
-        error_message = f"Ping error: {exc}"
+        error_message = normalize_monitor_error(f"Ping-Fehler: {exc}")
 
     return status, response_time, error_message
 
@@ -303,7 +367,11 @@ async def send_telegram_notification(
     }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        await client.post(url, json=payload)
+        response = await client.post(url, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        if not data.get("ok", False):
+            raise RuntimeError(str(data.get("description") or "Telegram API hat die Nachricht abgelehnt."))
 
 
 def send_email_notification(
