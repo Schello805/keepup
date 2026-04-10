@@ -293,6 +293,37 @@ def get_monitor(monitor_id: int) -> Optional[dict[str, Any]]:
     return monitor
 
 
+def list_monitor_options() -> list[dict[str, Any]]:
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name FROM monitors ORDER BY id DESC")
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def get_monitor_summary() -> dict[str, int]:
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN enabled = 1 AND status = 'up' THEN 1 ELSE 0 END) AS up_count,
+                SUM(CASE WHEN enabled = 1 AND status = 'down' THEN 1 ELSE 0 END) AS down_count,
+                SUM(CASE WHEN enabled = 1 AND status = 'unknown' THEN 1 ELSE 0 END) AS unknown_count,
+                SUM(CASE WHEN enabled = 0 THEN 1 ELSE 0 END) AS paused_count
+            FROM monitors
+            """
+        )
+        row = cursor.fetchone()
+        return {
+            "total": int((row["total"] if row and row["total"] is not None else 0) or 0),
+            "up": int((row["up_count"] if row and row["up_count"] is not None else 0) or 0),
+            "down": int((row["down_count"] if row and row["down_count"] is not None else 0) or 0),
+            "unknown": int((row["unknown_count"] if row and row["unknown_count"] is not None else 0) or 0),
+            "paused": int((row["paused_count"] if row and row["paused_count"] is not None else 0) or 0),
+        }
+
+
 def list_monitors() -> list[dict[str, Any]]:
     with closing(get_db()) as conn:
         cursor = conn.cursor()

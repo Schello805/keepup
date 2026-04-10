@@ -284,6 +284,30 @@
     </script>
 {%- endmacro %}
 
+{% macro render_cards_loading() -%}
+    <section class="space-y-4">
+        <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {% for _ in range(6) %}
+            <div class="min-h-[340px] rounded-3xl border border-white/10 bg-white/5 p-4 shadow-panel animate-pulse">
+                <div class="h-3 w-20 rounded-full bg-white/10"></div>
+                <div class="mt-4 h-8 w-40 rounded-2xl bg-white/10"></div>
+                <div class="mt-2 h-4 w-56 rounded-xl bg-white/10"></div>
+                <div class="mt-6 grid grid-cols-2 gap-3">
+                    <div class="h-20 rounded-2xl bg-slate-950/45"></div>
+                    <div class="h-20 rounded-2xl bg-slate-950/45"></div>
+                </div>
+                <div class="mt-6 h-10 rounded-2xl bg-white/10"></div>
+                <div class="mt-6 flex gap-2">
+                    <div class="h-10 w-10 rounded-xl bg-white/10"></div>
+                    <div class="h-10 w-10 rounded-xl bg-white/10"></div>
+                    <div class="h-10 w-10 rounded-xl bg-white/10"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </section>
+    </section>
+{%- endmacro %}
+
 {% if not partial %}
 <!DOCTYPE html>
 <html lang="de" class="dark">
@@ -491,8 +515,8 @@
                 </button>
             </form>
         </section>
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
-            {{ render_monitor_cards(monitors) }}
+        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="load, every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
+            {{ render_cards_loading() }}
         </section>
         {% endif %}
 {% if not partial %}

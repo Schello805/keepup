@@ -1,5 +1,98 @@
 {% from "_shared.html" import render_page_header, btn_classes, select_classes, render_toast, render_footer %}
 
+{% macro render_incident_feed(feed_items, selected_item) -%}
+    <section class="space-y-3">
+        {% if feed_items %}
+            {% for item in feed_items %}
+            {% set is_selected = (selected_item and selected_item.item_id == item.item_id) %}
+            {% set dot = 'bg-sky-400' if item.kind == 'created' else ('bg-rose-400' if item.is_open else 'bg-emerald-400') %}
+            {% set border = 'border-sky-400/20 bg-sky-500/10' if item.kind == 'created' else ('border-rose-400/30 bg-rose-500/10' if item.is_open else 'border-emerald-400/20 bg-emerald-500/10') %}
+            <details class="group rounded-3xl border {{ border }} p-5 shadow-panel" {% if is_selected %}open{% endif %}>
+                <summary class="tap-target flex cursor-pointer list-none items-start justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-3">
+                            <span class="inline-flex h-3 w-3 rounded-full {{ dot }}"></span>
+                            <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ item.monitor_type | upper }}</p>
+                            <p class="truncate font-semibold">{{ item.monitor_name }}</p>
+                            {% if item.kind == 'created' %}
+                            <span class="rounded-xl border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-sky-100">Erstellt</span>
+                            {% elif item.is_open %}
+                            <span class="rounded-xl border border-rose-400/20 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-rose-100">Offen</span>
+                            {% else %}
+                            <span class="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-100">Geschlossen</span>
+                            {% endif %}
+                        </div>
+                        <p class="mt-1 text-xs text-slate-400">{{ item.timestamp_display or '-' }}</p>
+                        <p class="mt-2 break-all text-sm text-slate-300">{{ item.monitor_target }}</p>
+                        {% if item.kind == 'created' %}
+                        <p class="mt-2 text-sm text-slate-300">Monitor erstellt</p>
+                        {% elif item.incident and item.incident.start_error_msg %}
+                        <p class="mt-2 break-words text-sm text-slate-300">{{ item.incident.start_error_msg }}</p>
+                        {% endif %}
+                    </div>
+                    <svg xmlns="http://www.w3.org/2000/svg" class="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/>
+                    </svg>
+                </summary>
+                <div class="mt-3 flex justify-end">
+                    <a href="{{ item.select_url }}" class="shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">Link</a>
+                </div>
+
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {% if item.kind == 'created' %}
+                        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Info</p>
+                            <p class="mt-2 text-sm text-slate-300">Monitor wurde erstellt und wird beim nächsten Run automatisch geprüft.</p>
+                        </div>
+                    {% else %}
+                        {% set incident = item.incident %}
+                        {% set is_open = (incident and incident.ended_at is none) %}
+                        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Start</p>
+                            <p class="mt-1 text-sm text-slate-100">{{ incident.started_at_display or '-' }}</p>
+                            {% if incident.start_error_msg %}
+                            <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.start_error_msg }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Ende</p>
+                            <p class="mt-1 text-sm text-slate-100">{{ incident.ended_at_display or ("Noch offen" if is_open else '-') }}</p>
+                            {% if incident.end_error_msg %}
+                            <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.end_error_msg }}</p>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </details>
+            {% endfor %}
+        {% else %}
+            <div class="rounded-3xl border border-dashed border-white/15 bg-white/5 p-6 text-center text-slate-400">
+                Keine Einträge für diesen Filter.
+            </div>
+        {% endif %}
+    </section>
+{%- endmacro %}
+
+{% macro render_incident_feed_loading() -%}
+    <section class="space-y-3">
+        {% for _ in range(5) %}
+        <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel animate-pulse">
+            <div class="h-4 w-48 rounded-xl bg-white/10"></div>
+            <div class="mt-3 h-3 w-28 rounded-xl bg-white/10"></div>
+            <div class="mt-4 h-4 w-full rounded-xl bg-white/10"></div>
+            <div class="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div class="h-24 rounded-2xl bg-slate-950/45"></div>
+                <div class="h-24 rounded-2xl bg-slate-950/45"></div>
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+{%- endmacro %}
+
+{% if partial == "feed" %}
+{{ render_incident_feed(feed_items, selected_item) }}
+{% else %}
 <!DOCTYPE html>
 <html lang="de" class="dark">
 <head>
@@ -8,6 +101,7 @@
     <title>{{ settings.app_name }} Incidents</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -94,76 +188,8 @@
                 </div>
             </form>
 
-            <section class="space-y-3">
-                {% if feed_items %}
-                    {% for item in feed_items %}
-                    {% set is_selected = (selected_item and selected_item.item_id == item.item_id) %}
-                    {% set dot = 'bg-sky-400' if item.kind == 'created' else ('bg-rose-400' if item.is_open else 'bg-emerald-400') %}
-                    {% set border = 'border-sky-400/20 bg-sky-500/10' if item.kind == 'created' else ('border-rose-400/30 bg-rose-500/10' if item.is_open else 'border-emerald-400/20 bg-emerald-500/10') %}
-                    <details class="group rounded-3xl border {{ border }} p-5 shadow-panel" {% if is_selected %}open{% endif %}>
-                        <summary class="tap-target flex cursor-pointer list-none items-start justify-between gap-4">
-                            <div class="min-w-0">
-                                <div class="flex items-center gap-3">
-                                    <span class="inline-flex h-3 w-3 rounded-full {{ dot }}"></span>
-                                    <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ item.monitor_type | upper }}</p>
-                                    <p class="truncate font-semibold">{{ item.monitor_name }}</p>
-                                    {% if item.kind == 'created' %}
-                                    <span class="rounded-xl border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-sky-100">Erstellt</span>
-                                    {% elif item.is_open %}
-                                    <span class="rounded-xl border border-rose-400/20 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-rose-100">Offen</span>
-                                    {% else %}
-                                    <span class="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-100">Geschlossen</span>
-                                    {% endif %}
-                                </div>
-                                <p class="mt-1 text-xs text-slate-400">{{ item.timestamp_display or '-' }}</p>
-                                <p class="mt-2 break-all text-sm text-slate-300">{{ item.monitor_target }}</p>
-                                {% if item.kind == 'created' %}
-                                <p class="mt-2 text-sm text-slate-300">Monitor erstellt</p>
-                                {% elif item.incident and item.incident.start_error_msg %}
-                                <p class="mt-2 break-words text-sm text-slate-300">{{ item.incident.start_error_msg }}</p>
-                                {% endif %}
-                            </div>
-                            <svg xmlns="http://www.w3.org/2000/svg" class="mt-1 h-5 w-5 shrink-0 text-slate-400 transition group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/>
-                            </svg>
-                        </summary>
-                        <div class="mt-3 flex justify-end">
-                            <a href="{{ item.select_url }}" class="shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/10">Link</a>
-                        </div>
-
-                        <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
-                            {% if item.kind == 'created' %}
-                                <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Info</p>
-                                    <p class="mt-2 text-sm text-slate-300">Monitor wurde erstellt und wird beim nächsten Run automatisch geprüft.</p>
-                                </div>
-                            {% else %}
-                                {% set incident = item.incident %}
-                                {% set is_open = (incident and incident.ended_at is none) %}
-                                <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Start</p>
-                                    <p class="mt-1 text-sm text-slate-100">{{ incident.started_at_display or '-' }}</p>
-                                    {% if incident.start_error_msg %}
-                                    <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.start_error_msg }}</p>
-                                    {% endif %}
-                                </div>
-
-                                <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                                    <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Ende</p>
-                                    <p class="mt-1 text-sm text-slate-100">{{ incident.ended_at_display or ("Noch offen" if is_open else '-') }}</p>
-                                    {% if incident.end_error_msg %}
-                                    <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.end_error_msg }}</p>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
-                        </div>
-                    </details>
-                    {% endfor %}
-                {% else %}
-                    <div class="rounded-3xl border border-dashed border-white/15 bg-white/5 p-6 text-center text-slate-400">
-                        Keine Einträge für diesen Filter.
-                    </div>
-                {% endif %}
+            <section id="incident-feed-shell" hx-get="{{ incident_feed_url }}" hx-trigger="load" hx-swap="innerHTML">
+                {{ render_incident_feed_loading() }}
             </section>
         </section>
     </main>
@@ -171,3 +197,4 @@
     {{ render_footer("https://github.com/Schello805/keepup", app_version, active_page) }}
 </body>
 </html>
+{% endif %}

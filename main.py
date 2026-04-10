@@ -29,8 +29,10 @@ from database import (
     export_backup,
     get_db,
     get_monitor,
+    get_monitor_summary,
     get_recent_logs_for_monitors,
     list_incidents,
+    list_monitor_options,
     get_settings,
     import_backup,
     init_db,
@@ -200,6 +202,24 @@ def build_dashboard_context(request: Request) -> dict:
     }
 
 
+def build_dashboard_shell_context(request: Request) -> dict:
+    settings = get_settings()
+    summary = get_monitor_summary()
+    overall_status = "All systems operational" if summary["down"] == 0 else f"{summary['down']} issue(s) detected"
+    overall_tone = "ok" if summary["down"] == 0 else "problem"
+    summary["overall_status"] = overall_status
+    summary["overall_tone"] = overall_tone
+
+    return {
+        "request": request,
+        "settings": settings,
+        "app_version": get_app_version_display(),
+        "active_page": "dashboard",
+        "toast": get_toast(request),
+        "summary": summary,
+    }
+
+
 def build_settings_context(request: Request) -> dict:
     settings = get_settings()
     timezone_options = APP_TIMEZONE_OPTIONS.copy()
@@ -220,27 +240,7 @@ def build_incidents_context(request: Request) -> dict:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
     monitors = list_monitors()
-
-    monitor_id_raw = request.query_params.get("monitor_id", "").strip()
-    status = request.query_params.get("status", "all").strip().lower() or "all"
-    days_raw = request.query_params.get("days", "7").strip()
-    item_raw = request.query_params.get("item", "").strip()
-
-    monitor_id: Optional[int] = None
-    if monitor_id_raw:
-        try:
-            monitor_id = int(monitor_id_raw)
-        except ValueError:
-            monitor_id = None
-
-    since_days: Optional[int] = 7
-    if days_raw in {"all", "0", ""}:
-        since_days = None
-    else:
-        try:
-            since_days = max(1, int(days_raw))
-        except ValueError:
-            since_days = 7
+    monitor_id, status, since_days, item_raw = parse_incident_filters(request)
 
     incidents = list_incidents(monitor_id=monitor_id, status=status, since_days=since_days)
 
@@ -365,6 +365,55 @@ def build_incidents_context(request: Request) -> dict:
             "days": since_days,
         },
     }
+
+
+def build_incidents_shell_context(request: Request) -> dict:
+    settings = get_settings()
+    monitor_id, status, since_days, _item_raw = parse_incident_filters(request)
+    query_string = request.url.query
+    incident_feed_url = "/api/incidents/feed"
+    if query_string:
+        incident_feed_url += f"?{query_string}"
+
+    return {
+        "request": request,
+        "settings": settings,
+        "app_version": get_app_version_display(),
+        "active_page": "incidents",
+        "toast": get_toast(request),
+        "monitors": list_monitor_options(),
+        "filters": {
+            "monitor_id": monitor_id,
+            "status": status,
+            "days": since_days,
+        },
+        "incident_feed_url": incident_feed_url,
+    }
+
+
+def parse_incident_filters(request: Request) -> tuple[Optional[int], str, Optional[int], str]:
+    monitor_id_raw = request.query_params.get("monitor_id", "").strip()
+    status = request.query_params.get("status", "all").strip().lower() or "all"
+    days_raw = request.query_params.get("days", "7").strip()
+    item_raw = request.query_params.get("item", "").strip()
+
+    monitor_id: Optional[int] = None
+    if monitor_id_raw:
+        try:
+            monitor_id = int(monitor_id_raw)
+        except ValueError:
+            monitor_id = None
+
+    since_days: Optional[int] = 7
+    if days_raw in {"all", "0", ""}:
+        since_days = None
+    else:
+        try:
+            since_days = max(1, int(days_raw))
+        except ValueError:
+            since_days = 7
+
+    return monitor_id, status, since_days, item_raw
 
 
 def _run_git_command(args: list[str]) -> Optional[str]:
@@ -604,7 +653,7 @@ async def run_update() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", build_dashboard_context(request))
+    return render_template(request, "index.html", build_dashboard_shell_context(request))
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -614,7 +663,12 @@ async def settings_page(request: Request) -> HTMLResponse:
 
 @app.get("/incidents", response_class=HTMLResponse)
 async def incidents_page(request: Request) -> HTMLResponse:
-    return render_template(request, "incidents.html", build_incidents_context(request))
+    return render_template(request, "incidents.html", build_incidents_shell_context(request))
+
+
+@app.get("/api/incidents/feed", response_class=HTMLResponse)
+async def incidents_feed_partial(request: Request) -> HTMLResponse:
+    return render_template(request, "incidents.html", {**build_incidents_context(request), "partial": "feed"})
 
 
 @app.get("/api/dashboard", response_class=HTMLResponse)
@@ -624,7 +678,7 @@ async def dashboard_partial(request: Request) -> HTMLResponse:
 
 @app.get("/api/live/top", response_class=HTMLResponse)
 async def live_top_partial(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "top"})
+    return render_template(request, "index.html", {**build_dashboard_shell_context(request), "partial": "top"})
 
 
 @app.get("/api/live/cards", response_class=HTMLResponse)
