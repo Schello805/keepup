@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import threading
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -57,6 +58,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger("keepup")
+UPDATE_STATUS_TTL_SECONDS = 60
+_update_status_cache: dict[str, Any] = {"expires_at": 0.0, "payload": None}
 APP_TIMEZONE_OPTIONS = [
     "UTC",
     "Europe/Berlin",
@@ -435,6 +438,33 @@ async def _get_remote_main_sha() -> Optional[str]:
         return None
 
 
+async def get_cached_update_status_payload() -> dict[str, Any]:
+    now = time.time()
+    cached_payload = _update_status_cache.get("payload")
+    expires_at = float(_update_status_cache.get("expires_at") or 0.0)
+    if cached_payload and now < expires_at:
+        return cached_payload
+
+    local_sha = _run_git_command(["git", "rev-parse", "HEAD"])
+    remote_sha = await _get_remote_main_sha()
+    update_available = bool(local_sha and remote_sha and local_sha != remote_sha)
+    token = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
+    update_enabled = bool(token)
+
+    payload = {
+        "current_version": get_app_version_display(),
+        "local_sha": local_sha,
+        "local_sha_short": (local_sha[:7] if local_sha else None),
+        "remote_sha": remote_sha,
+        "remote_sha_short": (remote_sha[:7] if remote_sha else None),
+        "update_available": update_available,
+        "update_enabled": update_enabled,
+    }
+    _update_status_cache["payload"] = payload
+    _update_status_cache["expires_at"] = now + UPDATE_STATUS_TTL_SECONDS
+    return payload
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup")
@@ -513,22 +543,7 @@ async def readiness() -> JSONResponse:
 
 @app.get("/api/update/status")
 async def update_status() -> JSONResponse:
-    local_sha = _run_git_command(["git", "rev-parse", "HEAD"])
-    remote_sha = await _get_remote_main_sha()
-    update_available = bool(local_sha and remote_sha and local_sha != remote_sha)
-
-    token = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
-    update_enabled = bool(token)
-
-    payload = {
-        "current_version": get_app_version_display(),
-        "local_sha": local_sha,
-        "local_sha_short": (local_sha[:7] if local_sha else None),
-        "remote_sha": remote_sha,
-        "remote_sha_short": (remote_sha[:7] if remote_sha else None),
-        "update_available": update_available,
-        "update_enabled": update_enabled,
-    }
+    payload = await get_cached_update_status_payload()
     return JSONResponse(payload)
 
 

@@ -218,10 +218,14 @@ systemctl restart keepup.service</p>
                         const popover = document.getElementById('update-popover');
                         const closeBtn = document.getElementById('update-close');
                         const text = document.getElementById('update-banner-text');
+                        const footerVersion = document.getElementById('footer-version');
                         const form = document.getElementById('update-form');
                         const disabledPanel = document.getElementById('update-disabled');
                         if (!pill || !popover || !text || !closeBtn) return;
 
+                        if (footerVersion && data.current_version) {
+                            footerVersion.textContent = `v${data.current_version}`;
+                        }
                         pill.classList.remove('hidden');
                         if (mobilePill) mobilePill.classList.remove('hidden');
                         const current = data.current_version ? `v${data.current_version}` : 'lokal';
@@ -410,29 +414,5 @@ systemctl restart keepup.service</p>
             </a>
         </div>
     </footer>
-    <script>
-        (function () {
-            async function syncFooterVersion() {
-                const footerVersion = document.getElementById('footer-version');
-                if (!footerVersion) return;
-                try {
-                    const res = await fetch('/api/update/status', { cache: 'no-store' });
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    if (data && data.current_version) {
-                        footerVersion.textContent = `v${data.current_version}`;
-                    }
-                } catch (_) {
-                    return;
-                }
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', syncFooterVersion);
-            } else {
-                syncFooterVersion();
-            }
-        })();
-    </script>
     {{ render_mobile_tabbar(active_page) }}
 {%- endmacro %}
