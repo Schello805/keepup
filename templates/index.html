@@ -47,7 +47,7 @@
             <article data-monitor-status="{{ status }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] touch-pan-y">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d">
                     <!-- VORDERSEITE -->
-                    <div class="card-front absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto touch-pan-y">
+                    <div class="card-front card-front-shell absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto touch-pan-y">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
                             <div class="min-w-0">
                                 <div class="mb-2 flex items-center gap-2">
@@ -57,7 +57,7 @@
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
                                 <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
                             </div>
-                            <div class="flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
+                            <div class="card-front-interactive flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
                                 <div class="flex items-center gap-2">
                                     <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {{ status_pill_classes(status) }}">
                                         {{ status }}
@@ -124,7 +124,7 @@
                             </div>
                         </div>
 
-                        <div class="mt-auto pt-4 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
+                        <div class="card-front-interactive mt-auto pt-4 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
                             <form action="/monitors/{{ monitor.id }}/toggle" method="post">
                                 <button type="submit" aria-label="{% if monitor.enabled %}Monitor pausieren{% else %}Monitor fortsetzen{% endif %}" title="{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl {% if monitor.enabled %}bg-amber-500/15 text-amber-100 hover:bg-amber-500/25{% else %}bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25{% endif %} transition cursor-pointer">
                                     {% if monitor.enabled %}
@@ -364,6 +364,14 @@
         .is-flipped .card-back { pointer-events: auto; }
         .is-flipped .card-front { pointer-events: none; }
         .scrollbar-thin { scrollbar-width: thin; }
+        @media (pointer: coarse) {
+            .card-front-shell {
+                pointer-events: none;
+            }
+            .card-front-shell .card-front-interactive {
+                pointer-events: auto;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-100">

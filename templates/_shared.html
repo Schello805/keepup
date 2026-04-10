@@ -34,26 +34,26 @@
                             </button>
                         </div>
 
-                        <button id="mobile-menu-btn" type="button" class="tap-target inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10 lg:hidden" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-menu-popover">
+                        <button id="mobile-menu-btn" type="button" class="tap-target inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10 active:scale-[0.98] lg:hidden" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-menu-popover">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
                             </svg>
                         </button>
                     </div>
 
-                    <div id="mobile-menu-popover" class="hidden absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-3 shadow-panel lg:hidden">
-                        <div class="flex flex-col gap-2" onclick="event.stopPropagation()">
-                            <a href="/" class="tap-target inline-flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                    <div id="mobile-menu-popover" class="hidden absolute right-0 mt-2 w-[min(24rem,calc(100vw-1rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-3 shadow-panel lg:hidden">
+                        <div class="flex flex-col gap-3" onclick="event.stopPropagation()">
+                            <a href="/" class="mobile-menu-link tap-target inline-flex min-h-[52px] items-center justify-between rounded-2xl px-4 py-3 text-base font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
                                 <span>Dashboard</span>
                             </a>
-                            <a href="/incidents" class="tap-target inline-flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                            <a href="/incidents" class="mobile-menu-link tap-target inline-flex min-h-[52px] items-center justify-between rounded-2xl px-4 py-3 text-base font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
                                 <span>Incidents</span>
                             </a>
-                            <a href="/settings" class="tap-target inline-flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                            <a href="/settings" class="mobile-menu-link tap-target inline-flex min-h-[52px] items-center justify-between rounded-2xl px-4 py-3 text-base font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
                                 <span>Einstellungen</span>
                             </a>
 
-                            <button id="update-pill-mobile" type="button" class="hidden tap-target inline-flex items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15">
+                            <button id="update-pill-mobile" type="button" class="hidden tap-target inline-flex min-h-[52px] items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-base font-semibold text-amber-100 transition hover:bg-amber-500/15">
                                 <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
                                 Update
                             </button>
@@ -309,6 +309,11 @@ systemctl restart keepup.service</p>
                     btn.addEventListener('click', (evt) => {
                         evt.stopPropagation();
                         toggleMenu();
+                    });
+                    menu.querySelectorAll('.mobile-menu-link').forEach((link) => {
+                        link.addEventListener('click', () => {
+                            closeMenu();
+                        });
                     });
                     document.addEventListener('click', (evt) => {
                         const target = evt.target;
