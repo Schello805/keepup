@@ -29,7 +29,7 @@ from database import (
     export_backup,
     get_db,
     get_monitor,
-    get_recent_logs,
+    get_recent_logs_for_monitors,
     list_incidents,
     get_settings,
     import_backup,
@@ -164,8 +164,9 @@ def build_dashboard_context(request: Request) -> dict:
     monitors = list_monitors()
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
+    logs_by_monitor = get_recent_logs_for_monitors([monitor["id"] for monitor in monitors])
     for monitor in monitors:
-        monitor["logs"] = get_recent_logs(monitor["id"])
+        monitor["logs"] = logs_by_monitor.get(monitor["id"], [])
         monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)

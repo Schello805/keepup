@@ -184,6 +184,15 @@ def init_db() -> None:
                 FOREIGN KEY (start_check_id) REFERENCES checks(id) ON DELETE SET NULL,
                 FOREIGN KEY (end_check_id) REFERENCES checks(id) ON DELETE SET NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_checks_monitor_checked
+            ON checks (monitor_id, checked_at DESC, id DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_checks_monitor_status_checked
+            ON checks (monitor_id, status, checked_at DESC, id DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_incidents_monitor_started
+            ON incidents (monitor_id, started_at DESC, ended_at);
             """
         )
 
@@ -289,64 +298,136 @@ def list_monitors() -> list[dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM monitors ORDER BY id DESC")
         monitors = [dict(row) for row in cursor.fetchall()]
+        if not monitors:
+            return []
+
+        monitor_ids = [monitor["id"] for monitor in monitors]
+        placeholders = ", ".join("?" for _ in monitor_ids)
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
+        monitor_map = {monitor["id"]: monitor for monitor in monitors}
+
+        cursor.execute(
+            f"""
+            SELECT monitor_id, status, response_time, checked_at
+            FROM (
+                SELECT
+                    monitor_id,
+                    status,
+                    response_time,
+                    checked_at,
+                    id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY monitor_id
+                        ORDER BY checked_at DESC, id DESC
+                    ) AS rn
+                FROM checks
+                WHERE monitor_id IN ({placeholders})
+            )
+            WHERE rn <= ?
+            ORDER BY monitor_id, checked_at DESC
+            """,
+            (*monitor_ids, HISTORY_LIMIT),
+        )
+        recent_checks_by_monitor: dict[int, list[sqlite3.Row]] = {monitor_id: [] for monitor_id in monitor_ids}
+        for row in cursor.fetchall():
+            recent_checks_by_monitor[row["monitor_id"]].append(row)
+
+        cursor.execute(
+            f"""
+            SELECT monitor_id, MAX(checked_at) AS last_success_at
+            FROM checks
+            WHERE status = 'up'
+              AND monitor_id IN ({placeholders})
+            GROUP BY monitor_id
+            """,
+            tuple(monitor_ids),
+        )
+        last_success_map = {
+            row["monitor_id"]: row["last_success_at"]
+            for row in cursor.fetchall()
+        }
+
+        cursor.execute(
+            f"""
+            SELECT monitor_id, started_at, ended_at
+            FROM incidents
+            WHERE monitor_id IN ({placeholders})
+              AND started_at <= ?
+            ORDER BY monitor_id ASC, started_at ASC, id ASC
+            """,
+            (*monitor_ids, now_dt.isoformat()),
+        )
+        incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {monitor_id: [] for monitor_id in monitor_ids}
+        for row in cursor.fetchall():
+            incident_rows_by_monitor[row["monitor_id"]].append(row)
 
         for monitor in monitors:
-            cursor.execute(
-                """
-                SELECT status, response_time, checked_at
-                FROM checks
-                WHERE monitor_id = ?
-                ORDER BY checked_at DESC, id DESC
-                LIMIT ?
-                """,
-                (monitor["id"], HISTORY_LIMIT),
-            )
-            rows = list(reversed(cursor.fetchall()))
+            rows = list(reversed(recent_checks_by_monitor.get(monitor["id"], [])))
             monitor["history"] = [r["status"] for r in rows]
-            
-            import json
+
             monitor["chart_data_json"] = json.dumps([
                 {"x": r["checked_at"], "y": r["response_time"]}
                 for r in rows
             ])
 
-            cursor.execute(
-                """
-                SELECT status
-                FROM checks
-                WHERE monitor_id = ?
-                ORDER BY checked_at DESC
-                LIMIT ?
-                """,
-                (monitor["id"], HISTORY_LIMIT),
-            )
-            recent_statuses = [row["status"] for row in cursor.fetchall()]
+            recent_statuses = [row["status"] for row in recent_checks_by_monitor.get(monitor["id"], [])]
             total = len(recent_statuses)
             up_count = sum(1 for status in recent_statuses if status == "up")
             monitor["uptime_percentage"] = round((up_count / total) * 100, 1) if total else None
 
-            cursor.execute(
-                """
-                SELECT checked_at
-                FROM checks
-                WHERE monitor_id = ? AND status = 'up'
-                ORDER BY checked_at DESC, id DESC
-                LIMIT 1
-                """,
-                (monitor["id"],),
-            )
-            last_success_row = cursor.fetchone()
-            monitor["last_success_at"] = last_success_row["checked_at"] if last_success_row else None
-
+            monitor["last_success_at"] = last_success_map.get(monitor["id"])
             monitor["sla"] = {
-                "7d": _compute_sla_window(cursor, monitor["id"], 7, now_dt),
-                "30d": _compute_sla_window(cursor, monitor["id"], 30, now_dt),
-                "90d": _compute_sla_window(cursor, monitor["id"], 90, now_dt),
+                "7d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 7, now_dt),
+                "30d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 30, now_dt),
+                "90d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 90, now_dt),
             }
 
     return monitors
+
+
+def _compute_sla_window_from_rows(
+    incidents: list[sqlite3.Row],
+    window_days: int,
+    now: datetime,
+) -> dict[str, Any]:
+    window_days = max(1, int(window_days))
+    window_start = now - timedelta(days=window_days)
+    window_seconds = (now - window_start).total_seconds()
+
+    downtime_seconds = 0.0
+    incident_count = 0
+    mttr_durations: list[float] = []
+
+    for row in incidents:
+        started = _parse_iso(row["started_at"]) or window_start
+        ended = _parse_iso(row["ended_at"]) or now
+
+        overlap_start = max(started, window_start)
+        overlap_end = min(ended, now)
+        if overlap_end <= overlap_start:
+            continue
+
+        incident_count += 1
+        downtime_seconds += (overlap_end - overlap_start).total_seconds()
+
+        if row["ended_at"] is not None:
+            mttr_durations.append((ended - started).total_seconds())
+
+    downtime_seconds = min(downtime_seconds, window_seconds)
+    uptime_ratio = 1.0 if window_seconds <= 0 else max(0.0, (window_seconds - downtime_seconds) / window_seconds)
+    uptime_pct = round(uptime_ratio * 100.0, 3)
+    mttr_seconds = (sum(mttr_durations) / len(mttr_durations)) if mttr_durations else None
+
+    return {
+        "window_days": window_days,
+        "uptime_pct": uptime_pct,
+        "incident_count": incident_count,
+        "downtime_seconds": int(round(downtime_seconds)),
+        "downtime_human": _format_duration_seconds(downtime_seconds),
+        "mttr_seconds": int(round(mttr_seconds)) if mttr_seconds is not None else None,
+        "mttr_human": _format_duration_seconds(mttr_seconds),
+    }
 
 
 def create_monitor(
@@ -480,6 +561,44 @@ def get_recent_logs(monitor_id: int, limit: int = 8) -> list[dict[str, Any]]:
             (monitor_id, limit),
         )
         return [dict(row) for row in cursor.fetchall()]
+
+
+def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8) -> dict[int, list[dict[str, Any]]]:
+    if not monitor_ids:
+        return {}
+
+    placeholders = ", ".join("?" for _ in monitor_ids)
+    grouped_logs: dict[int, list[dict[str, Any]]] = {monitor_id: [] for monitor_id in monitor_ids}
+
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"""
+            SELECT monitor_id, id, status, response_time, error_msg, checked_at
+            FROM (
+                SELECT
+                    monitor_id,
+                    id,
+                    status,
+                    response_time,
+                    error_msg,
+                    checked_at,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY monitor_id
+                        ORDER BY checked_at DESC, id DESC
+                    ) AS rn
+                FROM checks
+                WHERE monitor_id IN ({placeholders})
+            )
+            WHERE rn <= ?
+            ORDER BY monitor_id ASC, checked_at DESC, id DESC
+            """,
+            (*monitor_ids, limit),
+        )
+        for row in cursor.fetchall():
+            grouped_logs[row["monitor_id"]].append(dict(row))
+
+    return grouped_logs
 
 
 def log_check_result(
