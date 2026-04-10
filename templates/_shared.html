@@ -12,6 +12,32 @@
     </div>
 {%- endmacro %}
 
+{% macro render_mobile_tabbar(active_page) -%}
+    <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-panel backdrop-blur lg:hidden">
+        <div class="mx-auto grid max-w-7xl grid-cols-3 gap-2">
+            <a href="/" class="tap-target inline-flex min-h-[58px] flex-col items-center justify-center rounded-2xl text-xs font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mb-1 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 11.5 12 4l9 7.5M5 10v10h14V10"/>
+                </svg>
+                Dashboard
+            </a>
+            <a href="/incidents" class="tap-target inline-flex min-h-[58px] flex-col items-center justify-center rounded-2xl text-xs font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mb-1 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
+                </svg>
+                Incidents
+            </a>
+            <a href="/settings" class="tap-target inline-flex min-h-[58px] flex-col items-center justify-center rounded-2xl text-xs font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="mb-1 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317a1 1 0 0 1 1.35-.936l.756.327a1 1 0 0 0 .794 0l.756-.327a1 1 0 0 1 1.35.936l.07.812a1 1 0 0 0 .493.774l.675.4a1 1 0 0 1 .364 1.364l-.406.704a1 1 0 0 0 0 .998l.406.704a1 1 0 0 1-.364 1.364l-.675.4a1 1 0 0 0-.493.774l-.07.812a1 1 0 0 1-1.35.936l-.756-.327a1 1 0 0 0-.794 0l-.756.327a1 1 0 0 1-1.35-.936l-.07-.812a1 1 0 0 0-.493-.774l-.675-.4a1 1 0 0 1-.364-1.364l.406-.704a1 1 0 0 0 0-.998l-.406-.704a1 1 0 0 1 .364-1.364l.675-.4a1 1 0 0 0 .493-.774l.07-.812Z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                </svg>
+                Einstellungen
+            </a>
+        </div>
+    </nav>
+{%- endmacro %}
+
 {% macro render_page_header(title, active_page) -%}
     <div class="sticky top-0 z-40 -mt-4 bg-gradient-to-b from-keepup-bg via-keepup-bg to-transparent pb-4">
         <header class="rounded-3xl border border-white/10 bg-slate-950 px-4 py-3 shadow-panel">
@@ -34,30 +60,10 @@
                             </button>
                         </div>
 
-                        <button id="mobile-menu-btn" type="button" class="tap-target inline-flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10 active:scale-[0.98] lg:hidden" aria-label="Menü öffnen" aria-expanded="false" aria-controls="mobile-menu-popover">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
-                            </svg>
+                        <button id="update-pill-mobile" type="button" class="hidden tap-target inline-flex items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-100 transition hover:bg-amber-500/15 lg:hidden">
+                            <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
+                            Update
                         </button>
-                    </div>
-
-                    <div id="mobile-menu-popover" class="hidden absolute right-0 mt-2 w-[min(24rem,calc(100vw-1rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-3 shadow-panel lg:hidden">
-                        <div class="flex flex-col gap-3" onclick="event.stopPropagation()">
-                            <a href="/" class="mobile-menu-link tap-target inline-flex min-h-[52px] items-center justify-between rounded-2xl px-4 py-3 text-base font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
-                                <span>Dashboard</span>
-                            </a>
-                            <a href="/incidents" class="mobile-menu-link tap-target inline-flex min-h-[52px] items-center justify-between rounded-2xl px-4 py-3 text-base font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
-                                <span>Incidents</span>
-                            </a>
-                            <a href="/settings" class="mobile-menu-link tap-target inline-flex min-h-[52px] items-center justify-between rounded-2xl px-4 py-3 text-base font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
-                                <span>Einstellungen</span>
-                            </a>
-
-                            <button id="update-pill-mobile" type="button" class="hidden tap-target inline-flex min-h-[52px] items-center gap-2 rounded-2xl border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-base font-semibold text-amber-100 transition hover:bg-amber-500/15">
-                                <span class="inline-flex h-2 w-2 rounded-full bg-amber-300"></span>
-                                Update
-                            </button>
-                        </div>
                     </div>
 
                     <div id="update-popover" class="hidden absolute right-0 mt-2 w-[min(28rem,calc(100vw-2rem))] rounded-3xl border border-white/10 bg-keepup-panel/95 p-4 shadow-panel">
@@ -290,44 +296,6 @@ systemctl restart keepup.service</p>
                 } else {
                     loadUpdateStatus();
                 }
-
-                function initMobileMenu() {
-                    const btn = document.getElementById('mobile-menu-btn');
-                    const menu = document.getElementById('mobile-menu-popover');
-                    if (!btn || !menu) return;
-
-                    const closeMenu = () => {
-                        menu.classList.add('hidden');
-                        btn.setAttribute('aria-expanded', 'false');
-                    };
-                    const toggleMenu = () => {
-                        const willOpen = menu.classList.contains('hidden');
-                        menu.classList.toggle('hidden');
-                        btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-                    };
-
-                    btn.addEventListener('click', (evt) => {
-                        evt.stopPropagation();
-                        toggleMenu();
-                    });
-                    menu.querySelectorAll('.mobile-menu-link').forEach((link) => {
-                        link.addEventListener('click', () => {
-                            closeMenu();
-                        });
-                    });
-                    document.addEventListener('click', (evt) => {
-                        const target = evt.target;
-                        if (!target) return;
-                        if (menu.contains(target) || btn.contains(target)) return;
-                        closeMenu();
-                    });
-                }
-
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', initMobileMenu);
-                } else {
-                    initMobileMenu();
-                }
             })();
         </script>
     </div>
@@ -430,7 +398,7 @@ systemctl restart keepup.service</p>
     </details>
 {%- endmacro %}
 
-{% macro render_footer(repo_url, version) -%}
+{% macro render_footer(repo_url, version, active_page) -%}
     <footer class="mt-10 border-t border-white/10 pb-10 pt-6 text-sm text-slate-400">
         <div class="mx-auto flex max-w-7xl flex-col gap-3 px-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
             <p class="text-xs">Self-hosted Monitoring mit KeepUp{% if version %} <span id="footer-version" class="text-slate-500">v{{ version }}</span>{% endif %}</p>
@@ -466,4 +434,5 @@ systemctl restart keepup.service</p>
             }
         })();
     </script>
+    {{ render_mobile_tabbar(active_page) }}
 {%- endmacro %}

@@ -47,7 +47,7 @@
     </style>
 </head>
 <body class="min-h-screen text-slate-100">
-    <main class="mx-auto max-w-7xl px-4 pb-12 pt-4 sm:px-6 lg:px-8">
+    <main class="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-12 lg:px-8">
         {{ render_toast(toast) }}
         {{ render_page_header("Incidents", active_page) }}
 
@@ -163,6 +163,6 @@
         </section>
     </main>
 
-    {{ render_footer("https://github.com/Schello805/keepup", app_version) }}
+    {{ render_footer("https://github.com/Schello805/keepup", app_version, active_page) }}
 </body>
 </html>
