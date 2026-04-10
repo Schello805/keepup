@@ -139,6 +139,13 @@
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
                                 <span class="sr-only">Bearbeiten</span>
                             </button>
+                            <button type="button" onclick="flipCard('card-inner-{{ monitor.id }}')" aria-label="Details anzeigen" title="Details" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-white/10 text-slate-100 transition hover:bg-white/15 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <span class="sr-only">Details</span>
+                            </button>
                             <form action="/monitors/{{ monitor.id }}/delete" method="post" onsubmit="return confirm('Monitor wirklich löschen?');" class="ml-auto">
                                 <button type="submit" aria-label="Monitor löschen" title="Löschen" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 cursor-pointer">
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-7 4v8m6-8v8M6 6l1 14h10l1-14"/></svg>
@@ -152,6 +159,12 @@
                     <div class="card-back absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden rotate-y-180 flex flex-col text-sm pointer-events-auto touch-pan-y">
                         <div class="flex items-center justify-between mb-4 flex-shrink-0">
                             <h3 class="font-semibold text-lg text-slate-100">Details & Logs</h3>
+                            <button type="button" onclick="flipCard('card-inner-{{ monitor.id }}')" aria-label="Details schließen" title="Zurück" class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 18l-6-6 6-6"/>
+                                </svg>
+                                <span class="sr-only">Zurück</span>
+                            </button>
                         </div>
                         <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
                             <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -634,6 +647,9 @@
         if (!window.__keepupCardFlipInstallerInstalled) {
             window.__keepupCardFlipInstallerInstalled = true;
             window.bindCardFlipHandlers = function bindCardFlipHandlers() {
+                if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
+                    return;
+                }
                 const interactiveSelector = "button, a, input, select, textarea, label, form";
                 const tapMoveThreshold = 10;
                 const tapTimeThreshold = 600;
