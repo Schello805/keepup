@@ -182,6 +182,7 @@ def build_dashboard_context(request: Request) -> dict:
     paused_count = sum(1 for monitor in monitors if not monitor.get("enabled", 1))
     overall_status = "All systems operational" if down_count == 0 else f"{down_count} issue(s) detected"
     overall_tone = "ok" if down_count == 0 else "problem"
+    last_updated_at = format_timestamp(datetime.now(timezone.utc).replace(microsecond=0).isoformat(), app_timezone)
 
     return {
         "request": request,
@@ -198,6 +199,7 @@ def build_dashboard_context(request: Request) -> dict:
             "paused": paused_count,
             "overall_status": overall_status,
             "overall_tone": overall_tone,
+            "last_updated_at": last_updated_at,
         },
     }
 
@@ -205,10 +207,12 @@ def build_dashboard_context(request: Request) -> dict:
 def build_dashboard_shell_context(request: Request) -> dict:
     settings = get_settings()
     summary = get_monitor_summary()
+    app_timezone = settings.get("app_timezone", "UTC")
     overall_status = "All systems operational" if summary["down"] == 0 else f"{summary['down']} issue(s) detected"
     overall_tone = "ok" if summary["down"] == 0 else "problem"
     summary["overall_status"] = overall_status
     summary["overall_tone"] = overall_tone
+    summary["last_updated_at"] = format_timestamp(datetime.now(timezone.utc).replace(microsecond=0).isoformat(), app_timezone)
 
     return {
         "request": request,
@@ -240,7 +244,7 @@ def build_incidents_context(request: Request) -> dict:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
     monitors = list_monitors()
-    monitor_id, status, since_days, item_raw = parse_incident_filters(request)
+    monitor_id, status, since_days, item_raw, page = parse_incident_filters(request)
 
     incidents = list_incidents(monitor_id=monitor_id, status=status, since_days=since_days)
 
@@ -340,14 +344,30 @@ def build_incidents_context(request: Request) -> dict:
 
     feed_items.sort(key=_sort_key, reverse=True)
 
+    per_page = 20
+    total_items = len(feed_items)
+    total_pages = max(1, (total_items + per_page - 1) // per_page)
+    page = min(max(1, page), total_pages)
+    page_start = (page - 1) * per_page
+    page_end = page_start + per_page
+    paged_feed_items = feed_items[page_start:page_end]
+
     selected_item: Optional[dict[str, Any]] = None
     if item_raw:
-        for item in feed_items:
+        for item in paged_feed_items:
             if item.get("item_id") == item_raw:
                 selected_item = item
                 break
-    if selected_item is None and feed_items:
-        selected_item = feed_items[0]
+    if selected_item is None and paged_feed_items:
+        selected_item = paged_feed_items[0]
+
+    pagination_base_query = dict(base_query)
+    if item_raw:
+        pagination_base_query["item"] = item_raw
+
+    def _build_page_url(target_page: int) -> str:
+        query = {**pagination_base_query, "page": str(target_page)}
+        return "/incidents?" + urlencode(query)
 
     return {
         "request": request,
@@ -357,19 +377,32 @@ def build_incidents_context(request: Request) -> dict:
         "toast": get_toast(request),
         "monitors": monitors,
         "incidents": incidents,
-        "feed_items": feed_items,
+        "feed_items": paged_feed_items,
         "selected_item": selected_item,
         "filters": {
             "monitor_id": monitor_id,
             "status": status,
             "days": since_days,
+            "page": page,
+        },
+        "pagination": {
+            "page": page,
+            "per_page": per_page,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+            "prev_url": _build_page_url(page - 1) if page > 1 else None,
+            "next_url": _build_page_url(page + 1) if page < total_pages else None,
+            "from_item": page_start + 1 if total_items else 0,
+            "to_item": min(page_end, total_items),
         },
     }
 
 
 def build_incidents_shell_context(request: Request) -> dict:
     settings = get_settings()
-    monitor_id, status, since_days, _item_raw = parse_incident_filters(request)
+    monitor_id, status, since_days, _item_raw, page = parse_incident_filters(request)
     query_string = request.url.query
     incident_feed_url = "/api/incidents/feed"
     if query_string:
@@ -386,16 +419,18 @@ def build_incidents_shell_context(request: Request) -> dict:
             "monitor_id": monitor_id,
             "status": status,
             "days": since_days,
+            "page": page,
         },
         "incident_feed_url": incident_feed_url,
     }
 
 
-def parse_incident_filters(request: Request) -> tuple[Optional[int], str, Optional[int], str]:
+def parse_incident_filters(request: Request) -> tuple[Optional[int], str, Optional[int], str, int]:
     monitor_id_raw = request.query_params.get("monitor_id", "").strip()
     status = request.query_params.get("status", "all").strip().lower() or "all"
     days_raw = request.query_params.get("days", "7").strip()
     item_raw = request.query_params.get("item", "").strip()
+    page_raw = request.query_params.get("page", "1").strip()
 
     monitor_id: Optional[int] = None
     if monitor_id_raw:
@@ -412,8 +447,12 @@ def parse_incident_filters(request: Request) -> tuple[Optional[int], str, Option
             since_days = max(1, int(days_raw))
         except ValueError:
             since_days = 7
+    try:
+        page = max(1, int(page_raw))
+    except ValueError:
+        page = 1
 
-    return monitor_id, status, since_days, item_raw
+    return monitor_id, status, since_days, item_raw, page
 
 
 def _run_git_command(args: list[str]) -> Optional[str]:
@@ -653,7 +692,7 @@ async def run_update() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", build_dashboard_shell_context(request))
+    return render_template(request, "index.html", build_dashboard_context(request))
 
 
 @app.get("/settings", response_class=HTMLResponse)

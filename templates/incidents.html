@@ -1,6 +1,6 @@
 {% from "_shared.html" import render_page_header, btn_classes, select_classes, render_toast, render_footer %}
 
-{% macro render_incident_feed(feed_items, selected_item) -%}
+{% macro render_incident_feed(feed_items, selected_item, pagination) -%}
     <section class="space-y-3">
         {% if feed_items %}
             {% for item in feed_items %}
@@ -71,6 +71,37 @@
                 Keine Einträge für diesen Filter.
             </div>
         {% endif %}
+
+        {% if pagination and pagination.total_pages > 1 %}
+        <div class="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
+            <p class="text-sm text-slate-400">
+                Einträge {{ pagination.from_item }}-{{ pagination.to_item }} von {{ pagination.total_items }}
+            </p>
+            <div class="flex items-center gap-2">
+                {% if pagination.has_prev %}
+                <a href="{{ pagination.prev_url }}" class="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
+                    Zurück
+                </a>
+                {% else %}
+                <span class="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-500">
+                    Zurück
+                </span>
+                {% endif %}
+                <span class="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/10 bg-slate-950/40 px-4 text-sm font-semibold text-slate-200">
+                    Seite {{ pagination.page }} / {{ pagination.total_pages }}
+                </span>
+                {% if pagination.has_next %}
+                <a href="{{ pagination.next_url }}" class="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
+                    Weiter
+                </a>
+                {% else %}
+                <span class="inline-flex min-h-[44px] items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-500">
+                    Weiter
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </section>
 {%- endmacro %}
 
@@ -91,7 +122,7 @@
 {%- endmacro %}
 
 {% if partial == "feed" %}
-{{ render_incident_feed(feed_items, selected_item) }}
+{{ render_incident_feed(feed_items, selected_item, pagination) }}
 {% else %}
 <!DOCTYPE html>
 <html lang="de" class="dark">
