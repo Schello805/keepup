@@ -163,18 +163,14 @@ def build_notification_settings_payload(
 
 
 def build_dashboard_context(request: Request) -> dict:
-    monitors = list_monitors()
+    monitors = list_monitors(include_heavy_details=False)
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
-    logs_by_monitor = get_recent_logs_for_monitors([monitor["id"] for monitor in monitors])
     for monitor in monitors:
-        monitor["logs"] = logs_by_monitor.get(monitor["id"], [])
         monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
         monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
-        for log in monitor["logs"]:
-            log["checked_at"] = format_timestamp(log.get("checked_at"), app_timezone)
 
     down_count = sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "down")
     up_count = sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "up")
@@ -201,6 +197,31 @@ def build_dashboard_context(request: Request) -> dict:
             "overall_tone": overall_tone,
             "last_updated_at": last_updated_at,
         },
+    }
+
+
+def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[dict[str, Any]]:
+    settings = get_settings()
+    app_timezone = settings.get("app_timezone", "UTC")
+    monitors = list_monitors(monitor_ids=[monitor_id], include_heavy_details=True)
+    if not monitors:
+        return None
+
+    monitor = monitors[0]
+    logs_by_monitor = get_recent_logs_for_monitors([monitor_id])
+    monitor["logs"] = logs_by_monitor.get(monitor_id, [])
+    monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
+    monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
+    monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
+    monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
+    for log in monitor["logs"]:
+        log["checked_at"] = format_timestamp(log.get("checked_at"), app_timezone)
+
+    return {
+        "request": request,
+        "settings": settings,
+        "monitor": monitor,
+        "active_page": "dashboard",
     }
 
 
@@ -725,9 +746,17 @@ async def live_cards_partial(request: Request) -> HTMLResponse:
     return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "cards"})
 
 
+@app.get("/api/monitors/{monitor_id}/details", response_class=HTMLResponse)
+async def monitor_detail_partial(request: Request, monitor_id: int) -> HTMLResponse:
+    context = build_monitor_detail_context(request, monitor_id)
+    if not context:
+        raise HTTPException(status_code=404, detail="Monitor not found")
+    return render_template(request, "index.html", {**context, "partial": "monitor-detail"})
+
+
 @app.get("/api/monitors")
 async def monitor_snapshot() -> JSONResponse:
-    monitors = list_monitors()
+    monitors = list_monitors(include_heavy_details=False)
     for monitor in monitors:
         monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
     summary = {

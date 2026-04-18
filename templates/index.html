@@ -44,6 +44,109 @@
     </div>
 {%- endmacro %}
 
+{% macro render_monitor_detail(monitor) -%}
+    <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
+        <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Check</dt>
+                {% set _checked_parts = (monitor.last_checked_at or '').split(' ') %}
+                <dd class="mt-1 font-medium tabular-nums leading-tight">
+                    {% if _checked_parts|length >= 2 %}
+                        <span class="block">{{ _checked_parts[0] }}</span>
+                        <span class="block text-sm text-slate-200">{{ _checked_parts[1] }}{% if _checked_parts|length >= 3 %} {{ _checked_parts[2] }}{% endif %}</span>
+                    {% else %}
+                        {{ monitor.last_checked_at or "-" }}
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                <dt class="text-slate-500 text-xs uppercase tracking-wide">Statuswechsel</dt>
+                {% set _change_parts = (monitor.last_change_at or '').split(' ') %}
+                <dd class="mt-1 font-medium tabular-nums leading-tight">
+                    {% if _change_parts|length >= 2 %}
+                        <span class="block">{{ _change_parts[0] }}</span>
+                        <span class="block text-sm text-slate-200">{{ _change_parts[1] }}{% if _change_parts|length >= 3 %} {{ _change_parts[2] }}{% endif %}</span>
+                    {% else %}
+                        {{ monitor.last_change_at or "-" }}
+                    {% endif %}
+                </dd>
+            </div>
+            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+                <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Erfolg</dt>
+                {% set _success_parts = (monitor.last_success_at or '').split(' ') %}
+                <dd class="mt-1 font-medium tabular-nums leading-tight">
+                    {% if _success_parts|length >= 2 %}
+                        <span class="block">{{ _success_parts[0] }}</span>
+                        <span class="block text-sm text-slate-200">{{ _success_parts[1] }}{% if _success_parts|length >= 3 %} {{ _success_parts[2] }}{% endif %}</span>
+                    {% else %}
+                        {{ monitor.last_success_at or "-" }}
+                    {% endif %}
+                </dd>
+            </div>
+        </dl>
+        {% if monitor.sla %}
+        <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
+            <h4 class="font-medium text-slate-300 mb-2">SLA / Uptime</h4>
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500">7 Tage</div>
+                    <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['7d'].uptime_pct }}%</div>
+                    <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['7d'].incident_count }}</div>
+                    <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['7d'].downtime_human or '0s' }}</div>
+                    <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['7d'].mttr_human or '-' }}</div>
+                </div>
+                <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500">30 Tage</div>
+                    <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['30d'].uptime_pct }}%</div>
+                    <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['30d'].incident_count }}</div>
+                    <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['30d'].downtime_human or '0s' }}</div>
+                    <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['30d'].mttr_human or '-' }}</div>
+                </div>
+                <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                    <div class="text-[10px] uppercase tracking-wide text-slate-500">90 Tage</div>
+                    <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['90d'].uptime_pct }}%</div>
+                    <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['90d'].incident_count }}</div>
+                    <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['90d'].downtime_human or '0s' }}</div>
+                    <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['90d'].mttr_human or '-' }}</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if monitor.chart_data_json and monitor.chart_data_json != "[]" %}
+        <div class="mb-2">
+            <h4 class="font-medium text-slate-300 mb-2">Antwortzeiten (letzte Checks)</h4>
+            <div class="rounded-2xl border border-white/5 bg-slate-950/40 overflow-hidden apex-chart-container h-36 w-full" data-chart-series='{{ monitor.chart_data_json }}' data-monitor-type='{{ monitor.type }}' id="chart-{{ monitor.id }}"></div>
+        </div>
+        {% endif %}
+
+        <div>
+            <h4 class="font-medium text-slate-300 mb-2">Technische Fehlerlogs</h4>
+            <div class="space-y-3">
+                {% if monitor.logs %}
+                    {% for log in monitor.logs %}
+                    <div class="rounded-2xl border border-white/5 bg-slate-950/60 p-3">
+                        <div class="flex items-center justify-between gap-3 mb-1">
+                            <span class="uppercase tracking-wide text-[10px] font-semibold text-slate-400">{{ log.status }}</span>
+                            <span class="text-xs text-slate-500">{{ log.checked_at }}</span>
+                        </div>
+                        {% if log.error_msg %}
+                        <p class="break-words text-slate-300">{{ log.error_msg }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-slate-500 italic">Keine Fehlerprotokolle vorhanden.</p>
+                {% endif %}
+            </div>
+        </div>
+        {% if monitor.last_error %}
+        <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-rose-100">
+            {{ monitor.last_error }}
+        </div>
+        {% endif %}
+    </div>
+{%- endmacro %}
+
 {% macro render_monitor_cards(monitors) -%}
     <section class="space-y-4">
         <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -172,105 +275,17 @@
                                 <span class="sr-only">Zurück</span>
                             </button>
                         </div>
-                        <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
-                            <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                                    <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Check</dt>
-                                    {% set _checked_parts = (monitor.last_checked_at or '').split(' ') %}
-                                    <dd class="mt-1 font-medium tabular-nums leading-tight">
-                                        {% if _checked_parts|length >= 2 %}
-                                            <span class="block">{{ _checked_parts[0] }}</span>
-                                            <span class="block text-sm text-slate-200">{{ _checked_parts[1] }}{% if _checked_parts|length >= 3 %} {{ _checked_parts[2] }}{% endif %}</span>
-                                        {% else %}
-                                            {{ monitor.last_checked_at or "-" }}
-                                        {% endif %}
-                                    </dd>
+                        <div id="card-detail-content-{{ monitor.id }}" class="overflow-y-auto flex-1 rounded-xl" data-detail-url="/api/monitors/{{ monitor.id }}/details" data-detail-loaded="false">
+                            <div class="space-y-4 pr-1">
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
+                                    <div class="h-4 w-32 rounded-lg bg-white/10"></div>
+                                    <div class="mt-3 h-16 rounded-2xl bg-white/5"></div>
                                 </div>
-                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                                    <dt class="text-slate-500 text-xs uppercase tracking-wide">Statuswechsel</dt>
-                                    {% set _change_parts = (monitor.last_change_at or '').split(' ') %}
-                                    <dd class="mt-1 font-medium tabular-nums leading-tight">
-                                        {% if _change_parts|length >= 2 %}
-                                            <span class="block">{{ _change_parts[0] }}</span>
-                                            <span class="block text-sm text-slate-200">{{ _change_parts[1] }}{% if _change_parts|length >= 3 %} {{ _change_parts[2] }}{% endif %}</span>
-                                        {% else %}
-                                            {{ monitor.last_change_at or "-" }}
-                                        {% endif %}
-                                    </dd>
-                                </div>
-                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                                    <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Erfolg</dt>
-                                    {% set _success_parts = (monitor.last_success_at or '').split(' ') %}
-                                    <dd class="mt-1 font-medium tabular-nums leading-tight">
-                                        {% if _success_parts|length >= 2 %}
-                                            <span class="block">{{ _success_parts[0] }}</span>
-                                            <span class="block text-sm text-slate-200">{{ _success_parts[1] }}{% if _success_parts|length >= 3 %} {{ _success_parts[2] }}{% endif %}</span>
-                                        {% else %}
-                                            {{ monitor.last_success_at or "-" }}
-                                        {% endif %}
-                                    </dd>
-                                </div>
-                            </dl>
-                            {% if monitor.sla %}
-                            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                                <h4 class="font-medium text-slate-300 mb-2">SLA / Uptime</h4>
-                                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                                    <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
-                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">7 Tage</div>
-                                        <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['7d'].uptime_pct }}%</div>
-                                        <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['7d'].incident_count }}</div>
-                                        <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['7d'].downtime_human or '0s' }}</div>
-                                        <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['7d'].mttr_human or '-' }}</div>
-                                    </div>
-                                    <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
-                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">30 Tage</div>
-                                        <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['30d'].uptime_pct }}%</div>
-                                        <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['30d'].incident_count }}</div>
-                                        <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['30d'].downtime_human or '0s' }}</div>
-                                        <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['30d'].mttr_human or '-' }}</div>
-                                    </div>
-                                    <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
-                                        <div class="text-[10px] uppercase tracking-wide text-slate-500">90 Tage</div>
-                                        <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['90d'].uptime_pct }}%</div>
-                                        <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['90d'].incident_count }}</div>
-                                        <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['90d'].downtime_human or '0s' }}</div>
-                                        <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['90d'].mttr_human or '-' }}</div>
-                                    </div>
+                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
+                                    <div class="h-4 w-28 rounded-lg bg-white/10"></div>
+                                    <div class="mt-3 h-24 rounded-2xl bg-white/5"></div>
                                 </div>
                             </div>
-                            {% endif %}
-                            {% if monitor.chart_data_json and monitor.chart_data_json != "[]" %}
-                            <div class="mb-2">
-                                <h4 class="font-medium text-slate-300 mb-2">Antwortzeiten (letzte Checks)</h4>
-                                <div class="rounded-2xl border border-white/5 bg-slate-950/40 overflow-hidden apex-chart-container h-36 w-full" data-chart-series='{{ monitor.chart_data_json }}' data-monitor-type='{{ monitor.type }}' id="chart-{{ monitor.id }}"></div>
-                            </div>
-                            {% endif %}
-                            
-                            <div>
-                                <h4 class="font-medium text-slate-300 mb-2">Technische Fehlerlogs</h4>
-                                <div class="space-y-3">
-                                    {% if monitor.logs %}
-                                        {% for log in monitor.logs %}
-                                        <div class="rounded-2xl border border-white/5 bg-slate-950/60 p-3">
-                                            <div class="flex items-center justify-between gap-3 mb-1">
-                                                <span class="uppercase tracking-wide text-[10px] font-semibold text-slate-400">{{ log.status }}</span>
-                                                <span class="text-xs text-slate-500">{{ log.checked_at }}</span>
-                                            </div>
-                                            {% if log.error_msg %}
-                                            <p class="break-words text-slate-300">{{ log.error_msg }}</p>
-                                            {% endif %}
-                                        </div>
-                                        {% endfor %}
-                                    {% else %}
-                                        <p class="text-slate-500 italic">Keine Fehlerprotokolle vorhanden.</p>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% if monitor.last_error %}
-                            <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-rose-100">
-                                {{ monitor.last_error }}
-                            </div>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -300,7 +315,6 @@
     <link rel="icon" type="image/png" href="/static/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <script>
         tailwind.config = {
             darkMode: "class",
@@ -393,6 +407,8 @@
         <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
             {{ render_monitor_cards(monitors) }}
         </section>
+        {% elif partial == "monitor-detail" %}
+        {{ render_monitor_detail(monitor) }}
         {% else %}
         <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
@@ -543,14 +559,43 @@
             });
         }
 
+        async function ensureMonitorDetailsLoaded(monitorId) {
+            const container = document.getElementById(`card-detail-content-${monitorId}`);
+            if (!container) return;
+            if (container.dataset.detailLoaded === "true" || container.dataset.detailLoading === "true") return;
+            const url = container.dataset.detailUrl;
+            if (!url) return;
+
+            container.dataset.detailLoading = "true";
+            try {
+                const response = await fetch(url, { headers: { "HX-Request": "true" } });
+                if (!response.ok) {
+                    throw new Error(`detail_load_failed_${response.status}`);
+                }
+                container.innerHTML = await response.text();
+                container.dataset.detailLoaded = "true";
+                await renderCharts(container.closest('[id^="card-inner-"]') || container);
+            } catch (error) {
+                console.error("Monitor detail loading failed", error);
+                container.innerHTML = `
+                    <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
+                        Detaildaten konnten gerade nicht geladen werden.
+                    </div>
+                `;
+            } finally {
+                delete container.dataset.detailLoading;
+            }
+        }
+
         function flipCard(id) {
             const panel = document.getElementById(id);
             if (!panel) return;
             panel.classList.toggle("is-flipped");
+            const monitorId = id.replace("card-inner-", "");
             const openIds = new Set(getOpenDetails());
             if (panel.classList.contains("is-flipped")) {
                 openIds.add(id);
-                renderCharts(panel);
+                ensureMonitorDetailsLoaded(monitorId);
             } else {
                 openIds.delete(id);
             }
@@ -562,7 +607,7 @@
             document.querySelectorAll("[id^='card-inner-']").forEach((inner) => {
                 inner.classList.toggle("is-flipped", openIds.includes(inner.id));
                 if (inner.classList.contains("is-flipped")) {
-                    renderCharts(inner);
+                    ensureMonitorDetailsLoaded(inner.id.replace("card-inner-", ""));
                 }
             });
         }
@@ -602,8 +647,32 @@
             }
         }
 
-        function renderCharts(scope = document) {
-            if (typeof ApexCharts === 'undefined') return;
+        async function ensureApexChartsLoaded() {
+            if (typeof ApexCharts !== "undefined") return true;
+            if (window.__keepupApexChartsPromise) {
+                await window.__keepupApexChartsPromise;
+                return typeof ApexCharts !== "undefined";
+            }
+            window.__keepupApexChartsPromise = new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = "https://cdn.jsdelivr.net/npm/apexcharts";
+                script.onload = () => resolve(true);
+                script.onerror = () => reject(new Error("apexcharts_load_failed"));
+                document.head.appendChild(script);
+            });
+            try {
+                await window.__keepupApexChartsPromise;
+            } catch (error) {
+                console.error("ApexCharts loading failed", error);
+                return false;
+            }
+            return typeof ApexCharts !== "undefined";
+        }
+
+        async function renderCharts(scope = document) {
+            if (!scope.querySelector('.apex-chart-container')) return;
+            const ready = await ensureApexChartsLoaded();
+            if (!ready || typeof ApexCharts === 'undefined') return;
             scope.querySelectorAll('.is-flipped .apex-chart-container, .card-inner.is-flipped .apex-chart-container, [id^="card-inner-"].is-flipped .apex-chart-container, .apex-chart-container').forEach(el => {
                 if (el.dataset.chartRendered) return;
                 if (!el.closest('.is-flipped')) return;

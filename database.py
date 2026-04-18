@@ -324,19 +324,28 @@ def get_monitor_summary() -> dict[str, int]:
         }
 
 
-def list_monitors() -> list[dict[str, Any]]:
+def list_monitors(
+    monitor_ids: Optional[list[int]] = None,
+    include_heavy_details: bool = False,
+) -> list[dict[str, Any]]:
     with closing(get_db()) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM monitors ORDER BY id DESC")
+        if monitor_ids:
+            placeholders = ", ".join("?" for _ in monitor_ids)
+            cursor.execute(
+                f"SELECT * FROM monitors WHERE id IN ({placeholders}) ORDER BY id DESC",
+                tuple(monitor_ids),
+            )
+        else:
+            cursor.execute("SELECT * FROM monitors ORDER BY id DESC")
         monitors = [dict(row) for row in cursor.fetchall()]
         if not monitors:
             return []
 
-        monitor_ids = [monitor["id"] for monitor in monitors]
-        placeholders = ", ".join("?" for _ in monitor_ids)
+        resolved_monitor_ids = [monitor["id"] for monitor in monitors]
+        placeholders = ", ".join("?" for _ in resolved_monitor_ids)
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
-        monitor_map = {monitor["id"]: monitor for monitor in monitors}
 
         cursor.execute(
             f"""
@@ -358,9 +367,9 @@ def list_monitors() -> list[dict[str, Any]]:
             WHERE rn <= ?
             ORDER BY monitor_id, checked_at DESC
             """,
-            (*monitor_ids, HISTORY_LIMIT),
+            (*resolved_monitor_ids, HISTORY_LIMIT),
         )
-        recent_checks_by_monitor: dict[int, list[sqlite3.Row]] = {monitor_id: [] for monitor_id in monitor_ids}
+        recent_checks_by_monitor: dict[int, list[sqlite3.Row]] = {monitor_id: [] for monitor_id in resolved_monitor_ids}
         for row in cursor.fetchall():
             recent_checks_by_monitor[row["monitor_id"]].append(row)
 
@@ -372,35 +381,32 @@ def list_monitors() -> list[dict[str, Any]]:
               AND monitor_id IN ({placeholders})
             GROUP BY monitor_id
             """,
-            tuple(monitor_ids),
+            tuple(resolved_monitor_ids),
         )
         last_success_map = {
             row["monitor_id"]: row["last_success_at"]
             for row in cursor.fetchall()
         }
 
-        cursor.execute(
-            f"""
-            SELECT monitor_id, started_at, ended_at
-            FROM incidents
-            WHERE monitor_id IN ({placeholders})
-              AND started_at <= ?
-            ORDER BY monitor_id ASC, started_at ASC, id ASC
-            """,
-            (*monitor_ids, now_dt.isoformat()),
-        )
-        incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {monitor_id: [] for monitor_id in monitor_ids}
-        for row in cursor.fetchall():
-            incident_rows_by_monitor[row["monitor_id"]].append(row)
+        incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {}
+        if include_heavy_details:
+            cursor.execute(
+                f"""
+                SELECT monitor_id, started_at, ended_at
+                FROM incidents
+                WHERE monitor_id IN ({placeholders})
+                  AND started_at <= ?
+                ORDER BY monitor_id ASC, started_at ASC, id ASC
+                """,
+                (*resolved_monitor_ids, now_dt.isoformat()),
+            )
+            incident_rows_by_monitor = {monitor_id: [] for monitor_id in resolved_monitor_ids}
+            for row in cursor.fetchall():
+                incident_rows_by_monitor[row["monitor_id"]].append(row)
 
         for monitor in monitors:
             rows = list(reversed(recent_checks_by_monitor.get(monitor["id"], [])))
             monitor["history"] = [r["status"] for r in rows]
-
-            monitor["chart_data_json"] = json.dumps([
-                {"x": r["checked_at"], "y": r["response_time"]}
-                for r in rows
-            ])
 
             recent_statuses = [row["status"] for row in recent_checks_by_monitor.get(monitor["id"], [])]
             total = len(recent_statuses)
@@ -408,11 +414,16 @@ def list_monitors() -> list[dict[str, Any]]:
             monitor["uptime_percentage"] = round((up_count / total) * 100, 1) if total else None
 
             monitor["last_success_at"] = last_success_map.get(monitor["id"])
-            monitor["sla"] = {
-                "7d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 7, now_dt),
-                "30d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 30, now_dt),
-                "90d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 90, now_dt),
-            }
+            if include_heavy_details:
+                monitor["chart_data_json"] = json.dumps([
+                    {"x": r["checked_at"], "y": r["response_time"]}
+                    for r in rows
+                ])
+                monitor["sla"] = {
+                    "7d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 7, now_dt),
+                    "30d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 30, now_dt),
+                    "90d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 90, now_dt),
+                }
 
     return monitors
 
