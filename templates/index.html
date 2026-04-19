@@ -2,9 +2,24 @@
 
 {% macro render_dashboard_top(summary, active_page) -%}
     <div class="space-y-3">
-        <div class="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-400">
-            <span>Zuletzt aktualisiert</span>
-            <span class="font-medium text-slate-200">{{ summary.last_updated_at or "-" }}</span>
+        <div class="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-400 md:flex-row md:items-center md:justify-between">
+            <label class="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-300">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m21 21-4.35-4.35"/>
+                </svg>
+                <input
+                    id="monitor-search-input"
+                    type="search"
+                    placeholder="Nach Name, IP oder Hostname suchen"
+                    oninput="setSearchQuery(this.value)"
+                    class="min-w-0 flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                >
+            </label>
+            <div class="flex items-center justify-end gap-3 whitespace-nowrap">
+                <span>Zuletzt aktualisiert</span>
+                <span class="font-medium text-slate-200">{{ summary.last_updated_at or "-" }}</span>
+            </div>
         </div>
         <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
         <button type="button" data-filter="all" onclick="setStatusFilter('all')" class="status-filter-card rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-sky-300/30 hover:bg-white/10">
@@ -32,15 +47,19 @@
 {%- endmacro %}
 
 {% macro render_monitor_intro() -%}
-    <div id="monitor-actions-anchor" class="flex flex-col gap-3 rounded-3xl border border-white/10 bg-white/5 p-4 shadow-panel sm:flex-row sm:items-center sm:justify-between">
-        <div>
-            <p class="text-sm text-slate-300">Leichtgewichtiges Self-Hosted Monitoring für HTTP/S und Ping mit automatischen Statuswechsel-Benachrichtigungen.</p>
-        </div>
-        <div class="flex flex-wrap gap-2">
-            <button type="button" onclick="togglePanel('add-monitor-panel')" class="{{ btn_classes('primary') }}">
-                Monitor anlegen
-            </button>
-        </div>
+    <div id="monitor-actions-anchor" class="flex items-center justify-end rounded-3xl border border-white/10 bg-white/5 p-3 shadow-panel">
+        <button
+            type="button"
+            onclick="togglePanel('add-monitor-panel')"
+            title="Monitor anlegen"
+            aria-label="Monitor anlegen"
+            class="tap-target inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-500 text-slate-950 transition hover:bg-sky-400"
+        >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/>
+            </svg>
+            <span class="sr-only">Monitor anlegen</span>
+        </button>
     </div>
 {%- endmacro %}
 
@@ -153,7 +172,7 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] touch-pan-y">
+            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] touch-pan-y">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d">
                     <!-- VORDERSEITE -->
                     <div class="card-front card-front-shell absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto touch-pan-y">
@@ -299,7 +318,7 @@
     </section>
     <script>
         if (typeof restoreOpenDetails === 'function') {
-            applyStatusFilter();
+            applyMonitorFilters();
             restoreOpenDetails();
         }
     </script>
@@ -531,6 +550,10 @@
             return window.localStorage.getItem("keepup-status-filter") || "all";
         }
 
+        function getSearchQuery() {
+            return (window.localStorage.getItem("keepup-monitor-search") || "").trim().toLowerCase();
+        }
+
         function getOpenDetails() {
             try {
                 return JSON.parse(window.localStorage.getItem("keepup-open-details") || "[]");
@@ -545,17 +568,35 @@
 
         function setStatusFilter(filter) {
             window.localStorage.setItem("keepup-status-filter", filter);
-            applyStatusFilter();
+            applyMonitorFilters();
         }
 
-        function applyStatusFilter() {
+        function setSearchQuery(query) {
+            window.localStorage.setItem("keepup-monitor-search", (query || "").trim());
+            applyMonitorFilters();
+        }
+
+        function syncSearchInput() {
+            const input = document.getElementById("monitor-search-input");
+            if (!input) return;
+            const query = window.localStorage.getItem("keepup-monitor-search") || "";
+            if (input.value !== query) {
+                input.value = query;
+            }
+        }
+
+        function applyMonitorFilters() {
             const filter = getStatusFilter();
+            const query = getSearchQuery();
+            syncSearchInput();
             document.querySelectorAll(".status-filter-card").forEach((card) => {
                 card.classList.toggle("is-active", card.dataset.filter === filter);
             });
             document.querySelectorAll(".monitor-card").forEach((card) => {
-                const matches = filter === "all" || card.dataset.monitorStatus === filter;
-                card.classList.toggle("is-hidden", !matches);
+                const matchesStatus = filter === "all" || card.dataset.monitorStatus === filter;
+                const haystack = (card.dataset.monitorSearch || "").toLowerCase();
+                const matchesSearch = !query || haystack.includes(query);
+                card.classList.toggle("is-hidden", !(matchesStatus && matchesSearch));
             });
         }
 
@@ -729,7 +770,7 @@
         }
 
         window.setTimeout(dismissToast, 4200);
-        applyStatusFilter();
+        applyMonitorFilters();
         restoreOpenDetails();
         if (!window.__keepupCardFlipInstallerInstalled) {
             window.__keepupCardFlipInstallerInstalled = true;
@@ -807,7 +848,7 @@
             );
         }
         document.body.addEventListener("htmx:afterSwap", () => {
-            applyStatusFilter();
+            applyMonitorFilters();
             restoreOpenDetails();
             window.bindCardFlipHandlers?.();
         });
