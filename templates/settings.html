@@ -83,12 +83,32 @@
                             <input type="number" min="1" step="1" name="down_failures_threshold" value="{{ settings.down_failures_threshold or 3 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Recovery erst nach X Erfolgen (UP)</span>
+                            <input type="number" min="1" step="1" name="up_successes_threshold" value="{{ settings.up_successes_threshold or 1 }}" class="{{ input_classes() }} appearance-none">
+                        </label>
+                        <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Flapping-Fenster (Minuten)</span>
+                            <input type="number" min="1" step="1" name="flapping_window_minutes" value="{{ settings.flapping_window_minutes or 15 }}" class="{{ input_classes() }} appearance-none">
+                        </label>
+                        <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Flapping ab X Statuswechseln</span>
+                            <input type="number" min="2" step="1" name="flapping_transition_threshold" value="{{ settings.flapping_transition_threshold or 3 }}" class="{{ input_classes() }} appearance-none">
+                        </label>
+                        <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Sammelmeldungs-Fenster (Sek.)</span>
+                            <input type="number" min="0" step="1" name="notification_batch_window_seconds" value="{{ settings.notification_batch_window_seconds if settings.notification_batch_window_seconds is not none else 30 }}" class="{{ input_classes() }} appearance-none">
+                        </label>
+                        <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Scheduler-Jitter (Sek.)</span>
+                            <input type="number" min="0" step="1" name="scheduler_jitter_seconds" value="{{ settings.scheduler_jitter_seconds if settings.scheduler_jitter_seconds is not none else 10 }}" class="{{ input_classes() }} appearance-none">
+                        </label>
+                        <label class="space-y-2">
                             <span class="text-sm text-slate-300">Checks aufbewahren (Tage)</span>
                             <input type="number" min="1" step="1" name="retention_days" value="{{ settings.retention_days or 7 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                     </div>
                     <p class="mt-3 text-xs text-slate-500">Die Auswahl steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
-                    <p class="mt-2 text-xs text-slate-500">Benachrichtigungen und Incidents werden erst ausgelöst, wenn ein Monitor X Mal in Folge als <span class="font-semibold text-rose-200">down</span> gemessen wurde. Empfehlung: 3.</p>
+                    <p class="mt-2 text-xs text-slate-500">Benachrichtigungen und Incidents werden erst nach bestätigten DOWN-/UP-Checks ausgelöst. Flapping markiert Monitore mit häufigen Statuswechseln; Sammelmeldungen bündeln mehrere Änderungen innerhalb des Fensters.</p>
                     <p class="mt-2 text-xs text-slate-500">Die Aufbewahrungszeit legt fest, wie lange alte Check-Einträge in der Datenbank bleiben, bevor KeepUp sie automatisch bereinigt.</p>
                 {% endcall %}
 

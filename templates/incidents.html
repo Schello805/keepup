@@ -22,7 +22,15 @@
                             <span class="rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-100">Geschlossen</span>
                             {% endif %}
                         </div>
-                        <p class="mt-1 text-xs text-slate-400">{{ item.timestamp_display or '-' }}</p>
+                        <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                            <span>{{ item.timestamp_display or '-' }}</span>
+                            {% if item.duration_display %}
+                            <span class="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-slate-300">Dauer: {{ item.duration_display }}</span>
+                            {% endif %}
+                            {% if item.burst_count and item.burst_count >= 3 %}
+                            <span class="rounded-full border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-amber-100">{{ item.burst_count }} gleichzeitig</span>
+                            {% endif %}
+                        </div>
                         <p class="mt-2 break-all text-sm text-slate-300">{{ item.monitor_target }}</p>
                         {% if item.kind == 'created' %}
                         <p class="mt-2 text-sm text-slate-300">Monitor erstellt</p>
@@ -47,9 +55,34 @@
                     {% else %}
                         {% set incident = item.incident %}
                         {% set is_open = (incident and incident.ended_at is none) %}
+                        {% if incident.burst_hint %}
+                        <div class="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 md:col-span-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-200">Hinweis zur Erkennung</p>
+                            <p class="mt-2 text-sm text-amber-50">{{ incident.burst_hint }}</p>
+                        </div>
+                        {% endif %}
+                        <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4 md:col-span-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Bewertung</p>
+                            <p class="mt-2 text-sm text-slate-300">
+                                {% if is_open %}
+                                Der Incident ist noch offen. Prüfe Ziel, DNS, Netzwerkpfad und Reverse Proxy, bevor du den Dienst selbst als Ursache annimmst.
+                                {% else %}
+                                Geschlossen nach {{ incident.duration_display or 'unbekannter Dauer' }}. Sehr kurze Incidents können durch temporäre Netzwerk-, DNS- oder Proxy-Aussetzer entstehen.
+                                {% endif %}
+                            </p>
+                        </div>
                         <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                             <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Start</p>
                             <p class="mt-1 text-sm text-slate-100">{{ incident.started_at_display or '-' }}</p>
+                            {% if incident.first_failed_at_display %}
+                            <p class="mt-2 text-xs text-slate-400">Erster Fehler: {{ incident.first_failed_at_display }}</p>
+                            {% endif %}
+                            {% if incident.confirmed_down_at_display %}
+                            <p class="mt-1 text-xs text-slate-400">DOWN bestätigt: {{ incident.confirmed_down_at_display }}{% if incident.confirmation_attempts %} nach {{ incident.confirmation_attempts }} Checks{% endif %}</p>
+                            {% endif %}
+                            {% if incident.start_error_category %}
+                            <p class="mt-2 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300">Kategorie: {{ incident.start_error_category }}</p>
+                            {% endif %}
                             {% if incident.start_error_msg %}
                             <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.start_error_msg }}</p>
                             {% endif %}
@@ -58,6 +91,15 @@
                         <div class="rounded-2xl border border-white/10 bg-slate-950/40 p-4">
                             <p class="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">Ende</p>
                             <p class="mt-1 text-sm text-slate-100">{{ incident.ended_at_display or ("Noch offen" if is_open else '-') }}</p>
+                            {% if incident.first_recovered_at_display %}
+                            <p class="mt-2 text-xs text-slate-400">Erster Recovery-Erfolg: {{ incident.first_recovered_at_display }}</p>
+                            {% endif %}
+                            {% if incident.confirmed_up_at_display %}
+                            <p class="mt-1 text-xs text-slate-400">UP bestätigt: {{ incident.confirmed_up_at_display }}{% if incident.recovery_attempts %} nach {{ incident.recovery_attempts }} Checks{% endif %}</p>
+                            {% endif %}
+                            {% if incident.end_error_category %}
+                            <p class="mt-2 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-1 text-xs text-slate-300">Recovery-Kategorie: {{ incident.end_error_category }}</p>
+                            {% endif %}
                             {% if incident.end_error_msg %}
                             <p class="mt-2 text-sm text-slate-300 break-words">{{ incident.end_error_msg }}</p>
                             {% endif %}

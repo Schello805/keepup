@@ -112,6 +112,33 @@ def format_timestamp(timestamp: Optional[str], timezone_name: str) -> Optional[s
     return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S %Z")
 
 
+def format_duration_short(seconds: Optional[int]) -> Optional[str]:
+    if seconds is None:
+        return None
+    seconds = max(0, int(seconds))
+    minutes, sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {sec}s"
+    return f"{sec}s"
+
+
+def get_incident_burst_bucket(timestamp: Optional[str]) -> Optional[str]:
+    if not timestamp:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(second=0, microsecond=0).isoformat()
+
 def normalize_timezone(timezone_name: str) -> str:
     timezone_name = timezone_name.strip() or "UTC"
     try:
@@ -124,7 +151,12 @@ def normalize_timezone(timezone_name: str) -> str:
 def build_notification_settings_payload(
     app_timezone: str,
     down_failures_threshold: int,
+    up_successes_threshold: int,
     retention_days: int,
+    flapping_window_minutes: int,
+    flapping_transition_threshold: int,
+    notification_batch_window_seconds: int,
+    scheduler_jitter_seconds: int,
     telegram_enabled: Optional[str],
     telegram_bot_token: str,
     telegram_chat_id: str,
@@ -139,15 +171,35 @@ def build_notification_settings_payload(
     smtp_use_ssl: Optional[str],
 ) -> dict:
     down_failures_threshold = int(down_failures_threshold)
+    up_successes_threshold = int(up_successes_threshold)
     retention_days = int(retention_days)
+    flapping_window_minutes = int(flapping_window_minutes)
+    flapping_transition_threshold = int(flapping_transition_threshold)
+    notification_batch_window_seconds = int(notification_batch_window_seconds)
+    scheduler_jitter_seconds = int(scheduler_jitter_seconds)
     if down_failures_threshold < 1:
         raise ValueError("Fehlschlag-Schwelle muss mindestens 1 sein.")
+    if up_successes_threshold < 1:
+        raise ValueError("Recovery-Schwelle muss mindestens 1 sein.")
     if retention_days < 1:
         raise ValueError("Aufbewahrungszeit muss mindestens 1 Tag sein.")
+    if flapping_window_minutes < 1:
+        raise ValueError("Flapping-Fenster muss mindestens 1 Minute sein.")
+    if flapping_transition_threshold < 2:
+        raise ValueError("Flapping-Schwelle muss mindestens 2 Statuswechsel sein.")
+    if notification_batch_window_seconds < 0:
+        raise ValueError("Sammelmeldungs-Fenster darf nicht negativ sein.")
+    if scheduler_jitter_seconds < 0:
+        raise ValueError("Scheduler-Jitter darf nicht negativ sein.")
     return {
         "app_timezone": normalize_timezone(app_timezone),
         "down_failures_threshold": down_failures_threshold,
+        "up_successes_threshold": up_successes_threshold,
         "retention_days": retention_days,
+        "flapping_window_minutes": flapping_window_minutes,
+        "flapping_transition_threshold": flapping_transition_threshold,
+        "notification_batch_window_seconds": notification_batch_window_seconds,
+        "scheduler_jitter_seconds": scheduler_jitter_seconds,
         "telegram_enabled": telegram_enabled == "on",
         "telegram_bot_token": telegram_bot_token.strip(),
         "telegram_chat_id": telegram_chat_id.strip(),
@@ -278,10 +330,19 @@ def build_incidents_context(request: Request) -> dict:
     base_query["days"] = "all" if since_days is None else str(since_days)
 
     feed_items: list[dict[str, Any]] = []
+    incident_burst_counts: dict[str, int] = {}
+    for incident in incidents:
+        bucket = get_incident_burst_bucket(incident.get("started_at"))
+        if bucket:
+            incident_burst_counts[bucket] = incident_burst_counts.get(bucket, 0) + 1
 
     for incident in incidents:
         incident["started_at_display"] = format_timestamp(incident.get("started_at"), app_timezone)
         incident["ended_at_display"] = format_timestamp(incident.get("ended_at"), app_timezone)
+        incident["first_failed_at_display"] = format_timestamp(incident.get("first_failed_at"), app_timezone)
+        incident["confirmed_down_at_display"] = format_timestamp(incident.get("confirmed_down_at"), app_timezone)
+        incident["first_recovered_at_display"] = format_timestamp(incident.get("first_recovered_at"), app_timezone)
+        incident["confirmed_up_at_display"] = format_timestamp(incident.get("confirmed_up_at"), app_timezone)
 
         incident_item_id = f"incident:{incident.get('id')}"
         incident["item_id"] = incident_item_id
@@ -307,6 +368,17 @@ def build_incidents_context(request: Request) -> dict:
             duration_seconds = None
 
         incident["duration_seconds"] = duration_seconds
+        incident["duration_display"] = format_duration_short(duration_seconds)
+        burst_bucket = get_incident_burst_bucket(incident.get("started_at"))
+        burst_count = incident_burst_counts.get(burst_bucket or "", 0)
+        incident["burst_count"] = burst_count
+        incident["burst_hint"] = (
+            f"{burst_count} Incidents starteten in derselben Minute. "
+            "Das spricht eher für DNS-, Netzwerk-, Proxy- oder Host-Probleme "
+            "als für einzelne Dienste."
+            if burst_count >= 3
+            else None
+        )
 
         feed_items.append(
             {
@@ -319,6 +391,9 @@ def build_incidents_context(request: Request) -> dict:
                 "monitor_type": incident.get("monitor_type"),
                 "monitor_target": incident.get("monitor_target"),
                 "is_open": incident.get("ended_at") is None,
+                "duration_display": incident.get("duration_display"),
+                "burst_count": burst_count,
+                "burst_hint": incident.get("burst_hint"),
                 "incident": incident,
                 "select_url": incident.get("select_url"),
             }
@@ -780,6 +855,8 @@ async def create_monitor_route(
     retry_count: int = Form(2),
     interval: int = Form(...),
     timeout: int = Form(...),
+    expected_text: str = Form(""),
+    forbidden_text: str = Form(""),
 ) -> RedirectResponse:
     if monitor_type not in {"http", "ping"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
@@ -793,6 +870,8 @@ async def create_monitor_route(
         retry_count=max(0, min(5, retry_count)),
         interval=max(10, interval),
         timeout=max(2, timeout),
+        expected_text=expected_text,
+        forbidden_text=forbidden_text,
     )
     reschedule_monitor_jobs(scheduler)
     await execute_monitor_check(monitor_id)
@@ -809,6 +888,8 @@ async def edit_monitor_route(
     retry_count: int = Form(2),
     interval: int = Form(...),
     timeout: int = Form(...),
+    expected_text: str = Form(""),
+    forbidden_text: str = Form(""),
 ) -> RedirectResponse:
     monitor = get_monitor(monitor_id)
     if not monitor:
@@ -827,6 +908,8 @@ async def edit_monitor_route(
         retry_count=max(0, min(5, retry_count)),
         interval=max(10, interval),
         timeout=max(2, timeout),
+        expected_text=expected_text,
+        forbidden_text=forbidden_text,
     )
     reschedule_monitor_jobs(scheduler)
     return flash_redirect("/", "Monitor wurde aktualisiert.")
@@ -861,7 +944,12 @@ async def run_monitor_route(monitor_id: int) -> RedirectResponse:
 async def update_notification_settings(
     app_timezone: str = Form("UTC"),
     down_failures_threshold: int = Form(3),
+    up_successes_threshold: int = Form(1),
     retention_days: int = Form(7),
+    flapping_window_minutes: int = Form(15),
+    flapping_transition_threshold: int = Form(3),
+    notification_batch_window_seconds: int = Form(30),
+    scheduler_jitter_seconds: int = Form(10),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -879,7 +967,12 @@ async def update_notification_settings(
         payload = build_notification_settings_payload(
             app_timezone,
             down_failures_threshold,
+            up_successes_threshold,
             retention_days,
+            flapping_window_minutes,
+            flapping_transition_threshold,
+            notification_batch_window_seconds,
+            scheduler_jitter_seconds,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -896,6 +989,7 @@ async def update_notification_settings(
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
     update_settings(payload)
+    reschedule_monitor_jobs(scheduler)
     return flash_redirect("/settings", "Einstellungen wurden gespeichert.")
 
 
@@ -903,7 +997,12 @@ async def update_notification_settings(
 async def test_telegram_settings(
     app_timezone: str = Form("UTC"),
     down_failures_threshold: int = Form(3),
+    up_successes_threshold: int = Form(1),
     retention_days: int = Form(7),
+    flapping_window_minutes: int = Form(15),
+    flapping_transition_threshold: int = Form(3),
+    notification_batch_window_seconds: int = Form(30),
+    scheduler_jitter_seconds: int = Form(10),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -921,7 +1020,12 @@ async def test_telegram_settings(
         payload = build_notification_settings_payload(
             app_timezone,
             down_failures_threshold,
+            up_successes_threshold,
             retention_days,
+            flapping_window_minutes,
+            flapping_transition_threshold,
+            notification_batch_window_seconds,
+            scheduler_jitter_seconds,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
@@ -954,7 +1058,12 @@ async def test_telegram_settings(
 async def test_smtp_settings(
     app_timezone: str = Form("UTC"),
     down_failures_threshold: int = Form(3),
+    up_successes_threshold: int = Form(1),
     retention_days: int = Form(7),
+    flapping_window_minutes: int = Form(15),
+    flapping_transition_threshold: int = Form(3),
+    notification_batch_window_seconds: int = Form(30),
+    scheduler_jitter_seconds: int = Form(10),
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
@@ -972,7 +1081,12 @@ async def test_smtp_settings(
         payload = build_notification_settings_payload(
             app_timezone,
             down_failures_threshold,
+            up_successes_threshold,
             retention_days,
+            flapping_window_minutes,
+            flapping_transition_threshold,
+            notification_batch_window_seconds,
+            scheduler_jitter_seconds,
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,

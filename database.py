@@ -17,7 +17,12 @@ DEFAULT_SETTINGS = {
     "refresh_interval": 10,
     "app_timezone": "UTC",
     "down_failures_threshold": 3,
+    "up_successes_threshold": 1,
     "retention_days": 7,
+    "flapping_window_minutes": 15,
+    "flapping_transition_threshold": 3,
+    "notification_batch_window_seconds": 30,
+    "scheduler_jitter_seconds": 10,
     "telegram_enabled": False,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
@@ -150,6 +155,13 @@ def init_db() -> None:
                 last_response_time REAL,
                 last_checked_at TEXT,
                 last_change_at TEXT,
+                consecutive_failures INTEGER NOT NULL DEFAULT 0,
+                consecutive_successes INTEGER NOT NULL DEFAULT 0,
+                expected_text TEXT,
+                forbidden_text TEXT,
+                last_error_category TEXT,
+                is_flapping INTEGER NOT NULL DEFAULT 0,
+                flapping_until TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             );
@@ -160,6 +172,7 @@ def init_db() -> None:
                 status TEXT NOT NULL,
                 response_time REAL,
                 error_msg TEXT,
+                error_category TEXT,
                 checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
             );
@@ -178,6 +191,14 @@ def init_db() -> None:
                 end_check_id INTEGER,
                 start_error_msg TEXT,
                 end_error_msg TEXT,
+                first_failed_at TEXT,
+                confirmed_down_at TEXT,
+                first_recovered_at TEXT,
+                confirmed_up_at TEXT,
+                confirmation_attempts INTEGER,
+                recovery_attempts INTEGER,
+                start_error_category TEXT,
+                end_error_category TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE,
@@ -197,6 +218,8 @@ def init_db() -> None:
         )
 
         _ensure_monitor_columns(cursor)
+        _ensure_check_columns(cursor)
+        _ensure_incident_columns(cursor)
         _seed_default_settings(cursor)
         conn.commit()
 
@@ -214,11 +237,46 @@ def _ensure_monitor_columns(cursor: sqlite3.Cursor) -> None:
         "last_checked_at": "TEXT",
         "last_change_at": "TEXT",
         "consecutive_failures": "INTEGER NOT NULL DEFAULT 0",
+        "consecutive_successes": "INTEGER NOT NULL DEFAULT 0",
+        "expected_text": "TEXT",
+        "forbidden_text": "TEXT",
+        "last_error_category": "TEXT",
+        "is_flapping": "INTEGER NOT NULL DEFAULT 0",
+        "flapping_until": "TEXT",
         "updated_at": "TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP",
     }
     for column_name, column_type in required_columns.items():
         if column_name not in existing_columns:
             cursor.execute(f"ALTER TABLE monitors ADD COLUMN {column_name} {column_type}")
+
+
+def _ensure_check_columns(cursor: sqlite3.Cursor) -> None:
+    cursor.execute("PRAGMA table_info(checks)")
+    existing_columns = {row["name"] for row in cursor.fetchall()}
+    required_columns = {
+        "error_category": "TEXT",
+    }
+    for column_name, column_type in required_columns.items():
+        if column_name not in existing_columns:
+            cursor.execute(f"ALTER TABLE checks ADD COLUMN {column_name} {column_type}")
+
+
+def _ensure_incident_columns(cursor: sqlite3.Cursor) -> None:
+    cursor.execute("PRAGMA table_info(incidents)")
+    existing_columns = {row["name"] for row in cursor.fetchall()}
+    required_columns = {
+        "first_failed_at": "TEXT",
+        "confirmed_down_at": "TEXT",
+        "first_recovered_at": "TEXT",
+        "confirmed_up_at": "TEXT",
+        "confirmation_attempts": "INTEGER",
+        "recovery_attempts": "INTEGER",
+        "start_error_category": "TEXT",
+        "end_error_category": "TEXT",
+    }
+    for column_name, column_type in required_columns.items():
+        if column_name not in existing_columns:
+            cursor.execute(f"ALTER TABLE incidents ADD COLUMN {column_name} {column_type}")
 
 
 def _get_int_setting(cursor: sqlite3.Cursor, key: str, default: int) -> int:
@@ -480,6 +538,8 @@ def create_monitor(
     retry_count: int,
     interval: int,
     timeout: int,
+    expected_text: str = "",
+    forbidden_text: str = "",
     enabled: bool = True,
 ) -> int:
     now = utc_now()
@@ -488,8 +548,9 @@ def create_monitor(
         cursor.execute(
             """
             INSERT INTO monitors (
-                name, type, target, http_method, retry_count, interval, timeout, enabled, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+                name, type, target, http_method, retry_count, interval, timeout,
+                expected_text, forbidden_text, enabled, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
             """,
             (
                 name.strip(),
@@ -499,6 +560,8 @@ def create_monitor(
                 max(0, int(retry_count)),
                 interval,
                 timeout,
+                expected_text.strip() or None,
+                forbidden_text.strip() or None,
                 int(enabled),
                 now,
                 now,
@@ -518,6 +581,8 @@ def update_monitor(
     retry_count: int,
     interval: int,
     timeout: int,
+    expected_text: str = "",
+    forbidden_text: str = "",
 ) -> None:
     now = utc_now()
     with closing(get_db()) as conn:
@@ -531,6 +596,8 @@ def update_monitor(
                 retry_count = ?,
                 interval = ?,
                 timeout = ?,
+                expected_text = ?,
+                forbidden_text = ?,
                 updated_at = ?
             WHERE id = ?
             """,
@@ -542,6 +609,8 @@ def update_monitor(
                 max(0, int(retry_count)),
                 interval,
                 timeout,
+                expected_text.strip() or None,
+                forbidden_text.strip() or None,
                 now,
                 monitor_id,
             ),
@@ -594,7 +663,7 @@ def get_recent_logs(monitor_id: int, limit: int = 8) -> list[dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute(
             """
-            SELECT id, status, response_time, error_msg, checked_at
+            SELECT id, status, response_time, error_msg, error_category, checked_at
             FROM checks
             WHERE monitor_id = ?
             ORDER BY checked_at DESC, id DESC
@@ -616,7 +685,7 @@ def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8) -> dict
         cursor = conn.cursor()
         cursor.execute(
             f"""
-            SELECT monitor_id, id, status, response_time, error_msg, checked_at
+            SELECT monitor_id, id, status, response_time, error_msg, error_category, checked_at
             FROM (
                 SELECT
                     monitor_id,
@@ -624,6 +693,7 @@ def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8) -> dict
                     status,
                     response_time,
                     error_msg,
+                    error_category,
                     checked_at,
                     ROW_NUMBER() OVER (
                         PARTITION BY monitor_id
@@ -643,53 +713,154 @@ def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8) -> dict
     return grouped_logs
 
 
+def _get_first_recent_status_at(
+    cursor: sqlite3.Cursor,
+    monitor_id: int,
+    status: str,
+    count: int,
+    fallback: str,
+) -> str:
+    if count <= 1:
+        return fallback
+    cursor.execute(
+        """
+        SELECT checked_at
+        FROM checks
+        WHERE monitor_id = ? AND status = ?
+        ORDER BY checked_at DESC, id DESC
+        LIMIT ?
+        """,
+        (monitor_id, status, count),
+    )
+    rows = cursor.fetchall()
+    if len(rows) < count:
+        return fallback
+    return rows[-1]["checked_at"] or fallback
+
+
+def _detect_flapping(
+    cursor: sqlite3.Cursor,
+    monitor_id: int,
+    timestamp: str,
+    window_minutes: int,
+    transition_threshold: int,
+) -> tuple[bool, Optional[str]]:
+    now_dt = _parse_iso(timestamp) or datetime.now(timezone.utc).replace(microsecond=0)
+    window_minutes = max(1, int(window_minutes))
+    transition_threshold = max(2, int(transition_threshold))
+    cutoff = (now_dt - timedelta(minutes=window_minutes)).isoformat()
+    cursor.execute(
+        """
+        SELECT started_at, ended_at
+        FROM incidents
+        WHERE monitor_id = ?
+          AND (started_at >= ? OR ended_at >= ?)
+        """,
+        (monitor_id, cutoff, cutoff),
+    )
+    transitions = 0
+    for row in cursor.fetchall():
+        if row["started_at"] and row["started_at"] >= cutoff:
+            transitions += 1
+        if row["ended_at"] and row["ended_at"] >= cutoff:
+            transitions += 1
+    if transitions >= transition_threshold:
+        return True, (now_dt + timedelta(minutes=window_minutes)).isoformat()
+    return False, None
+
+
 def log_check_result(
     monitor_id: int,
     new_status: str,
     response_time: Optional[float],
     error_msg: Optional[str],
+    error_category: Optional[str] = None,
     checked_at: Optional[str] = None,
 ) -> dict[str, Any]:
     timestamp = checked_at or utc_now()
     with closing(get_db()) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT status, consecutive_failures FROM monitors WHERE id = ?", (monitor_id,))
+        cursor.execute(
+            """
+            SELECT status, consecutive_failures, consecutive_successes, flapping_until
+            FROM monitors
+            WHERE id = ?
+            """,
+            (monitor_id,),
+        )
         current_row = cursor.fetchone()
         previous_status = current_row["status"] if current_row else "unknown"
         previous_failures = int(current_row["consecutive_failures"] or 0) if current_row else 0
-        threshold = _get_int_setting(
+        previous_successes = int(current_row["consecutive_successes"] or 0) if current_row else 0
+        down_threshold = _get_int_setting(
             cursor,
             "down_failures_threshold",
             int(DEFAULT_SETTINGS.get("down_failures_threshold", 3)),
+        )
+        up_threshold = _get_int_setting(
+            cursor,
+            "up_successes_threshold",
+            int(DEFAULT_SETTINGS.get("up_successes_threshold", 1)),
+        )
+        flapping_window = _get_int_setting(
+            cursor,
+            "flapping_window_minutes",
+            int(DEFAULT_SETTINGS.get("flapping_window_minutes", 15)),
+        )
+        flapping_threshold = _get_int_setting(
+            cursor,
+            "flapping_transition_threshold",
+            int(DEFAULT_SETTINGS.get("flapping_transition_threshold", 3)),
         )
 
         raw_status = (new_status or "unknown").strip().lower()
         effective_status = previous_status
 
         if raw_status == "up":
-            effective_status = "up"
             consecutive_failures = 0
+            consecutive_successes = previous_successes + 1 if previous_status == "down" else 0
+            if previous_status == "down" and consecutive_successes < up_threshold:
+                effective_status = "down"
+            else:
+                effective_status = "up"
         elif raw_status == "down":
             consecutive_failures = previous_failures + 1
-            if previous_status == "down" or consecutive_failures >= threshold:
+            consecutive_successes = 0
+            if previous_status == "down" or consecutive_failures >= down_threshold:
                 effective_status = "down"
             else:
                 effective_status = previous_status
         else:
             consecutive_failures = previous_failures
+            consecutive_successes = previous_successes
             effective_status = previous_status
 
         status_changed = previous_status != effective_status and previous_status != "unknown"
 
         cursor.execute(
             """
-            INSERT INTO checks (monitor_id, status, response_time, error_msg, checked_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO checks (monitor_id, status, response_time, error_msg, error_category, checked_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (monitor_id, raw_status, response_time, error_msg, timestamp),
+            (monitor_id, raw_status, response_time, error_msg, error_category, timestamp),
         )
 
         check_id = cursor.lastrowid
+        first_failed_at = None
+        confirmed_down_at = None
+        first_recovered_at = None
+        confirmed_up_at = None
+
+        if status_changed and effective_status == "down":
+            first_failed_at = _get_first_recent_status_at(
+                cursor, monitor_id, "down", consecutive_failures, timestamp
+            )
+            confirmed_down_at = timestamp
+        elif status_changed and effective_status == "up":
+            first_recovered_at = _get_first_recent_status_at(
+                cursor, monitor_id, "up", max(1, consecutive_successes), timestamp
+            )
+            confirmed_up_at = timestamp
 
         _update_incidents_for_status_change(
             cursor,
@@ -699,13 +870,38 @@ def log_check_result(
             timestamp=timestamp,
             check_id=check_id,
             error_msg=error_msg,
+            error_category=error_category,
+            first_failed_at=first_failed_at,
+            confirmed_down_at=confirmed_down_at,
+            first_recovered_at=first_recovered_at,
+            confirmed_up_at=confirmed_up_at,
+            confirmation_attempts=consecutive_failures,
+            recovery_attempts=consecutive_successes,
         )
+
+        is_flapping = False
+        flapping_until = current_row["flapping_until"] if current_row else None
+        if status_changed:
+            is_flapping, detected_until = _detect_flapping(
+                cursor,
+                monitor_id,
+                timestamp,
+                flapping_window,
+                flapping_threshold,
+            )
+            if detected_until:
+                flapping_until = detected_until
+        elif flapping_until:
+            until_dt = _parse_iso(flapping_until)
+            now_dt = _parse_iso(timestamp) or datetime.now(timezone.utc)
+            is_flapping = bool(until_dt and until_dt > now_dt)
 
         cursor.execute(
             """
             UPDATE monitors
             SET status = ?,
                 last_error = ?,
+                last_error_category = ?,
                 last_response_time = ?,
                 last_checked_at = ?,
                 last_change_at = CASE
@@ -713,17 +909,24 @@ def log_check_result(
                     ELSE last_change_at
                 END,
                 consecutive_failures = ?,
+                consecutive_successes = ?,
+                is_flapping = ?,
+                flapping_until = ?,
                 updated_at = ?
             WHERE id = ?
             """,
             (
                 effective_status,
                 error_msg,
+                error_category,
                 response_time,
                 timestamp,
                 effective_status,
                 timestamp,
                 consecutive_failures,
+                consecutive_successes,
+                int(is_flapping),
+                flapping_until,
                 timestamp,
                 monitor_id,
             ),
@@ -738,10 +941,19 @@ def log_check_result(
         "checked_at": timestamp,
         "check_id": check_id,
         "error_msg": error_msg,
+        "error_category": error_category,
         "response_time": response_time,
         "raw_status": raw_status,
         "consecutive_failures": consecutive_failures,
-        "down_failures_threshold": threshold,
+        "consecutive_successes": consecutive_successes,
+        "down_failures_threshold": down_threshold,
+        "up_successes_threshold": up_threshold,
+        "first_failed_at": first_failed_at,
+        "confirmed_down_at": confirmed_down_at,
+        "first_recovered_at": first_recovered_at,
+        "confirmed_up_at": confirmed_up_at,
+        "is_flapping": is_flapping,
+        "flapping_until": flapping_until,
     }
 
 
@@ -753,6 +965,13 @@ def _update_incidents_for_status_change(
     timestamp: str,
     check_id: int,
     error_msg: Optional[str],
+    error_category: Optional[str],
+    first_failed_at: Optional[str],
+    confirmed_down_at: Optional[str],
+    first_recovered_at: Optional[str],
+    confirmed_up_at: Optional[str],
+    confirmation_attempts: int,
+    recovery_attempts: int,
 ) -> None:
     if previous_status == new_status:
         return
@@ -778,10 +997,21 @@ def _update_incidents_for_status_change(
                 """
                 INSERT INTO incidents (
                     monitor_id, started_at, ended_at, start_check_id, end_check_id,
-                    start_error_msg, end_error_msg, updated_at
-                ) VALUES (?, ?, NULL, ?, NULL, ?, NULL, ?)
+                    start_error_msg, end_error_msg, first_failed_at, confirmed_down_at,
+                    confirmation_attempts, start_error_category, updated_at
+                ) VALUES (?, ?, NULL, ?, NULL, ?, NULL, ?, ?, ?, ?, ?)
                 """,
-                (monitor_id, now, check_id, error_msg, now),
+                (
+                    monitor_id,
+                    confirmed_down_at or now,
+                    check_id,
+                    error_msg,
+                    first_failed_at,
+                    confirmed_down_at or now,
+                    confirmation_attempts,
+                    error_category,
+                    now,
+                ),
             )
         return
 
@@ -804,10 +1034,24 @@ def _update_incidents_for_status_change(
                 SET ended_at = ?,
                     end_check_id = ?,
                     end_error_msg = ?,
+                    first_recovered_at = ?,
+                    confirmed_up_at = ?,
+                    recovery_attempts = ?,
+                    end_error_category = ?,
                     updated_at = ?
                 WHERE id = ?
                 """,
-                (now, check_id, error_msg, now, open_row["id"]),
+                (
+                    confirmed_up_at or now,
+                    check_id,
+                    error_msg,
+                    first_recovered_at,
+                    confirmed_up_at or now,
+                    recovery_attempts,
+                    error_category,
+                    now,
+                    open_row["id"],
+                ),
             )
 
 
@@ -852,6 +1096,14 @@ def list_incidents(
                 i.ended_at,
                 i.start_error_msg,
                 i.end_error_msg,
+                i.first_failed_at,
+                i.confirmed_down_at,
+                i.first_recovered_at,
+                i.confirmed_up_at,
+                i.confirmation_attempts,
+                i.recovery_attempts,
+                i.start_error_category,
+                i.end_error_category,
                 m.name AS monitor_name,
                 m.type AS monitor_type,
                 m.target AS monitor_target
@@ -913,9 +1165,11 @@ def import_backup(payload: dict[str, Any]) -> None:
             cursor.execute(
                 """
                 INSERT INTO monitors (
-                    id, name, type, target, http_method, retry_count, interval, timeout, enabled, status, last_error,
-                    last_response_time, last_checked_at, last_change_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    id, name, type, target, http_method, retry_count, interval, timeout,
+                    enabled, status, last_error, last_error_category, last_response_time,
+                    last_checked_at, last_change_at, consecutive_failures, consecutive_successes,
+                    expected_text, forbidden_text, is_flapping, flapping_until, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     monitor.get("id"),
@@ -929,9 +1183,16 @@ def import_backup(payload: dict[str, Any]) -> None:
                     int(bool(monitor.get("enabled", True))),
                     monitor.get("status", "unknown"),
                     monitor.get("last_error"),
+                    monitor.get("last_error_category"),
                     monitor.get("last_response_time"),
                     monitor.get("last_checked_at"),
                     monitor.get("last_change_at"),
+                    int(monitor.get("consecutive_failures", 0) or 0),
+                    int(monitor.get("consecutive_successes", 0) or 0),
+                    monitor.get("expected_text"),
+                    monitor.get("forbidden_text"),
+                    int(bool(monitor.get("is_flapping", False))),
+                    monitor.get("flapping_until"),
                     monitor.get("created_at", utc_now()),
                     monitor.get("updated_at", utc_now()),
                 ),
@@ -940,8 +1201,8 @@ def import_backup(payload: dict[str, Any]) -> None:
         for check in checks:
             cursor.execute(
                 """
-                INSERT INTO checks (id, monitor_id, status, response_time, error_msg, checked_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO checks (id, monitor_id, status, response_time, error_msg, error_category, checked_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     check.get("id"),
@@ -949,6 +1210,7 @@ def import_backup(payload: dict[str, Any]) -> None:
                     check["status"],
                     check.get("response_time"),
                     check.get("error_msg"),
+                    check.get("error_category"),
                     check.get("checked_at", utc_now()),
                 ),
             )
@@ -958,8 +1220,10 @@ def import_backup(payload: dict[str, Any]) -> None:
                 """
                 INSERT INTO incidents (
                     id, monitor_id, started_at, ended_at, start_check_id, end_check_id,
-                    start_error_msg, end_error_msg, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    start_error_msg, end_error_msg, first_failed_at, confirmed_down_at,
+                    first_recovered_at, confirmed_up_at, confirmation_attempts, recovery_attempts,
+                    start_error_category, end_error_category, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     incident.get("id"),
@@ -970,6 +1234,14 @@ def import_backup(payload: dict[str, Any]) -> None:
                     incident.get("end_check_id"),
                     incident.get("start_error_msg"),
                     incident.get("end_error_msg"),
+                    incident.get("first_failed_at"),
+                    incident.get("confirmed_down_at"),
+                    incident.get("first_recovered_at"),
+                    incident.get("confirmed_up_at"),
+                    incident.get("confirmation_attempts"),
+                    incident.get("recovery_attempts"),
+                    incident.get("start_error_category"),
+                    incident.get("end_error_category"),
                     incident.get("created_at", utc_now()),
                     incident.get("updated_at", utc_now()),
                 ),
