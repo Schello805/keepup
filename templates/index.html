@@ -260,7 +260,7 @@
                         </div>
 
                         <div class="card-front-interactive mt-auto pt-4 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
-                            <form action="/monitors/{{ monitor.id }}/toggle" method="post">
+                            <form action="/monitors/{{ monitor.id }}/toggle" method="post" class="js-monitor-toggle">
                                 <button type="submit" aria-label="{% if monitor.enabled %}Monitor pausieren{% else %}Monitor fortsetzen{% endif %}" title="{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl {% if monitor.enabled %}bg-amber-500/15 text-amber-100 hover:bg-amber-500/25{% else %}bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25{% endif %} transition cursor-pointer">
                                     {% if monitor.enabled %}
                                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm10 0a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/></svg>
@@ -704,6 +704,83 @@
             }
         }
 
+        function showToast(message, tone = "info") {
+            const toneStyles = {
+                success: "border-emerald-400/30 bg-emerald-500/15 text-emerald-50",
+                info: "border-sky-400/30 bg-sky-500/15 text-sky-50",
+                warning: "border-amber-400/30 bg-amber-500/15 text-amber-50",
+                error: "border-rose-400/30 bg-rose-500/15 text-rose-50",
+            };
+
+            const existing = document.getElementById("toast");
+            if (existing) existing.remove();
+
+            const toast = document.createElement("div");
+            toast.id = "toast";
+            toast.className = `fixed inset-x-4 bottom-4 z-50 mx-auto max-w-md rounded-2xl border px-4 py-3 shadow-panel backdrop-blur transition duration-300 ${toneStyles[tone] || toneStyles.success}`;
+            toast.innerHTML = `
+                <div class="flex items-start justify-between gap-3">
+                    <div>
+                        <p class="text-sm font-semibold">Status-Update</p>
+                        <p class="mt-1 text-sm/6 text-current/90"></p>
+                    </div>
+                    <button type="button" class="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-current/80 transition hover:bg-white/10" aria-label="Meldung schliessen">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            const textEl = toast.querySelector("p.text-sm/6");
+            if (textEl) textEl.textContent = message;
+            const closeBtn = toast.querySelector("button");
+            if (closeBtn) closeBtn.addEventListener("click", () => toast.remove());
+            document.body.appendChild(toast);
+            window.setTimeout(() => {
+                if (document.getElementById("toast") === toast) dismissToast();
+            }, 4200);
+        }
+
+        function bindMonitorToggleForms(scope = document) {
+            scope.querySelectorAll("form.js-monitor-toggle").forEach((form) => {
+                if (!(form instanceof HTMLFormElement)) return;
+                if (form.dataset.bound === "1") return;
+                form.dataset.bound = "1";
+                form.addEventListener("submit", async (e) => {
+                    e.preventDefault();
+                    const btn = form.querySelector("button[type='submit']");
+                    if (btn instanceof HTMLButtonElement) btn.disabled = true;
+                    try {
+                        const res = await fetch(form.action, {
+                            method: "POST",
+                            headers: { Accept: "application/json" },
+                            credentials: "same-origin",
+                        });
+                        if (!res.ok) {
+                            showToast("Aktion fehlgeschlagen.", "error");
+                            return;
+                        }
+                        const data = await res.json();
+                        showToast((data && data.message) ? data.message : "Status aktualisiert.", "info");
+                        const cardsShell = document.getElementById("monitor-cards-shell");
+                        if (cardsShell && window.htmx) {
+                            window.htmx.ajax("GET", "/api/live/cards", { target: cardsShell, swap: "outerHTML" });
+                        } else {
+                            window.location.reload();
+                        }
+                    } catch (err) {
+                        showToast("Aktion fehlgeschlagen.", "error");
+                    } finally {
+                        if (btn instanceof HTMLButtonElement) {
+                            window.setTimeout(() => {
+                                btn.disabled = false;
+                            }, 600);
+                        }
+                    }
+                });
+            });
+        }
+
         async function ensureApexChartsLoaded() {
             if (typeof ApexCharts !== "undefined") return true;
             if (window.__keepupApexChartsPromise) {
@@ -788,6 +865,7 @@
         window.setTimeout(dismissToast, 4200);
         applyMonitorFilters();
         restoreOpenDetails();
+        bindMonitorToggleForms();
         if (!window.__keepupCardFlipInstallerInstalled) {
             window.__keepupCardFlipInstallerInstalled = true;
             window.bindCardFlipHandlers = function bindCardFlipHandlers() {
@@ -832,6 +910,7 @@
             applyMonitorFilters();
             restoreOpenDetails();
             window.bindCardFlipHandlers?.();
+            bindMonitorToggleForms();
         });
     </script>
 </body>

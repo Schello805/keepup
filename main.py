@@ -916,7 +916,7 @@ async def edit_monitor_route(
 
 
 @app.post("/monitors/{monitor_id}/toggle")
-async def toggle_monitor_route(monitor_id: int) -> RedirectResponse:
+async def toggle_monitor_route(monitor_id: int, request: Request):
     monitor = get_monitor(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
@@ -924,6 +924,9 @@ async def toggle_monitor_route(monitor_id: int) -> RedirectResponse:
     set_monitor_enabled(monitor_id, is_enabled)
     reschedule_monitor_jobs(scheduler)
     message = "Monitor wurde fortgesetzt." if is_enabled else "Monitor wurde pausiert."
+    accept = (request.headers.get("accept") or "").lower()
+    if "application/json" in accept:
+        return JSONResponse({"ok": True, "enabled": bool(is_enabled), "message": message})
     return flash_redirect("/", message, "info")
 
 
