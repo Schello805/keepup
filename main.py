@@ -33,6 +33,7 @@ from database import (
     get_monitor_summary,
     get_recent_logs_for_monitors,
     list_incidents,
+    list_monitor_incident_feed_options,
     list_monitor_options,
     get_settings,
     import_backup,
@@ -338,7 +339,7 @@ def build_settings_context(request: Request) -> dict:
 def build_incidents_context(request: Request) -> dict:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
-    monitors = list_monitors()
+    monitors = list_monitor_incident_feed_options()
     monitor_id, status, since_days, item_raw, page = parse_incident_filters(request)
 
     incidents = list_incidents(monitor_id=monitor_id, status=status, since_days=since_days)

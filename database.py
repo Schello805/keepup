@@ -361,6 +361,19 @@ def list_monitor_options() -> list[dict[str, Any]]:
         return [dict(row) for row in cursor.fetchall()]
 
 
+def list_monitor_incident_feed_options() -> list[dict[str, Any]]:
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, name, type, target, created_at
+            FROM monitors
+            ORDER BY id DESC
+            """
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 def get_monitor_summary() -> dict[str, int]:
     with closing(get_db()) as conn:
         cursor = conn.cursor()
