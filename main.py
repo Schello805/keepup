@@ -70,6 +70,7 @@ DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
 _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
 _dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None}
 _dashboard_cards_cache_lock = threading.Lock()
+_dashboard_cards_refresh_task: Optional[asyncio.Task] = None
 APP_TIMEZONE_OPTIONS = [
     "UTC",
     "Europe/Berlin",
@@ -607,6 +608,12 @@ def invalidate_dashboard_cards_cache() -> None:
         _dashboard_cards_cache["expires_at"] = 0.0
 
 
+def peek_dashboard_cards_html() -> Optional[str]:
+    with _dashboard_cards_cache_lock:
+        cached_html = _dashboard_cards_cache.get("html")
+        return str(cached_html) if cached_html else None
+
+
 def render_template_content(name: str, context: dict[str, Any]) -> str:
     if "request" not in context:
         context = {**context, "request": None}
@@ -634,6 +641,28 @@ def get_dashboard_cards_html(force_refresh: bool = False) -> Optional[str]:
         _dashboard_cards_cache["html"] = html
         _dashboard_cards_cache["expires_at"] = time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS
     return html
+
+
+def dashboard_cards_cache_is_stale() -> bool:
+    with _dashboard_cards_cache_lock:
+        expires_at = float(_dashboard_cards_cache.get("expires_at") or 0.0)
+        return time.time() >= expires_at
+
+
+async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
+    global _dashboard_cards_refresh_task
+    if not force and not dashboard_cards_cache_is_stale():
+        return
+    if _dashboard_cards_refresh_task is not None and not _dashboard_cards_refresh_task.done():
+        return
+
+    async def _refresh() -> None:
+        try:
+            await asyncio.to_thread(get_dashboard_cards_html, True)
+        except Exception:
+            logger.exception("dashboard_cards_refresh_failed")
+
+    _dashboard_cards_refresh_task = asyncio.create_task(_refresh())
 
 
 def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
@@ -717,7 +746,7 @@ async def lifespan(app: FastAPI):
     logger.info("startup")
     init_db()
     await init_monitor_runtime()
-    asyncio.create_task(asyncio.to_thread(get_dashboard_cards_html, True))
+    asyncio.create_task(ensure_dashboard_cards_cache_refresh(force=True))
     scheduler.add_job(
         lambda: asyncio.Task(asyncio.to_thread(cleanup_old_checks)),
         "interval",
@@ -855,42 +884,52 @@ async def run_update() -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
     context = build_dashboard_shell_context(request)
-    context["initial_cards_html"] = get_dashboard_cards_html(force_refresh=False)
-    return render_template(request, "index.html", context)
+    context["initial_cards_html"] = peek_dashboard_cards_html()
+    await ensure_dashboard_cards_cache_refresh(force=False)
+    return await asyncio.to_thread(render_template, request, "index.html", context)
 
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
-    return render_template(request, "settings.html", build_settings_context(request))
+    return await asyncio.to_thread(render_template, request, "settings.html", build_settings_context(request))
 
 
 @app.get("/incidents", response_class=HTMLResponse)
 async def incidents_page(request: Request) -> HTMLResponse:
-    return render_template(request, "incidents.html", build_incidents_shell_context(request))
+    return await asyncio.to_thread(render_template, request, "incidents.html", build_incidents_shell_context(request))
 
 
 @app.get("/api/incidents/feed", response_class=HTMLResponse)
 async def incidents_feed_partial(request: Request) -> HTMLResponse:
-    return render_template(request, "incidents.html", {**build_incidents_context(request), "partial": "feed"})
+    context = await asyncio.to_thread(build_incidents_context, request)
+    return await asyncio.to_thread(render_template, request, "incidents.html", {**context, "partial": "feed"})
 
 
 @app.get("/api/dashboard", response_class=HTMLResponse)
 async def dashboard_partial(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", {**build_dashboard_context(request), "partial": True})
+    context = await asyncio.to_thread(build_dashboard_context, request)
+    return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": True})
 
 
 @app.get("/api/live/top", response_class=HTMLResponse)
 async def live_top_partial(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", {**build_dashboard_shell_context(request), "partial": "top"})
+    context = await asyncio.to_thread(build_dashboard_shell_context, request)
+    return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "top"})
 
 
 @app.get("/api/live/cards", response_class=HTMLResponse)
 async def live_cards_partial(request: Request) -> HTMLResponse:
-    html = await asyncio.to_thread(get_dashboard_cards_html, True)
+    html = peek_dashboard_cards_html()
     if html is None:
-        return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "cards"})
+        html = await asyncio.to_thread(get_dashboard_cards_html, True)
+    else:
+        await ensure_dashboard_cards_cache_refresh(force=False)
+    if html is None:
+        context = await asyncio.to_thread(build_dashboard_context, request)
+        return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "cards"})
     settings = get_settings()
-    return render_template(
+    return await asyncio.to_thread(
+        render_template,
         request,
         "index.html",
         {"settings": settings, "initial_cards_html": html, "partial": "cards-shell"},
@@ -899,10 +938,10 @@ async def live_cards_partial(request: Request) -> HTMLResponse:
 
 @app.get("/api/monitors/{monitor_id}/details", response_class=HTMLResponse)
 async def monitor_detail_partial(request: Request, monitor_id: int) -> HTMLResponse:
-    context = build_monitor_detail_context(request, monitor_id)
+    context = await asyncio.to_thread(build_monitor_detail_context, request, monitor_id)
     if not context:
         raise HTTPException(status_code=404, detail="Monitor not found")
-    return render_template(request, "index.html", {**context, "partial": "monitor-detail"})
+    return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "monitor-detail"})
 
 
 @app.get("/api/monitors")
