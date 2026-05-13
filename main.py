@@ -45,10 +45,12 @@ from database import (
 from monitor import (
     execute_monitor_check,
     format_notification_error,
+    init_monitor_runtime,
     reschedule_monitor_jobs,
     run_all_checks_once,
     send_test_email_notification,
     send_test_telegram_notification,
+    shutdown_monitor_runtime,
 )
 
 from keepup_version import __version__
@@ -63,6 +65,11 @@ logging.basicConfig(
 logger = logging.getLogger("keepup")
 UPDATE_STATUS_TTL_SECONDS = 60
 _update_status_cache: dict[str, Any] = {"expires_at": 0.0, "payload": None}
+APP_VERSION_TTL_SECONDS = 60
+DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
+_app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
+_dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None}
+_dashboard_cards_cache_lock = threading.Lock()
 APP_TIMEZONE_OPTIONS = [
     "UTC",
     "Europe/Berlin",
@@ -216,14 +223,9 @@ def build_notification_settings_payload(
 
 
 def build_dashboard_context(request: Request) -> dict:
-    monitors = list_monitors(include_heavy_details=False)
-    settings = get_settings()
-    app_timezone = settings.get("app_timezone", "UTC")
-    for monitor in monitors:
-        monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
-        monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
-        monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
-        monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
+    cards_payload = build_dashboard_cards_payload()
+    monitors = cards_payload["monitors"]
+    settings = cards_payload["settings"]
 
     down_count = sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "down")
     up_count = sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "up")
@@ -231,7 +233,10 @@ def build_dashboard_context(request: Request) -> dict:
     paused_count = sum(1 for monitor in monitors if not monitor.get("enabled", 1))
     overall_status = "All systems operational" if down_count == 0 else f"{down_count} issue(s) detected"
     overall_tone = "ok" if down_count == 0 else "problem"
-    last_updated_at = format_timestamp(datetime.now(timezone.utc).replace(microsecond=0).isoformat(), app_timezone)
+    last_updated_at = format_timestamp(
+        datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        settings.get("app_timezone", "UTC"),
+    )
 
     return {
         "request": request,
@@ -250,6 +255,21 @@ def build_dashboard_context(request: Request) -> dict:
             "overall_tone": overall_tone,
             "last_updated_at": last_updated_at,
         },
+    }
+
+
+def build_dashboard_cards_payload() -> dict[str, Any]:
+    monitors = list_monitors(include_heavy_details=False)
+    settings = get_settings()
+    app_timezone = settings.get("app_timezone", "UTC")
+    for monitor in monitors:
+        monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
+        monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
+        monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
+        monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
+    return {
+        "monitors": monitors,
+        "settings": settings,
     }
 
 
@@ -569,10 +589,51 @@ def _run_git_command(args: list[str]) -> Optional[str]:
 
 
 def get_app_version_display() -> str:
+    now = time.time()
+    cached_value = _app_version_cache.get("value")
+    expires_at = float(_app_version_cache.get("expires_at") or 0.0)
+    if cached_value and now < expires_at:
+        return str(cached_value)
+
     revision = _run_git_command(["git", "rev-list", "--count", "HEAD"])
-    if revision and revision.isdigit():
-        return f"{__version__} rev.{revision}"
-    return __version__
+    value = f"{__version__} rev.{revision}" if revision and revision.isdigit() else __version__
+    _app_version_cache["value"] = value
+    _app_version_cache["expires_at"] = now + APP_VERSION_TTL_SECONDS
+    return value
+
+
+def invalidate_dashboard_cards_cache() -> None:
+    with _dashboard_cards_cache_lock:
+        _dashboard_cards_cache["expires_at"] = 0.0
+
+
+def render_template_content(name: str, context: dict[str, Any]) -> str:
+    if "request" not in context:
+        context = {**context, "request": None}
+    template = templates.env.get_template(name)
+    return template.render(**context)
+
+
+def get_dashboard_cards_html(force_refresh: bool = False) -> Optional[str]:
+    now = time.time()
+    with _dashboard_cards_cache_lock:
+        cached_html = _dashboard_cards_cache.get("html")
+        expires_at = float(_dashboard_cards_cache.get("expires_at") or 0.0)
+        if not force_refresh and cached_html and now < expires_at:
+            return str(cached_html)
+        stale_html = str(cached_html) if cached_html else None
+
+    try:
+        payload = build_dashboard_cards_payload()
+        html = render_template_content("index.html", {**payload, "partial": "cards-inner"})
+    except Exception:
+        logger.exception("dashboard_cards_cache_build_failed")
+        return stale_html
+
+    with _dashboard_cards_cache_lock:
+        _dashboard_cards_cache["html"] = html
+        _dashboard_cards_cache["expires_at"] = time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS
+    return html
 
 
 def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
@@ -655,6 +716,8 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
 async def lifespan(app: FastAPI):
     logger.info("startup")
     init_db()
+    await init_monitor_runtime()
+    asyncio.create_task(asyncio.to_thread(get_dashboard_cards_html, True))
     scheduler.add_job(
         lambda: asyncio.Task(asyncio.to_thread(cleanup_old_checks)),
         "interval",
@@ -673,6 +736,7 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_run_initial_checks())
     yield
     scheduler.shutdown(wait=False)
+    await shutdown_monitor_runtime()
     logger.info("shutdown")
 
 
@@ -790,7 +854,9 @@ async def run_update() -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", build_dashboard_context(request))
+    context = build_dashboard_shell_context(request)
+    context["initial_cards_html"] = get_dashboard_cards_html(force_refresh=False)
+    return render_template(request, "index.html", context)
 
 
 @app.get("/settings", response_class=HTMLResponse)
@@ -820,7 +886,15 @@ async def live_top_partial(request: Request) -> HTMLResponse:
 
 @app.get("/api/live/cards", response_class=HTMLResponse)
 async def live_cards_partial(request: Request) -> HTMLResponse:
-    return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "cards"})
+    html = await asyncio.to_thread(get_dashboard_cards_html, True)
+    if html is None:
+        return render_template(request, "index.html", {**build_dashboard_context(request), "partial": "cards"})
+    settings = get_settings()
+    return render_template(
+        request,
+        "index.html",
+        {"settings": settings, "initial_cards_html": html, "partial": "cards-shell"},
+    )
 
 
 @app.get("/api/monitors/{monitor_id}/details", response_class=HTMLResponse)

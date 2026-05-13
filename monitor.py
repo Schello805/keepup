@@ -21,10 +21,46 @@ from database import get_monitor, get_settings, list_monitors, log_check_result
 
 
 HTTP_USER_AGENT = "KeepUp/1.0"
+MAX_CONCURRENT_HTTP_CHECKS = 8
+HTTP_CONNECTION_LIMIT = 16
+HTTP_KEEPALIVE_CONNECTION_LIMIT = 8
 logger = logging.getLogger("keepup.monitor")
 _notification_batch: list[tuple[dict[str, Any], dict[str, Any]]] = []
 _notification_batch_task: Optional[asyncio.Task] = None
 _notification_batch_lock = asyncio.Lock()
+_http_check_client: Optional[httpx.AsyncClient] = None
+_http_check_client_lock = asyncio.Lock()
+_http_check_semaphore = asyncio.Semaphore(MAX_CONCURRENT_HTTP_CHECKS)
+
+
+async def _ensure_http_check_client() -> httpx.AsyncClient:
+    global _http_check_client
+    if _http_check_client is not None:
+        return _http_check_client
+
+    async with _http_check_client_lock:
+        if _http_check_client is None:
+            _http_check_client = httpx.AsyncClient(
+                headers={"User-Agent": HTTP_USER_AGENT},
+                follow_redirects=True,
+                limits=httpx.Limits(
+                    max_connections=HTTP_CONNECTION_LIMIT,
+                    max_keepalive_connections=HTTP_KEEPALIVE_CONNECTION_LIMIT,
+                ),
+            )
+    return _http_check_client
+
+
+async def init_monitor_runtime() -> None:
+    await _ensure_http_check_client()
+
+
+async def shutdown_monitor_runtime() -> None:
+    global _http_check_client
+    async with _http_check_client_lock:
+        if _http_check_client is not None:
+            await _http_check_client.aclose()
+            _http_check_client = None
 
 
 def categorize_monitor_error(message: Optional[str], status: str = "down") -> Optional[str]:
@@ -186,7 +222,8 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
 
 async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Optional[str], Optional[str]]:
     start = time.perf_counter()
-    timeout = httpx.Timeout(monitor["timeout"])
+    timeout_seconds = float(monitor["timeout"])
+    timeout = httpx.Timeout(timeout_seconds, pool=min(2.0, timeout_seconds))
     error_message = None
     status = "down"
     method = str(monitor.get("http_method") or "GET").upper()
@@ -194,14 +231,11 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
         method = "GET"
 
     try:
-        async with httpx.AsyncClient(
-            timeout=timeout,
-            headers={"User-Agent": HTTP_USER_AGENT},
-            follow_redirects=True,
-        ) as client:
-            response = await client.request(method, monitor["target"])
+        client = await _ensure_http_check_client()
+        async with _http_check_semaphore:
+            response = await client.request(method, monitor["target"], timeout=timeout)
             if method == "HEAD" and response.status_code == 405:
-                response = await client.get(monitor["target"])
+                response = await client.get(monitor["target"], timeout=timeout)
         response_time = round((time.perf_counter() - start) * 1000, 2)
         if 200 <= response.status_code < 400:
             expected_text = str(monitor.get("expected_text") or "").strip()
