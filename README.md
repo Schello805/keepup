@@ -132,6 +132,54 @@ Zusätzlich gibt es:
 - Testversand für SMTP
 - Sammelmeldungs-Fenster für mehrere Statusänderungen
 
+## Raspberry Pi
+
+KeepUp läuft grundsätzlich auch auf einem Raspberry Pi, besonders gut für lokale Heimnetz-Setups. Je schwächer die Hardware, desto wichtiger werden sinnvolle Intervalle und knappe Timeouts.
+
+### Raspberry Pi 3B
+
+Praxisnahe Empfehlung:
+
+- etwa `10 bis 30` Monitore
+- bevorzugt `60s` Intervall oder mehr
+- Dashboard-Refresh eher `15s` bis `30s`
+- Timeout eher `3s` bis `5s`
+- `Retries` eher `0` oder `1`
+- bei HTTP möglichst `HEAD` statt `GET`
+
+Weniger empfehlenswert auf einem Pi 3B:
+
+- viele Monitore mit `10s`-Intervallen
+- viele hängende HTTP-Ziele gleichzeitig
+- sehr große Historie plus aggressive Live-Refresh-Werte
+
+### Raspberry Pi 4 / 5
+
+Auf einem Pi 4 oder Pi 5 ist KeepUp deutlich entspannter zu betreiben. Dort sind auch größere Setups realistisch, zum Beispiel:
+
+- `30 bis 60+` Monitore
+- oft problemlos `30s` bis `60s` Intervall
+- UI-Refresh meist `10s` bis `15s`
+
+### Allgemeine Empfehlung für Raspberry Pi
+
+Für einen stabilen Betrieb auf Pi-Systemen:
+
+- gute SD-Karte verwenden, besser A2-Klasse
+- wenn möglich SSD statt SD-Karte nutzen
+- HTTP-Timeouts knapp halten
+- globale Intervalle nicht unnötig aggressiv setzen
+- Incident- und Check-Historie regelmäßig bereinigen lassen
+
+Ein guter Startwert für einen Pi 3B ist zum Beispiel:
+
+- `20` Monitore
+- `60s` Prüfintervall
+- `15s` Dashboard-Refresh
+- `4s` Timeout
+- `1` Retry
+- `HEAD` für einfache Web-Erreichbarkeitschecks
+
 ## Performance-Hinweise
 
 KeepUp ist für lokale Self-Hosted-Umgebungen optimiert. Für gute Reaktionszeiten bei vielen Monitoren gelten diese Empfehlungen:
