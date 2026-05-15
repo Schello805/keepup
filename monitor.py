@@ -63,6 +63,11 @@ async def shutdown_monitor_runtime() -> None:
             _http_check_client = None
 
 
+def _notification_app_url(settings: dict[str, Any]) -> Optional[str]:
+    base_url = str(settings.get("keepup_base_url") or "").strip().rstrip("/")
+    return base_url or None
+
+
 def categorize_monitor_error(message: Optional[str], status: str = "down") -> Optional[str]:
     if status == "up":
         return None
@@ -374,6 +379,10 @@ def build_batch_notification_message(
         category = str(result.get("error_category") or "recovery")
         categories[category] = categories.get(category, 0) + 1
     lines.append("Kategorien: " + ", ".join(f"{key}={value}" for key, value in sorted(categories.items())))
+    app_url = _notification_app_url(settings)
+    if app_url:
+        lines.append("")
+        lines.append(f"KeepUp: {app_url}")
     lines.append("")
     lines.append("Powered by KeepUp")
     return subject, "\n".join(lines)
@@ -500,6 +509,8 @@ def build_notification_message(
     )
     category = result.get("error_category") or ("recovery" if is_recovered else "unknown")
     flapping_note = "Ja" if result.get("is_flapping") else "Nein"
+    app_url = _notification_app_url(settings)
+    app_url_line = f"KeepUp: {app_url}\n" if app_url else ""
     body = (
         f"Monitor: {monitor['name']}\n"
         f"Target: {monitor['target']}\n"
@@ -510,7 +521,8 @@ def build_notification_message(
         f"Detection: {detection_note}\n"
         f"Category: {category}\n"
         f"Flapping: {flapping_note}\n"
-        f"Details: {reason}\n\n"
+        f"Details: {reason}\n"
+        f"{app_url_line}\n"
         f"Powered by KeepUp"
     )
     return subject, body
@@ -564,6 +576,7 @@ async def send_telegram_notification(
     response_text = html.escape(response_text)
     checked_at = format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
     checked_at = html.escape(checked_at)
+    app_url = _notification_app_url(settings)
 
     # Compose Telegram HTML message. Note: Telegram does not support smaller font sizes,
     # so we use italics for the "Powered by" footer as a visual de-emphasis.
@@ -579,9 +592,14 @@ async def send_telegram_notification(
         f"Category: {category}",
         f"Flapping: {flapping_note}",
         f"Details: {reason}",
+    ]
+    if app_url:
+        safe_url = html.escape(app_url, quote=True)
+        telegram_lines.append(f'KeepUp: <a href="{safe_url}">{safe_url}</a>')
+    telegram_lines.extend([
         "",
         "<i>Powered by KeepUp</i>",
-    ]
+    ])
 
     text = "\n".join(telegram_lines)
 

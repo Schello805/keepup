@@ -157,7 +157,17 @@ def normalize_timezone(timezone_name: str) -> str:
     return timezone_name
 
 
+def normalize_base_url(base_url: str) -> str:
+    base_url = base_url.strip()
+    if not base_url:
+        return ""
+    if not (base_url.startswith("http://") or base_url.startswith("https://")):
+        raise ValueError("KeepUp URL muss mit http:// oder https:// beginnen.")
+    return base_url.rstrip("/")
+
+
 def build_notification_settings_payload(
+    keepup_base_url: str,
     app_timezone: str,
     default_monitor_interval: int,
     global_monitor_interval_override: int,
@@ -209,6 +219,7 @@ def build_notification_settings_payload(
     if scheduler_jitter_seconds < 0:
         raise ValueError("Scheduler-Jitter darf nicht negativ sein.")
     return {
+        "keepup_base_url": normalize_base_url(keepup_base_url),
         "app_timezone": normalize_timezone(app_timezone),
         "default_monitor_interval": default_monitor_interval,
         "global_monitor_interval_override": global_monitor_interval_override,
@@ -1073,6 +1084,7 @@ async def run_monitor_route(monitor_id: int) -> RedirectResponse:
 
 @app.post("/settings/notifications")
 async def update_notification_settings(
+    keepup_base_url: str = Form(""),
     app_timezone: str = Form("UTC"),
     default_monitor_interval: int = Form(60),
     global_monitor_interval_override: int = Form(0),
@@ -1098,6 +1110,7 @@ async def update_notification_settings(
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
+            keepup_base_url,
             app_timezone,
             default_monitor_interval,
             global_monitor_interval_override,
@@ -1130,6 +1143,7 @@ async def update_notification_settings(
 
 @app.post("/settings/test/telegram")
 async def test_telegram_settings(
+    keepup_base_url: str = Form(""),
     app_timezone: str = Form("UTC"),
     default_monitor_interval: int = Form(60),
     global_monitor_interval_override: int = Form(0),
@@ -1155,6 +1169,7 @@ async def test_telegram_settings(
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
+            keepup_base_url,
             app_timezone,
             default_monitor_interval,
             global_monitor_interval_override,
@@ -1195,6 +1210,7 @@ async def test_telegram_settings(
 
 @app.post("/settings/test/smtp")
 async def test_smtp_settings(
+    keepup_base_url: str = Form(""),
     app_timezone: str = Form("UTC"),
     default_monitor_interval: int = Form(60),
     global_monitor_interval_override: int = Form(0),
@@ -1220,6 +1236,7 @@ async def test_smtp_settings(
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
+            keepup_base_url,
             app_timezone,
             default_monitor_interval,
             global_monitor_interval_override,

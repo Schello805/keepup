@@ -15,6 +15,7 @@ HISTORY_LIMIT = 30
 DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
     "refresh_interval": 10,
+    "keepup_base_url": "",
     "app_timezone": "UTC",
     "default_monitor_interval": 60,
     "global_monitor_interval_override": 0,
