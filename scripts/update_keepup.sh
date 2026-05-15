@@ -3,6 +3,27 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VENV_DIR="$ROOT_DIR/.venv"
+PROJECT_OWNER="$(stat -c %U "$ROOT_DIR" 2>/dev/null || id -un)"
+
+run_as_project_owner() {
+  if [ "$(id -un)" = "$PROJECT_OWNER" ]; then
+    "$@"
+    return
+  fi
+
+  if [ "$(id -u)" -eq 0 ] && command -v runuser >/dev/null 2>&1; then
+    runuser -u "$PROJECT_OWNER" -- "$@"
+    return
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    sudo -u "$PROJECT_OWNER" "$@"
+    return
+  fi
+
+  echo "This script needs to run repository operations as '$PROJECT_OWNER', but sudo/runuser is unavailable." >&2
+  exit 1
+}
 
 run_as_root() {
   if [ "$(id -u)" -ne 0 ]; then
@@ -125,18 +146,18 @@ else
 fi
 
 if [ ! -d "$VENV_DIR" ]; then
-  python3 -m venv "$VENV_DIR"
+  run_as_project_owner python3 -m venv "$VENV_DIR"
 fi
 
 if [ -d "$ROOT_DIR/.git" ]; then
-  git -C "$ROOT_DIR" fetch --prune
-  git -C "$ROOT_DIR" pull --ff-only
+  run_as_project_owner git -C "$ROOT_DIR" -c safe.directory="$ROOT_DIR" fetch --prune
+  run_as_project_owner git -C "$ROOT_DIR" -c safe.directory="$ROOT_DIR" pull --ff-only
 fi
 
-"$VENV_DIR/bin/python" -m pip install --upgrade pip
-"$VENV_DIR/bin/pip" install -r "$ROOT_DIR/requirements.txt"
+run_as_project_owner "$VENV_DIR/bin/python" -m pip install --upgrade pip
+run_as_project_owner "$VENV_DIR/bin/pip" install -r "$ROOT_DIR/requirements.txt"
 
-"$VENV_DIR/bin/python" -m py_compile "$ROOT_DIR/main.py" "$ROOT_DIR/database.py" "$ROOT_DIR/monitor.py"
+run_as_project_owner "$VENV_DIR/bin/python" -m py_compile "$ROOT_DIR/main.py" "$ROOT_DIR/database.py" "$ROOT_DIR/monitor.py"
 
 echo "[update] Running configuration checks and ensuring service is configured"
 if [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ] && can_run_as_root; then
