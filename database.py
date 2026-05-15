@@ -16,6 +16,8 @@ DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
     "refresh_interval": 10,
     "app_timezone": "UTC",
+    "default_monitor_interval": 60,
+    "global_monitor_interval_override": 0,
     "down_failures_threshold": 3,
     "up_successes_threshold": 1,
     "retention_days": 7,

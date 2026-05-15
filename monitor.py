@@ -647,11 +647,12 @@ def reschedule_monitor_jobs(scheduler: AsyncIOScheduler) -> None:
 
     settings = get_settings()
     jitter_seconds = max(0, int(settings.get("scheduler_jitter_seconds") or 0))
+    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
     monitors = list_monitors()
     for monitor in monitors:
         if not monitor.get("enabled", 1):
             continue
-        interval_seconds = max(10, int(monitor["interval"]))
+        interval_seconds = max(10, global_interval_override or int(monitor["interval"]))
         jitter = random.randint(0, jitter_seconds) if jitter_seconds else 0
         scheduler.add_job(
             execute_monitor_check,

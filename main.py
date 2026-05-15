@@ -159,6 +159,8 @@ def normalize_timezone(timezone_name: str) -> str:
 
 def build_notification_settings_payload(
     app_timezone: str,
+    default_monitor_interval: int,
+    global_monitor_interval_override: int,
     down_failures_threshold: int,
     up_successes_threshold: int,
     retention_days: int,
@@ -179,6 +181,8 @@ def build_notification_settings_payload(
     smtp_use_tls: Optional[str],
     smtp_use_ssl: Optional[str],
 ) -> dict:
+    default_monitor_interval = int(default_monitor_interval)
+    global_monitor_interval_override = int(global_monitor_interval_override)
     down_failures_threshold = int(down_failures_threshold)
     up_successes_threshold = int(up_successes_threshold)
     retention_days = int(retention_days)
@@ -186,6 +190,10 @@ def build_notification_settings_payload(
     flapping_transition_threshold = int(flapping_transition_threshold)
     notification_batch_window_seconds = int(notification_batch_window_seconds)
     scheduler_jitter_seconds = int(scheduler_jitter_seconds)
+    if default_monitor_interval < 10:
+        raise ValueError("Standard-Intervall muss mindestens 10 Sekunden sein.")
+    if global_monitor_interval_override not in {0} and global_monitor_interval_override < 10:
+        raise ValueError("Globales Override-Intervall muss 0 oder mindestens 10 Sekunden sein.")
     if down_failures_threshold < 1:
         raise ValueError("Fehlschlag-Schwelle muss mindestens 1 sein.")
     if up_successes_threshold < 1:
@@ -202,6 +210,8 @@ def build_notification_settings_payload(
         raise ValueError("Scheduler-Jitter darf nicht negativ sein.")
     return {
         "app_timezone": normalize_timezone(app_timezone),
+        "default_monitor_interval": default_monitor_interval,
+        "global_monitor_interval_override": global_monitor_interval_override,
         "down_failures_threshold": down_failures_threshold,
         "up_successes_threshold": up_successes_threshold,
         "retention_days": retention_days,
@@ -264,8 +274,10 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
     monitors = list_monitors(include_heavy_details=False)
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
+    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
     for monitor in monitors:
         monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
+        monitor["effective_interval"] = global_interval_override or int(monitor.get("interval") or 60)
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
         monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
@@ -278,11 +290,13 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
 def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[dict[str, Any]]:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
+    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
     monitors = list_monitors(monitor_ids=[monitor_id], include_heavy_details=True)
     if not monitors:
         return None
 
     monitor = monitors[0]
+    monitor["effective_interval"] = global_interval_override or int(monitor.get("interval") or 60)
     logs_by_monitor = get_recent_logs_for_monitors([monitor_id])
     monitor["logs"] = logs_by_monitor.get(monitor_id, [])
     monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
@@ -1060,6 +1074,8 @@ async def run_monitor_route(monitor_id: int) -> RedirectResponse:
 @app.post("/settings/notifications")
 async def update_notification_settings(
     app_timezone: str = Form("UTC"),
+    default_monitor_interval: int = Form(60),
+    global_monitor_interval_override: int = Form(0),
     down_failures_threshold: int = Form(3),
     up_successes_threshold: int = Form(1),
     retention_days: int = Form(7),
@@ -1083,6 +1099,8 @@ async def update_notification_settings(
     try:
         payload = build_notification_settings_payload(
             app_timezone,
+            default_monitor_interval,
+            global_monitor_interval_override,
             down_failures_threshold,
             up_successes_threshold,
             retention_days,
@@ -1113,6 +1131,8 @@ async def update_notification_settings(
 @app.post("/settings/test/telegram")
 async def test_telegram_settings(
     app_timezone: str = Form("UTC"),
+    default_monitor_interval: int = Form(60),
+    global_monitor_interval_override: int = Form(0),
     down_failures_threshold: int = Form(3),
     up_successes_threshold: int = Form(1),
     retention_days: int = Form(7),
@@ -1136,6 +1156,8 @@ async def test_telegram_settings(
     try:
         payload = build_notification_settings_payload(
             app_timezone,
+            default_monitor_interval,
+            global_monitor_interval_override,
             down_failures_threshold,
             up_successes_threshold,
             retention_days,
@@ -1174,6 +1196,8 @@ async def test_telegram_settings(
 @app.post("/settings/test/smtp")
 async def test_smtp_settings(
     app_timezone: str = Form("UTC"),
+    default_monitor_interval: int = Form(60),
+    global_monitor_interval_override: int = Form(0),
     down_failures_threshold: int = Form(3),
     up_successes_threshold: int = Form(1),
     retention_days: int = Form(7),
@@ -1197,6 +1221,8 @@ async def test_smtp_settings(
     try:
         payload = build_notification_settings_payload(
             app_timezone,
+            default_monitor_interval,
+            global_monitor_interval_override,
             down_failures_threshold,
             up_successes_threshold,
             retention_days,

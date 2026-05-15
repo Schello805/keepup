@@ -239,7 +239,7 @@
                         <div class="mt-4 flex-shrink-0">
                             <div class="mb-2 flex items-center justify-between text-xs uppercase tracking-wide text-slate-400">
                                 <span>Letzte {{ monitor.history|length }} Checks</span>
-                                <span>{{ monitor.interval }}s Intervall</span>
+                                <span>{{ monitor.effective_interval or monitor.interval }}s Intervall</span>
                             </div>
                             <div class="flex items-end gap-1">
                                 {% if monitor.history %}
@@ -461,7 +461,7 @@
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
-                    <input type="number" min="10" step="10" name="interval" value="60" class="{{ input_classes() }}">
+                    <input type="number" min="10" step="10" name="interval" value="{{ settings.default_monitor_interval or 60 }}" class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">HTTP-Methode</span>
@@ -829,12 +829,13 @@
         }
 
         async function renderCharts(scope = document) {
-            if (!scope.querySelector('.apex-chart-container')) return;
+            if (!scope || !scope.querySelector || !scope.querySelector('.apex-chart-container')) return;
             const ready = await ensureApexChartsLoaded();
             if (!ready || typeof ApexCharts === 'undefined') return;
             scope.querySelectorAll('.is-flipped .apex-chart-container, .card-inner.is-flipped .apex-chart-container, [id^="card-inner-"].is-flipped .apex-chart-container, .apex-chart-container').forEach(el => {
                 if (el.dataset.chartRendered) return;
                 if (!el.closest('.is-flipped')) return;
+                if (!(el instanceof HTMLElement) || !el.isConnected || !document.body.contains(el)) return;
                 try {
                     const data = JSON.parse(el.dataset.chartSeries || '[]');
                     if (!data.length) return;
@@ -878,9 +879,17 @@
                             ]
                         }
                     };
+                    if (!el.isConnected || !document.body.contains(el)) return;
                     const chart = new ApexCharts(el, options);
-                    chart.render();
-                    el.dataset.chartRendered = 'true';
+                    Promise.resolve(chart.render())
+                        .then(() => {
+                            if (el.isConnected) {
+                                el.dataset.chartRendered = 'true';
+                            }
+                        })
+                        .catch((error) => {
+                            console.warn('Chart render skipped', error);
+                        });
                 } catch (e) {
                     console.error('Chart renderer error', e);
                 }
