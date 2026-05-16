@@ -126,18 +126,57 @@ systemctl restart keepup.service</p>
             </div>
         </div>
 
+        <div id="update-restart-overlay" class="hidden fixed inset-0 z-[60]">
+            <div class="absolute inset-0 bg-slate-950/85 backdrop-blur-md"></div>
+            <div class="relative flex min-h-screen items-center justify-center px-4">
+                <div class="w-[min(34rem,calc(100vw-2rem))] rounded-3xl border border-sky-400/20 bg-keepup-panel/95 p-6 shadow-panel">
+                    <div class="flex items-start gap-4">
+                        <div class="relative mt-1 flex h-14 w-14 shrink-0 items-center justify-center">
+                            <span class="absolute inset-0 animate-spin rounded-full border border-sky-300/20 border-t-sky-300/80"></span>
+                            <span class="absolute inset-[9px] animate-spin rounded-full border border-emerald-300/15 border-b-emerald-300/70" style="animation-direction: reverse; animation-duration: 2.2s;"></span>
+                            <span class="inline-flex h-3 w-3 rounded-full bg-sky-300"></span>
+                        </div>
+                        <div class="min-w-0">
+                            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200/80">Neustart läuft</p>
+                            <h3 class="mt-1 text-xl font-semibold text-slate-50">KeepUp wird gerade neu gestartet</h3>
+                            <p id="update-restart-text" class="mt-2 text-sm text-slate-300">Das Update wurde eingespielt. Bitte warte einen Moment, bis die App wieder vollständig bereit ist.</p>
+                            <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
+                                Währenddessen bleibt diese Seite bewusst geöffnet. Du musst nichts neu laden.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script>
             (function () {
-                async function waitForServiceReady(maxAttempts = 20, delayMs = 900) {
+                let updateProof = null;
+
+                async function waitForServiceReady(maxAttempts = 40, delayMs = 900) {
                     for (let i = 0; i < maxAttempts; i += 1) {
                         try {
-                            const res = await fetch('/health', { cache: 'no-store' });
+                            const res = await fetch('/ready', { cache: 'no-store' });
                             if (res.ok) return true;
                         } catch (_) {
                         }
                         await new Promise((resolve) => window.setTimeout(resolve, delayMs));
                     }
                     return false;
+                }
+
+                function showRestartOverlay(message) {
+                    const overlay = document.getElementById('update-restart-overlay');
+                    const text = document.getElementById('update-restart-text');
+                    if (!overlay) return;
+                    if (text && message) {
+                        text.textContent = message;
+                    }
+                    overlay.classList.remove('hidden');
+                }
+
+                function hideRestartOverlay() {
+                    document.getElementById('update-restart-overlay')?.classList.add('hidden');
                 }
 
                 async function downloadBackupAfterUpdate(reloadAfter = false) {
@@ -164,6 +203,17 @@ systemctl restart keepup.service</p>
                     } catch (_) {
                         return false;
                     }
+                }
+
+                async function waitForRestartAndReload() {
+                    showRestartOverlay('Das Update wurde eingespielt. KeepUp startet jetzt neu und lädt danach automatisch wieder.');
+                    const ready = await waitForServiceReady();
+                    if (ready) {
+                        window.location.reload();
+                        return true;
+                    }
+                    showRestartOverlay('KeepUp braucht noch etwas länger für den Neustart. Bitte warte einen Moment und lade notfalls gleich manuell neu.');
+                    return false;
                 }
 
                 function showUpdateResult(payload) {
@@ -228,6 +278,7 @@ systemctl restart keepup.service</p>
                         if (footerVersion && data.current_version) {
                             footerVersion.textContent = `v${data.current_version}`;
                         }
+                        updateProof = data.update_run_token || null;
                         if (footerUpdateHint) {
                             footerUpdateHint.classList.remove('hidden');
                         }
@@ -264,8 +315,14 @@ systemctl restart keepup.service</p>
                                     runBtn.disabled = true;
                                     runBtn.textContent = 'Update läuft…';
                                     try {
+                                        if (!updateProof) {
+                                            throw new Error('update_proof_missing');
+                                        }
                                         const runRes = await fetch('/api/update/run', {
                                             method: 'POST',
+                                            headers: {
+                                                'X-KeepUp-Update-Proof': updateProof,
+                                            },
                                         });
                                         if (!runRes.ok) {
                                             let msg = 'Update fehlgeschlagen.';
@@ -283,12 +340,22 @@ systemctl restart keepup.service</p>
                                         runBtn.textContent = 'Aktualisiert';
                                         text.textContent = 'Update erfolgreich abgeschlossen.';
                                         hidePopover();
-                                        showUpdateResult(payload);
-                                        window.setTimeout(() => {
-                                            downloadBackupAfterUpdate(true);
-                                        }, 600);
+                                        if (payload.restart_scheduled) {
+                                            showRestartOverlay('Das Update wurde eingespielt. KeepUp startet jetzt neu. Die Seite lädt automatisch neu, sobald alles wieder bereit ist.');
+                                            window.setTimeout(() => {
+                                                waitForRestartAndReload();
+                                            }, 300);
+                                        } else {
+                                            showUpdateResult(payload);
+                                            window.setTimeout(() => {
+                                                downloadBackupAfterUpdate(true);
+                                            }, 600);
+                                        }
                                     } catch (e) {
                                         runBtn.textContent = 'Fehlgeschlagen';
+                                        if (String(e && e.message || '') === 'update_proof_missing') {
+                                            text.textContent = 'Die Update-Freigabe fehlt oder ist abgelaufen. Bitte Seite neu laden und erneut versuchen.';
+                                        }
                                     } finally {
                                         window.setTimeout(() => {
                                             runBtn.disabled = false;

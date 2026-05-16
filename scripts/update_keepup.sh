@@ -170,7 +170,8 @@ fi
 
 if command -v systemctl >/dev/null 2>&1 && can_run_as_root; then
   echo "[update] Restarting keepup service"
-  run_as_root systemctl restart keepup.service || true
+  run_as_root systemctl restart keepup.service
+  run_as_root systemctl is-active --quiet keepup.service
 else
   echo "[update] Update completed, but service restart was skipped. Please restart keepup.service manually."
 fi

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -11,7 +13,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import uvicorn
@@ -836,6 +838,53 @@ def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
     timer.start()
 
 
+def _same_origin_base(request: Request) -> str:
+    return str(request.base_url).rstrip("/")
+
+
+def _is_same_origin_request(request: Request) -> bool:
+    expected = _same_origin_base(request)
+    origin = (request.headers.get("origin") or "").strip()
+    referer = (request.headers.get("referer") or "").strip()
+    if origin:
+        return origin.rstrip("/") == expected
+    if referer:
+        try:
+            parsed = urlparse(referer)
+        except Exception:
+            return False
+        referer_origin = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+        return referer_origin == expected
+    return False
+
+
+def _build_update_run_token(secret: str, window: int) -> str:
+    payload = f"{window}:{BASE_DIR}"
+    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _current_update_token_window(now: Optional[float] = None) -> int:
+    timestamp = now if now is not None else time.time()
+    return int(timestamp // 120)
+
+
+def _issue_update_run_token(secret: str) -> tuple[str, int]:
+    window = _current_update_token_window()
+    expires_at = (window + 1) * 120
+    return _build_update_run_token(secret, window), expires_at
+
+
+def _validate_update_run_token(secret: str, provided_token: str) -> bool:
+    if not provided_token:
+        return False
+    current_window = _current_update_token_window()
+    valid_tokens = (
+        _build_update_run_token(secret, current_window),
+        _build_update_run_token(secret, current_window - 1),
+    )
+    return any(hmac.compare_digest(provided_token, valid_token) for valid_token in valid_tokens)
+
+
 def _get_update_commit_summaries(previous_sha: Optional[str], current_sha: Optional[str], limit: int = 8) -> list[str]:
     if not previous_sha or not current_sha or previous_sha == current_sha:
         return []
@@ -888,6 +937,10 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
     update_available = bool(local_sha and remote_sha and local_sha != remote_sha)
     token = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
     update_enabled = bool(token)
+    update_run_token = None
+    update_run_token_expires_at = None
+    if token:
+        update_run_token, update_run_token_expires_at = _issue_update_run_token(token)
 
     payload = {
         "current_version": get_app_version_display(),
@@ -897,6 +950,8 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
         "remote_sha_short": (remote_sha[:7] if remote_sha else None),
         "update_available": update_available,
         "update_enabled": update_enabled,
+        "update_run_token": update_run_token,
+        "update_run_token_expires_at": update_run_token_expires_at,
     }
     _update_status_cache["payload"] = payload
     _update_status_cache["expires_at"] = now + UPDATE_STATUS_TTL_SECONDS
@@ -990,10 +1045,15 @@ async def update_status() -> JSONResponse:
 
 
 @app.post("/api/update/run")
-async def run_update() -> JSONResponse:
+async def run_update(request: Request) -> JSONResponse:
     expected = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
     if not expected:
         raise HTTPException(status_code=403, detail="Update ist nicht aktiviert (KEEPUP_UPDATE_TOKEN fehlt).")
+    if not _is_same_origin_request(request):
+        raise HTTPException(status_code=403, detail="Update-Anfrage wurde aus Sicherheitsgründen blockiert.")
+    provided_proof = (request.headers.get("x-keepup-update-proof") or "").strip()
+    if not _validate_update_run_token(expected, provided_proof):
+        raise HTTPException(status_code=403, detail="Update-Freigabe ist ungültig oder abgelaufen. Bitte Seite neu laden.")
 
     script_path = BASE_DIR / "scripts" / "update_keepup.sh"
     if not script_path.exists():
@@ -1036,6 +1096,7 @@ async def run_update() -> JSONResponse:
             "current_sha_short": (current_sha[:7] if current_sha else None),
             "changes": changes,
             "restart_scheduled": restart_scheduled,
+            "service_ready_url": "/ready",
             "stdout": stdout,
             "stderr": stderr,
         },
