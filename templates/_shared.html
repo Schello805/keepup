@@ -150,6 +150,20 @@ systemctl restart keepup.service</p>
                                     <p id="update-restart-codename" class="mt-1 text-sm font-semibold text-emerald-50">Wird berechnet…</p>
                                 </div>
                             </div>
+                            <div class="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Gesamtuptime</p>
+                                    <p id="update-restart-metric-uptime" class="mt-1 text-sm font-semibold text-slate-100">-</p>
+                                </div>
+                                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Gesamtdowntime</p>
+                                    <p id="update-restart-metric-downtime" class="mt-1 text-sm font-semibold text-slate-100">-</p>
+                                </div>
+                                <div class="rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Gesamt MTTR</p>
+                                    <p id="update-restart-metric-mttr" class="mt-1 text-sm font-semibold text-slate-100">-</p>
+                                </div>
+                            </div>
                             <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-slate-300">
                                 <span class="text-xs uppercase tracking-wide text-slate-500">Status</span>
                                 <p id="update-restart-fact" class="mt-1 text-sm text-slate-200">Initialisiere Neustart-Sequenz…</p>
@@ -176,6 +190,7 @@ systemctl restart keepup.service</p>
                 let restartReloadTimer = null;
                 let restartReloadCountdownTimer = null;
                 let restartReadyPollTimer = null;
+                let latestUpdateStatus = null;
                 window.__keepupRestarting = false;
 
                 function hashString(value) {
@@ -224,6 +239,35 @@ systemctl restart keepup.service</p>
                     return false;
                 }
 
+                async function reloadCurrentPageInPlace() {
+                    try {
+                        const res = await fetch(window.location.href, { cache: 'no-store' });
+                        if (!res.ok) return false;
+                        const html = await res.text();
+                        document.open();
+                        document.write(html);
+                        document.close();
+                        return true;
+                    } catch (_) {
+                        return false;
+                    }
+                }
+
+                function renderRestartMetrics(metrics) {
+                    const uptimeEl = document.getElementById('update-restart-metric-uptime');
+                    const downtimeEl = document.getElementById('update-restart-metric-downtime');
+                    const mttrEl = document.getElementById('update-restart-metric-mttr');
+                    if (uptimeEl) {
+                        uptimeEl.textContent = metrics && metrics.uptime_pct != null ? `${Number(metrics.uptime_pct).toFixed(3)} %` : '-';
+                    }
+                    if (downtimeEl) {
+                        downtimeEl.textContent = metrics && metrics.downtime_human ? metrics.downtime_human : '-';
+                    }
+                    if (mttrEl) {
+                        mttrEl.textContent = metrics && metrics.mttr_human ? metrics.mttr_human : '-';
+                    }
+                }
+
                 function startReadyPolling() {
                     const countdown = document.getElementById('update-restart-countdown');
                     if (restartReadyPollTimer) return;
@@ -241,7 +285,10 @@ systemctl restart keepup.service</p>
                                 if (countdown) {
                                     countdown.textContent = 'KeepUp ist wieder da. Lade neu…';
                                 }
-                                window.location.reload();
+                                const reloaded = await reloadCurrentPageInPlace();
+                                if (!reloaded && countdown) {
+                                    countdown.textContent = 'KeepUp antwortet, aber die Seite lädt noch nicht neu. Wir versuchen es weiter…';
+                                }
                             }
                         } catch (_) {
                         }
@@ -268,6 +315,7 @@ systemctl restart keepup.service</p>
                     if (codename) {
                         codename.textContent = flavor.codename;
                     }
+                    renderRestartMetrics(latestUpdateStatus && latestUpdateStatus.overlay_metrics ? latestUpdateStatus.overlay_metrics : null);
                     if (fact) {
                         let idx = 0;
                         fact.textContent = flavor.facts[0];
@@ -414,6 +462,7 @@ systemctl restart keepup.service</p>
                         if (!res.ok) return;
                         const data = await res.json();
                         if (!data || !data.update_available) return;
+                        latestUpdateStatus = data;
 
                         const pill = document.getElementById('update-pill');
                         const mobilePill = document.getElementById('update-pill-mobile');

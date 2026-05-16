@@ -146,6 +146,18 @@ def format_duration_short(seconds: Optional[int]) -> Optional[str]:
     return f"{sec}s"
 
 
+def parse_iso_datetime(timestamp: Optional[str]) -> Optional[datetime]:
+    if not timestamp:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def format_bytes_compact(num_bytes: Optional[float]) -> str:
     if num_bytes is None:
         return "-"
@@ -275,6 +287,62 @@ def get_incident_burst_bucket(timestamp: Optional[str]) -> Optional[str]:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc).replace(second=0, microsecond=0).isoformat()
+
+
+def build_update_overlay_metrics() -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    try:
+        conn = get_db()
+        try:
+            monitor_rows = conn.execute("SELECT id, created_at FROM monitors ORDER BY id ASC").fetchall()
+            incident_rows = conn.execute(
+                "SELECT monitor_id, started_at, ended_at FROM incidents ORDER BY started_at ASC, id ASC"
+            ).fetchall()
+        finally:
+            conn.close()
+    except Exception:
+        return {
+            "monitor_count": 0,
+            "uptime_pct": None,
+            "downtime_human": "-",
+            "mttr_human": "-",
+        }
+
+    created_at_by_monitor: dict[int, datetime] = {}
+    total_monitored_seconds = 0.0
+    for row in monitor_rows:
+        created_at = parse_iso_datetime(row["created_at"]) or now
+        created_at_by_monitor[int(row["id"])] = created_at
+        total_monitored_seconds += max(0.0, (now - created_at).total_seconds())
+
+    downtime_seconds = 0.0
+    mttr_durations: list[float] = []
+    for row in incident_rows:
+        monitor_id = int(row["monitor_id"])
+        created_at = created_at_by_monitor.get(monitor_id)
+        if not created_at:
+            continue
+        started = parse_iso_datetime(row["started_at"]) or created_at
+        ended = parse_iso_datetime(row["ended_at"]) or now
+        overlap_start = max(started, created_at)
+        overlap_end = min(ended, now)
+        if overlap_end <= overlap_start:
+            continue
+        downtime_seconds += (overlap_end - overlap_start).total_seconds()
+        if row["ended_at"] is not None and ended > started:
+            mttr_durations.append((ended - started).total_seconds())
+
+    uptime_pct = None
+    if total_monitored_seconds > 0:
+        uptime_pct = round(max(0.0, (total_monitored_seconds - downtime_seconds) / total_monitored_seconds) * 100.0, 3)
+    mttr_seconds = (sum(mttr_durations) / len(mttr_durations)) if mttr_durations else None
+
+    return {
+        "monitor_count": len(monitor_rows),
+        "uptime_pct": uptime_pct,
+        "downtime_human": format_duration_short(int(round(downtime_seconds))) or "0s",
+        "mttr_human": format_duration_short(int(round(mttr_seconds))) if mttr_seconds is not None else "-",
+    }
 
 def normalize_timezone(timezone_name: str) -> str:
     timezone_name = timezone_name.strip() or "UTC"
@@ -952,6 +1020,7 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
         "update_enabled": update_enabled,
         "update_run_token": update_run_token,
         "update_run_token_expires_at": update_run_token_expires_at,
+        "overlay_metrics": build_update_overlay_metrics(),
     }
     _update_status_cache["payload"] = payload
     _update_status_cache["expires_at"] = now + UPDATE_STATUS_TTL_SECONDS
