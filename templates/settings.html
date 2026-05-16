@@ -1,5 +1,38 @@
 {% from "_shared.html" import render_page_header, btn_classes, input_classes, select_classes, checkbox_classes, render_toast, accordion_section, render_footer %}
 
+{% macro render_system_status(system_metrics) -%}
+<section id="settings-system-status" hx-get="/api/settings/system-status" hx-trigger="every 5s" hx-swap="outerHTML" class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
+    <div class="flex items-center justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-semibold">Systemstatus</h2>
+            <p class="mt-1 text-sm text-slate-400">Live-Werte für die aktuelle Host-Auslastung, ohne die Seite neu zu laden.</p>
+        </div>
+    </div>
+    <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div class="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
+            <p class="text-xs uppercase tracking-wide text-sky-100/80">CPU</p>
+            <p class="mt-2 text-2xl font-semibold text-sky-100">{{ system_metrics.cpu_percent if system_metrics.cpu_percent is not none else "-" }}{% if system_metrics.cpu_percent is not none %}%{% endif %}</p>
+            <p class="mt-1 text-sm text-slate-300">Aktuelle Prozessorauslastung</p>
+        </div>
+        <div class="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
+            <p class="text-xs uppercase tracking-wide text-emerald-100/80">RAM</p>
+            <p class="mt-2 text-2xl font-semibold text-emerald-100">{{ system_metrics.memory_percent if system_metrics.memory_percent is not none else "-" }}{% if system_metrics.memory_percent is not none %}%{% endif %}</p>
+            <p class="mt-1 text-sm text-slate-300">{{ system_metrics.memory_used }} von {{ system_metrics.memory_total }}</p>
+        </div>
+        <div class="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
+            <p class="text-xs uppercase tracking-wide text-amber-100/80">Netzwerk</p>
+            <p class="mt-2 text-sm font-semibold text-amber-100">Down {{ system_metrics.net_download_rate }}</p>
+            <p class="mt-1 text-sm font-semibold text-amber-100">Up {{ system_metrics.net_upload_rate }}</p>
+            <p class="mt-2 text-xs text-slate-300">Gesamt: {{ system_metrics.net_recv_total }} empfangen / {{ system_metrics.net_sent_total }} gesendet</p>
+        </div>
+    </div>
+</section>
+{%- endmacro %}
+
+{% if partial == "system-status" %}
+{{ render_system_status(system_metrics) }}
+{% else %}
+
 <!DOCTYPE html>
 <html lang="de" class="dark">
 <head>
@@ -67,32 +100,7 @@
                 <p class="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">Benachrichtigungen werden nur versendet, wenn sich der Status eines Monitors ändert, zum Beispiel von <span class="font-semibold text-rose-200">down</span> auf <span class="font-semibold text-emerald-200">up</span> oder umgekehrt.</p>
             </div>
 
-            <section class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
-                <div class="flex items-center justify-between gap-3">
-                    <div>
-                        <h2 class="text-lg font-semibold">Systemstatus</h2>
-                        <p class="mt-1 text-sm text-slate-400">Momentaufnahme der aktuellen Host-Auslastung beim Laden der Einstellungsseite.</p>
-                    </div>
-                </div>
-                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                    <div class="rounded-2xl border border-sky-400/20 bg-sky-500/10 p-4">
-                        <p class="text-xs uppercase tracking-wide text-sky-100/80">CPU</p>
-                        <p class="mt-2 text-2xl font-semibold text-sky-100">{{ system_metrics.cpu_percent if system_metrics.cpu_percent is not none else "-" }}{% if system_metrics.cpu_percent is not none %}%{% endif %}</p>
-                        <p class="mt-1 text-sm text-slate-300">Aktuelle Prozessorauslastung</p>
-                    </div>
-                    <div class="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4">
-                        <p class="text-xs uppercase tracking-wide text-emerald-100/80">RAM</p>
-                        <p class="mt-2 text-2xl font-semibold text-emerald-100">{{ system_metrics.memory_percent if system_metrics.memory_percent is not none else "-" }}{% if system_metrics.memory_percent is not none %}%{% endif %}</p>
-                        <p class="mt-1 text-sm text-slate-300">{{ system_metrics.memory_used }} von {{ system_metrics.memory_total }}</p>
-                    </div>
-                    <div class="rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4">
-                        <p class="text-xs uppercase tracking-wide text-amber-100/80">Netzwerk</p>
-                        <p class="mt-2 text-sm font-semibold text-amber-100">Down {{ system_metrics.net_download_rate }}</p>
-                        <p class="mt-1 text-sm font-semibold text-amber-100">Up {{ system_metrics.net_upload_rate }}</p>
-                        <p class="mt-2 text-xs text-slate-300">Gesamt: {{ system_metrics.net_recv_total }} empfangen / {{ system_metrics.net_sent_total }} gesendet</p>
-                    </div>
-                </div>
-            </section>
+            {{ render_system_status(system_metrics) }}
 
             <form action="/settings/notifications" method="post" class="space-y-4" autocomplete="off" data-lpignore="true">
                 {% call accordion_section('settings-general', 'Allgemein', 'Basis-URL und Zeitzone für UI, Logs und Benachrichtigungen.', True) %}
@@ -335,3 +343,4 @@
     </script>
 </body>
 </html>
+{% endif %}

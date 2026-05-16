@@ -149,6 +149,36 @@
 
 {% macro render_incident_feed_loading() -%}
     <section class="space-y-3">
+        <div class="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 shadow-panel">
+            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="relative flex h-14 w-14 items-center justify-center">
+                        <span class="incident-warmup-orbit absolute inset-0 rounded-full border border-amber-300/25 border-t-amber-300/80"></span>
+                        <span class="incident-warmup-orbit absolute inset-[8px] rounded-full border border-sky-300/15 border-b-sky-300/70" style="animation-direction: reverse; animation-duration: 2.4s;"></span>
+                        <div class="grid grid-cols-2 gap-1">
+                            <span class="incident-warmup-dot h-2.5 w-2.5 rounded-full bg-amber-200"></span>
+                            <span class="incident-warmup-dot h-2.5 w-2.5 rounded-full bg-sky-300" style="animation-delay: 0.15s;"></span>
+                            <span class="incident-warmup-dot h-2.5 w-2.5 rounded-full bg-amber-300" style="animation-delay: 0.3s;"></span>
+                            <span class="incident-warmup-dot h-2.5 w-2.5 rounded-full bg-slate-100" style="animation-delay: 0.45s;"></span>
+                        </div>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/80">Feed-Aufbau</p>
+                        <h3 class="mt-1 text-lg font-semibold text-slate-50">Incidents werden gerade zusammengestellt</h3>
+                        <p class="mt-1 max-w-2xl text-sm text-slate-300">
+                            Nach einem Neustart oder bei vielen Eintraegen kann der erste Feed-Aufbau etwas laenger dauern.
+                            {% if monitor_count %}
+                            Aktuell sind {{ monitor_count }} Monitore konfiguriert.
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+                <div class="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-300">
+                    <span class="block text-xs uppercase tracking-wide text-slate-500">Hinweis</span>
+                    <span class="mt-1 block">Sobald der erste Build durch ist, wirken die Folgeaufrufe deutlich direkter.</span>
+                </div>
+            </div>
+        </div>
         {% for _ in range(5) %}
         <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel animate-pulse">
             <div class="h-4 w-48 rounded-xl bg-white/10"></div>
@@ -211,6 +241,20 @@
                 linear-gradient(180deg, #07111f 0%, #0b1424 45%, #09111d 100%);
         }
         .tap-target { min-width: 44px; min-height: 44px; }
+        .incident-warmup-orbit {
+            animation: keepup-orbit 1.8s linear infinite;
+        }
+        .incident-warmup-dot {
+            animation: keepup-dot-pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes keepup-orbit {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        @keyframes keepup-dot-pulse {
+            0%, 100% { transform: scale(0.72); opacity: 0.45; }
+            50% { transform: scale(1); opacity: 1; }
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-100">

@@ -488,6 +488,13 @@ def build_settings_context(request: Request) -> dict:
     }
 
 
+def build_settings_system_status_context(request: Request) -> dict:
+    return {
+        "request": request,
+        "system_metrics": build_system_metrics(),
+    }
+
+
 def build_incidents_context(request: Request) -> dict:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
@@ -676,6 +683,7 @@ def build_incidents_shell_context(request: Request) -> dict:
     monitor_id, status, since_days, _item_raw, page = parse_incident_filters(request)
     query_string = request.url.query
     incident_feed_url = "/api/incidents/feed"
+    monitor_options = list_monitor_options()
     if query_string:
         incident_feed_url += f"?{query_string}"
 
@@ -685,7 +693,8 @@ def build_incidents_shell_context(request: Request) -> dict:
         "app_version": get_app_version_display(),
         "active_page": "incidents",
         "toast": get_toast(request),
-        "monitors": list_monitor_options(),
+        "monitors": monitor_options,
+        "monitor_count": len(monitor_options),
         "filters": {
             "monitor_id": monitor_id,
             "status": status,
@@ -1038,6 +1047,7 @@ async def run_update() -> JSONResponse:
 async def dashboard(request: Request) -> HTMLResponse:
     context = build_dashboard_shell_context(request)
     context["initial_cards_html"] = peek_dashboard_cards_html()
+    context["cold_start_loading"] = context["initial_cards_html"] is None
     await ensure_dashboard_cards_cache_refresh(force=False)
     return await asyncio.to_thread(render_template, request, "index.html", context)
 
@@ -1045,6 +1055,12 @@ async def dashboard(request: Request) -> HTMLResponse:
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return await asyncio.to_thread(render_template, request, "settings.html", build_settings_context(request))
+
+
+@app.get("/api/settings/system-status", response_class=HTMLResponse)
+async def settings_system_status_partial(request: Request) -> HTMLResponse:
+    context = await asyncio.to_thread(build_settings_system_status_context, request)
+    return await asyncio.to_thread(render_template, request, "settings.html", {**context, "partial": "system-status"})
 
 
 @app.get("/incidents", response_class=HTMLResponse)
