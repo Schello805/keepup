@@ -295,6 +295,9 @@ def build_update_overlay_metrics() -> dict[str, Any]:
         conn = get_db()
         try:
             monitor_rows = conn.execute("SELECT id, created_at FROM monitors ORDER BY id ASC").fetchall()
+            check_rows = conn.execute(
+                "SELECT monitor_id, MIN(checked_at) AS first_checked_at FROM checks GROUP BY monitor_id"
+            ).fetchall()
             incident_rows = conn.execute(
                 "SELECT monitor_id, started_at, ended_at FROM incidents ORDER BY started_at ASC, id ASC"
             ).fetchall()
@@ -308,23 +311,44 @@ def build_update_overlay_metrics() -> dict[str, Any]:
             "mttr_human": "-",
         }
 
-    created_at_by_monitor: dict[int, datetime] = {}
+    first_seen_by_monitor: dict[int, datetime] = {}
+    for row in check_rows:
+        first_checked_at = parse_iso_datetime(row["first_checked_at"])
+        if first_checked_at is not None:
+            first_seen_by_monitor[int(row["monitor_id"])] = first_checked_at
+
+    for row in incident_rows:
+        started_at = parse_iso_datetime(row["started_at"])
+        if started_at is None:
+            continue
+        monitor_id = int(row["monitor_id"])
+        existing = first_seen_by_monitor.get(monitor_id)
+        if existing is None or started_at < existing:
+            first_seen_by_monitor[monitor_id] = started_at
+
     total_monitored_seconds = 0.0
+    baseline_by_monitor: dict[int, datetime] = {}
     for row in monitor_rows:
-        created_at = parse_iso_datetime(row["created_at"]) or now
-        created_at_by_monitor[int(row["id"])] = created_at
-        total_monitored_seconds += max(0.0, (now - created_at).total_seconds())
+        monitor_id = int(row["id"])
+        created_at = parse_iso_datetime(row["created_at"])
+        first_seen_at = first_seen_by_monitor.get(monitor_id)
+        if created_at and first_seen_at:
+            baseline = min(created_at, first_seen_at)
+        else:
+            baseline = created_at or first_seen_at or now
+        baseline_by_monitor[monitor_id] = baseline
+        total_monitored_seconds += max(0.0, (now - baseline).total_seconds())
 
     downtime_seconds = 0.0
     mttr_durations: list[float] = []
     for row in incident_rows:
         monitor_id = int(row["monitor_id"])
-        created_at = created_at_by_monitor.get(monitor_id)
-        if not created_at:
+        baseline = baseline_by_monitor.get(monitor_id)
+        if not baseline:
             continue
-        started = parse_iso_datetime(row["started_at"]) or created_at
+        started = parse_iso_datetime(row["started_at"]) or baseline
         ended = parse_iso_datetime(row["ended_at"]) or now
-        overlap_start = max(started, created_at)
+        overlap_start = max(started, baseline)
         overlap_end = min(ended, now)
         if overlap_end <= overlap_start:
             continue
