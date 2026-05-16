@@ -375,7 +375,6 @@
         .monitor-card {
             height: 340px;
             min-height: 340px;
-            contain: layout paint;
         }
         .status-filter-card.is-active {
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 18px 40px rgba(7, 17, 31, 0.28);
@@ -1087,7 +1086,10 @@
                 { passive: false, capture: true }
             );
         }
-        document.body.addEventListener("htmx:afterSwap", () => {
+        document.body.addEventListener("htmx:afterSwap", (event) => {
+            const target = event.detail?.target;
+            if (!(target instanceof Element)) return;
+            if (target.id !== "monitor-cards-shell") return;
             resetDashboardFiltersForAllSort();
             dismissColdStartHint();
             applyMonitorFilters();
