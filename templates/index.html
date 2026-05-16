@@ -373,13 +373,13 @@
             align-items: start;
         }
         .monitor-card {
-            height: 420px;
-            min-height: 420px;
+            height: 440px;
+            min-height: 440px;
         }
         @media (min-width: 768px) {
             .monitor-card {
-                height: 440px;
-                min-height: 440px;
+                height: 460px;
+                min-height: 460px;
             }
         }
         .status-filter-card.is-active {
@@ -623,6 +623,37 @@
 
     {{ render_footer("https://github.com/Schello805/keepup", app_version, active_page) }}
 
+    <div id="monitor-detail-overlay" class="hidden fixed inset-0 z-[60]">
+        <div class="absolute inset-0 bg-slate-950/82 backdrop-blur-md" onclick="closeMonitorDetailOverlay()"></div>
+        <div class="relative flex min-h-screen items-center justify-center px-4 py-4 sm:py-6">
+            <div class="w-[min(56rem,calc(100vw-2rem))] max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl border border-white/10 bg-keepup-panel/95 shadow-panel sm:max-h-[calc(100vh-3rem)]">
+                <div class="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-6">
+                    <div class="min-w-0">
+                        <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200/80">Monitor-Details</p>
+                        <h3 id="monitor-detail-overlay-title" class="mt-1 truncate text-2xl font-semibold text-slate-50">Details & Logs</h3>
+                    </div>
+                    <button type="button" onclick="closeMonitorDetailOverlay()" aria-label="Details schließen" class="tap-target inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                        </svg>
+                    </button>
+                </div>
+                <div id="monitor-detail-overlay-content" class="max-h-[calc(100vh-7rem)] overflow-y-auto px-5 py-5 sm:max-h-[calc(100vh-8rem)] sm:px-6">
+                    <div class="space-y-4">
+                        <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
+                            <div class="h-4 w-32 rounded-lg bg-white/10"></div>
+                            <div class="mt-3 h-20 rounded-2xl bg-white/5"></div>
+                        </div>
+                        <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
+                            <div class="h-4 w-28 rounded-lg bg-white/10"></div>
+                            <div class="mt-3 h-28 rounded-2xl bg-white/5"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
         function togglePanel(id) {
             document.getElementById(id)?.classList.toggle("hidden");
@@ -637,16 +668,12 @@
         }
 
         function getOpenDetails() {
-            return Array.from(window.__keepupOpenDetails || []);
+            return [];
         }
 
-        function setOpenDetails(ids) {
-            window.__keepupOpenDetails = new Set(Array.isArray(ids) ? ids : []);
-        }
+        function setOpenDetails(ids) {}
 
-        function clearOpenDetails() {
-            window.__keepupOpenDetails = new Set();
-        }
+        function clearOpenDetails() {}
 
         function normalizeAllCardsView() {
             if (getSortOrder() !== "all") return;
@@ -787,58 +814,63 @@
             dismissColdStartHint();
         }
 
-        async function ensureMonitorDetailsLoaded(monitorId) {
-            const container = document.getElementById(`card-detail-content-${monitorId}`);
-            if (!container) return;
-            if (container.dataset.detailLoaded === "true" || container.dataset.detailLoading === "true") return;
-            const url = container.dataset.detailUrl;
-            if (!url) return;
+        async function openMonitorDetailOverlay(monitorId, title = "Details & Logs") {
+            const overlay = document.getElementById("monitor-detail-overlay");
+            const titleEl = document.getElementById("monitor-detail-overlay-title");
+            const content = document.getElementById("monitor-detail-overlay-content");
+            if (!overlay || !content || !titleEl) return;
 
-            container.dataset.detailLoading = "true";
+            titleEl.textContent = title;
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
+                        <div class="h-4 w-32 rounded-lg bg-white/10"></div>
+                        <div class="mt-3 h-20 rounded-2xl bg-white/5"></div>
+                    </div>
+                    <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
+                        <div class="h-4 w-28 rounded-lg bg-white/10"></div>
+                        <div class="mt-3 h-28 rounded-2xl bg-white/5"></div>
+                    </div>
+                </div>
+            `;
+            overlay.classList.remove("hidden");
+            document.body.classList.add("overflow-hidden");
+
+            const requestId = (window.__keepupDetailRequestId || 0) + 1;
+            window.__keepupDetailRequestId = requestId;
+
             try {
-                const response = await fetch(url, { headers: { "HX-Request": "true" } });
+                const response = await fetch(`/api/monitors/${monitorId}/details`, { headers: { "HX-Request": "true" } });
                 if (!response.ok) {
                     throw new Error(`detail_load_failed_${response.status}`);
                 }
-                container.innerHTML = await response.text();
-                container.dataset.detailLoaded = "true";
-                await renderCharts(container.closest('[id^="card-inner-"]') || container);
+                if (window.__keepupDetailRequestId !== requestId) return;
+                content.innerHTML = await response.text();
+                await renderCharts(content);
             } catch (error) {
                 console.error("Monitor detail loading failed", error);
-                container.innerHTML = `
+                if (window.__keepupDetailRequestId !== requestId) return;
+                content.innerHTML = `
                     <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
                         Detaildaten konnten gerade nicht geladen werden.
                     </div>
                 `;
-            } finally {
-                delete container.dataset.detailLoading;
             }
+        }
+
+        function closeMonitorDetailOverlay() {
+            document.getElementById("monitor-detail-overlay")?.classList.add("hidden");
+            document.body.classList.remove("overflow-hidden");
         }
 
         function flipCard(id) {
-            const panel = document.getElementById(id);
-            if (!panel) return;
-            panel.classList.toggle("is-flipped");
             const monitorId = id.replace("card-inner-", "");
-            const openIds = new Set(getOpenDetails());
-            if (panel.classList.contains("is-flipped")) {
-                openIds.add(id);
-                ensureMonitorDetailsLoaded(monitorId);
-            } else {
-                openIds.delete(id);
-            }
-            setOpenDetails([...openIds]);
+            const card = document.querySelector(`[data-inner-id="${id}"]`);
+            const title = card?.querySelector("h3")?.textContent?.trim() || "Details & Logs";
+            openMonitorDetailOverlay(monitorId, title);
         }
 
-        function restoreOpenDetails() {
-            const openIds = getOpenDetails();
-            document.querySelectorAll("[id^='card-inner-']").forEach((inner) => {
-                inner.classList.toggle("is-flipped", openIds.includes(inner.id));
-                if (inner.classList.contains("is-flipped")) {
-                    ensureMonitorDetailsLoaded(inner.id.replace("card-inner-", ""));
-                }
-            });
-        }
+        function restoreOpenDetails() {}
 
         function openEditPanel(button) {
             const panel = document.getElementById("edit-monitor-panel");
@@ -980,9 +1012,8 @@
             if (!scope || !scope.querySelector || !scope.querySelector('.apex-chart-container')) return;
             const ready = await ensureApexChartsLoaded();
             if (!ready || typeof ApexCharts === 'undefined') return;
-            scope.querySelectorAll('.is-flipped .apex-chart-container, .card-inner.is-flipped .apex-chart-container, [id^="card-inner-"].is-flipped .apex-chart-container, .apex-chart-container').forEach(el => {
+            scope.querySelectorAll('.apex-chart-container').forEach(el => {
                 if (el.dataset.chartRendered) return;
-                if (!el.closest('.is-flipped')) return;
                 if (!(el instanceof HTMLElement) || !el.isConnected || !document.body.contains(el)) return;
                 try {
                     const data = JSON.parse(el.dataset.chartSeries || '[]');
@@ -1052,28 +1083,7 @@
         applyMonitorFilters();
         restoreOpenDetails();
         bindMonitorToggleForms();
-        if (!window.__keepupCardFlipInstallerInstalled) {
-            window.__keepupCardFlipInstallerInstalled = true;
-            window.bindCardFlipHandlers = function bindCardFlipHandlers() {
-                const interactiveSelector = "button, a, input, select, textarea, label, form";
-
-                document.querySelectorAll(".monitor-card").forEach((card) => {
-                    if (!(card instanceof HTMLElement)) return;
-                    if (card.dataset.flipBound) return;
-                    card.dataset.flipBound = "true";
-
-                    const innerId = card.dataset.innerId;
-                    if (!innerId) return;
-
-                    card.addEventListener("click", (ev) => {
-                        if (!(ev.target instanceof Element)) return;
-                        if (ev.target.closest(interactiveSelector)) return;
-                        flipCard(innerId);
-                    });
-                });
-            };
-        }
-        window.bindCardFlipHandlers?.();
+        window.bindCardFlipHandlers = function bindCardFlipHandlers() {};
         if (!window.__keepupWheelFixInstalled) {
             window.__keepupWheelFixInstalled = true;
             document.addEventListener(
@@ -1100,13 +1110,17 @@
             dismissColdStartHint();
             applyMonitorFilters();
             restoreOpenDetails();
-            window.bindCardFlipHandlers?.();
             bindMonitorToggleForms();
         });
         document.body.addEventListener("htmx:beforeRequest", (event) => {
             const target = event.detail?.elt;
             if (target && target.id === "monitor-cards-shell") {
                 dismissColdStartHint();
+            }
+        });
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                closeMonitorDetailOverlay();
             }
         });
     </script>
