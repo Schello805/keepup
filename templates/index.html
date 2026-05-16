@@ -32,6 +32,7 @@
                 <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-300 lg:min-w-[15rem]">
                     <span class="shrink-0 text-slate-500">Sortierung</span>
                     <select id="monitor-sort-select" onchange="setSortOrder(this.value)" class="min-w-0 flex-1 bg-transparent text-sm text-slate-100 focus:outline-none">
+                        <option value="all">Alle</option>
                         <option value="status">Status zuerst</option>
                         <option value="response-desc">Antwortzeit absteigend</option>
                         <option value="response-asc">Antwortzeit aufsteigend</option>
@@ -187,7 +188,7 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] cursor-pointer">
+            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] cursor-pointer">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d">
                     <!-- VORDERSEITE -->
                     <div class="card-front card-front-shell absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto">
@@ -650,11 +651,11 @@
         }
 
         function getSortOrder() {
-            return window.localStorage.getItem("keepup-monitor-sort") || "status";
+            return window.localStorage.getItem("keepup-monitor-sort") || "all";
         }
 
         function setSortOrder(order) {
-            window.localStorage.setItem("keepup-monitor-sort", order || "status");
+            window.localStorage.setItem("keepup-monitor-sort", order || "all");
             applyMonitorFilters();
         }
 
@@ -679,6 +680,9 @@
         function compareMonitorCards(a, b, order) {
             const numeric = (card, key) => Number(card.dataset[key] || -1);
             const text = (card, key) => String(card.dataset[key] || "");
+            if (order === "all") {
+                return numeric(a, "monitorOrder") - numeric(b, "monitorOrder");
+            }
             if (order === "name-asc") {
                 return text(a, "monitorName").localeCompare(text(b, "monitorName"), "de");
             }
