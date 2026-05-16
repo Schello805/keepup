@@ -188,7 +188,7 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}', {{ monitor.name|tojson }})">
+            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
                             <div class="min-w-0">
                                 <div class="mb-2 flex items-center gap-2">
@@ -630,10 +630,12 @@
 
         function clearOpenDetails() {}
 
-        function handleMonitorCardClick(event, monitorId, title) {
+        function handleMonitorCardClick(event, monitorId) {
             if (!(event?.target instanceof Element)) return;
             if (event.target.closest("button, a, input, select, textarea, label, form")) return;
-            openMonitorDetailOverlay(monitorId, title || "Details & Logs");
+            const card = document.querySelector(`[data-monitor-id="${monitorId}"]`);
+            const title = card?.querySelector("h3")?.textContent?.trim() || "Details & Logs";
+            openMonitorDetailOverlay(monitorId, title);
         }
 
         function normalizeAllCardsView() {
