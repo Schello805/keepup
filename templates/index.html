@@ -627,15 +627,15 @@
         }
 
         function getOpenDetails() {
-            try {
-                return JSON.parse(window.localStorage.getItem("keepup-open-details") || "[]");
-            } catch {
-                return [];
-            }
+            return Array.from(window.__keepupOpenDetails || []);
         }
 
         function setOpenDetails(ids) {
-            window.localStorage.setItem("keepup-open-details", JSON.stringify(ids));
+            window.__keepupOpenDetails = new Set(Array.isArray(ids) ? ids : []);
+        }
+
+        function clearOpenDetails() {
+            window.__keepupOpenDetails = new Set();
         }
 
         function setStatusFilter(filter) {
@@ -1012,6 +1012,7 @@
         }
 
         window.setTimeout(dismissToast, 4200);
+        clearOpenDetails();
         window.__keepupStatusFilter = "all";
         resetDashboardFiltersForAllSort();
         dismissColdStartHint();
