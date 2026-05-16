@@ -6,6 +6,8 @@ __pycache__/
 
 .venv/
 venv/
+node_modules/
 
 keepup.db
-
+keepup.db-shm
+keepup.db-wal

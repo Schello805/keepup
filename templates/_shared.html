@@ -164,6 +164,27 @@ systemctl restart keepup.service</p>
                                     <p id="update-restart-metric-mttr" class="mt-1 text-sm font-semibold text-slate-100">-</p>
                                 </div>
                             </div>
+                            <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3">
+                                <span class="text-xs uppercase tracking-wide text-slate-500">Fortschritt</span>
+                                <div class="mt-3 space-y-2">
+                                    <div data-restart-stage="prepare" class="restart-stage-item flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                                        <span>Update wird vorbereitet</span>
+                                        <span class="restart-stage-badge rounded-full px-2 py-0.5 text-xs font-semibold bg-white/5 text-slate-400">Wartet</span>
+                                    </div>
+                                    <div data-restart-stage="install" class="restart-stage-item flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                                        <span>Code und Abhängigkeiten werden aktualisiert</span>
+                                        <span class="restart-stage-badge rounded-full px-2 py-0.5 text-xs font-semibold bg-white/5 text-slate-400">Wartet</span>
+                                    </div>
+                                    <div data-restart-stage="restart" class="restart-stage-item flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                                        <span>KeepUp wird neu gestartet</span>
+                                        <span class="restart-stage-badge rounded-full px-2 py-0.5 text-xs font-semibold bg-white/5 text-slate-400">Wartet</span>
+                                    </div>
+                                    <div data-restart-stage="ready" class="restart-stage-item flex items-center justify-between gap-3 rounded-xl border border-white/5 bg-white/[0.03] px-3 py-2 text-sm text-slate-300">
+                                        <span>Bereitschaft wird geprüft</span>
+                                        <span class="restart-stage-badge rounded-full px-2 py-0.5 text-xs font-semibold bg-white/5 text-slate-400">Wartet</span>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-slate-300">
                                 <span class="text-xs uppercase tracking-wide text-slate-500">Status</span>
                                 <p id="update-restart-fact" class="mt-1 text-sm text-slate-200">Initialisiere Neustart-Sequenz…</p>
@@ -268,9 +289,35 @@ systemctl restart keepup.service</p>
                     }
                 }
 
+                function setRestartStage(currentStage) {
+                    const stages = ["prepare", "install", "restart", "ready"];
+                    const currentIndex = stages.indexOf(currentStage);
+                    document.querySelectorAll("[data-restart-stage]").forEach((item) => {
+                        const stage = item.getAttribute("data-restart-stage");
+                        const badge = item.querySelector(".restart-stage-badge");
+                        const stageIndex = stages.indexOf(stage);
+                        if (!badge || stageIndex === -1) return;
+                        item.classList.remove("border-emerald-400/20", "bg-emerald-500/10", "border-sky-400/20", "bg-sky-500/10");
+                        badge.className = "restart-stage-badge rounded-full px-2 py-0.5 text-xs font-semibold";
+                        if (stageIndex < currentIndex) {
+                            item.classList.add("border-emerald-400/20", "bg-emerald-500/10");
+                            badge.classList.add("bg-emerald-400/20", "text-emerald-100");
+                            badge.textContent = "Erledigt";
+                        } else if (stageIndex === currentIndex) {
+                            item.classList.add("border-sky-400/20", "bg-sky-500/10");
+                            badge.classList.add("bg-sky-400/20", "text-sky-100");
+                            badge.textContent = "Läuft";
+                        } else {
+                            badge.classList.add("bg-white/5", "text-slate-400");
+                            badge.textContent = "Wartet";
+                        }
+                    });
+                }
+
                 function startReadyPolling() {
                     const countdown = document.getElementById('update-restart-countdown');
                     if (restartReadyPollTimer) return;
+                    setRestartStage("ready");
                     if (countdown) {
                         countdown.textContent = 'Prüfe, ob KeepUp wieder bereit ist…';
                     }
@@ -285,6 +332,7 @@ systemctl restart keepup.service</p>
                                 if (countdown) {
                                     countdown.textContent = 'KeepUp ist wieder da. Lade neu…';
                                 }
+                                setRestartStage("ready");
                                 const reloaded = await reloadCurrentPageInPlace();
                                 if (!reloaded && countdown) {
                                     countdown.textContent = 'KeepUp antwortet, aber die Seite lädt noch nicht neu. Wir versuchen es weiter…';
@@ -306,6 +354,7 @@ systemctl restart keepup.service</p>
                     if (!overlay) return;
                     window.__keepupRestarting = true;
                     const flavor = buildInstanceFlavor();
+                    setRestartStage("restart");
                     if (text && message) {
                         text.textContent = message;
                     }
@@ -403,7 +452,9 @@ systemctl restart keepup.service</p>
                         link.remove();
                         window.URL.revokeObjectURL(downloadUrl);
                         if (reloadAfter) {
-                            window.setTimeout(() => window.location.reload(), 1200);
+                            window.setTimeout(() => {
+                                reloadCurrentPageInPlace();
+                            }, 1200);
                         }
                         return true;
                     } catch (_) {
@@ -446,7 +497,7 @@ systemctl restart keepup.service</p>
                     if (closeBtn) {
                         closeBtn.onclick = hideModal;
                     }
-                    reloadBtn.onclick = () => window.location.reload();
+                    reloadBtn.onclick = () => reloadCurrentPageInPlace();
                     downloadBtn.onclick = async () => {
                         downloadBtn.disabled = true;
                         downloadBtn.textContent = 'Lade Backup…';
@@ -515,10 +566,12 @@ systemctl restart keepup.service</p>
                                 runBtn.addEventListener('click', async () => {
                                     runBtn.disabled = true;
                                     runBtn.textContent = 'Update läuft…';
+                                    setRestartStage("prepare");
                                     try {
                                         if (!updateProof) {
                                             throw new Error('update_proof_missing');
                                         }
+                                        setRestartStage("install");
                                         const runRes = await fetch('/api/update/run', {
                                             method: 'POST',
                                             headers: {

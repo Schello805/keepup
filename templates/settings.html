@@ -40,31 +40,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ settings.app_name }} Einstellungen</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/keepup.css">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ["ui-sans-serif", "system-ui", "sans-serif"],
-                    },
-                    colors: {
-                        keepup: {
-                            bg: "#07111f",
-                            panel: "#111c31",
-                            panelAlt: "#16253f",
-                            accent: "#38bdf8",
-                        }
-                    },
-                    boxShadow: {
-                        panel: "0 18px 40px rgba(7, 17, 31, 0.28)",
-                    }
-                }
-            }
-        };
-    </script>
     <style>
         :root { color-scheme: dark; }
         html {

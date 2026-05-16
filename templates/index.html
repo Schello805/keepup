@@ -3,7 +3,7 @@
 {% macro render_dashboard_top(summary, active_page) -%}
     <div class="space-y-3">
         <div class="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-xs text-slate-400 md:flex-row md:items-center md:justify-between">
-            <div class="flex min-w-0 flex-1 items-center gap-3">
+            <div class="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:items-center">
                 <button
                     type="button"
                     onclick="togglePanel('add-monitor-panel')"
@@ -28,6 +28,17 @@
                         oninput="setSearchQuery(this.value)"
                         class="min-w-0 flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
                     >
+                </label>
+                <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-300 lg:min-w-[15rem]">
+                    <span class="shrink-0 text-slate-500">Sortierung</span>
+                    <select id="monitor-sort-select" onchange="setSortOrder(this.value)" class="min-w-0 flex-1 bg-transparent text-sm text-slate-100 focus:outline-none">
+                        <option value="status">Status zuerst</option>
+                        <option value="response-desc">Antwortzeit absteigend</option>
+                        <option value="response-asc">Antwortzeit aufsteigend</option>
+                        <option value="uptime-desc">Uptime absteigend</option>
+                        <option value="name-asc">Name A-Z</option>
+                        <option value="name-desc">Name Z-A</option>
+                    </select>
                 </label>
             </div>
             <div class="flex items-center justify-end gap-3 whitespace-nowrap">
@@ -172,11 +183,11 @@
 
 {% macro render_monitor_cards(monitors) -%}
     <section class="space-y-4">
-        <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <section class="monitor-card-grid grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] cursor-pointer">
+            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-inner-id="card-inner-{{ monitor.id }}" class="monitor-card perspective h-full min-h-[340px] cursor-pointer">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-700 transform-style-3d">
                     <!-- VORDERSEITE -->
                     <div class="card-front card-front-shell absolute inset-0 card-sheen rounded-3xl border {{ card_classes }} p-4 shadow-panel backface-hidden flex flex-col pointer-events-auto">
@@ -339,35 +350,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ settings.app_name }} Monitor</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
-    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/keepup.css">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
-    <script>
-        tailwind.config = {
-            darkMode: "class",
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ["ui-sans-serif", "system-ui", "sans-serif"],
-                    },
-                    colors: {
-                        keepup: {
-                            bg: "#07111f",
-                            panel: "#111c31",
-                            panelAlt: "#16253f",
-                            line: "#253657",
-                            ok: "#22c55e",
-                            bad: "#ef4444",
-                            warm: "#f59e0b",
-                            accent: "#38bdf8",
-                        }
-                    },
-                    boxShadow: {
-                        panel: "0 18px 40px rgba(7, 17, 31, 0.28)",
-                    }
-                }
-            }
-        };
-    </script>
     <style>
         :root { color-scheme: dark; }
         html {
@@ -665,6 +649,15 @@
             applyMonitorFilters();
         }
 
+        function getSortOrder() {
+            return window.localStorage.getItem("keepup-monitor-sort") || "status";
+        }
+
+        function setSortOrder(order) {
+            window.localStorage.setItem("keepup-monitor-sort", order || "status");
+            applyMonitorFilters();
+        }
+
         function syncSearchInput() {
             const input = document.getElementById("monitor-search-input");
             if (!input) return;
@@ -674,10 +667,54 @@
             }
         }
 
+        function syncSortInput() {
+            const input = document.getElementById("monitor-sort-select");
+            if (!input) return;
+            const order = getSortOrder();
+            if (input.value !== order) {
+                input.value = order;
+            }
+        }
+
+        function compareMonitorCards(a, b, order) {
+            const numeric = (card, key) => Number(card.dataset[key] || -1);
+            const text = (card, key) => String(card.dataset[key] || "");
+            if (order === "name-asc") {
+                return text(a, "monitorName").localeCompare(text(b, "monitorName"), "de");
+            }
+            if (order === "name-desc") {
+                return text(b, "monitorName").localeCompare(text(a, "monitorName"), "de");
+            }
+            if (order === "response-desc") {
+                return numeric(b, "monitorResponseTime") - numeric(a, "monitorResponseTime");
+            }
+            if (order === "response-asc") {
+                return numeric(a, "monitorResponseTime") - numeric(b, "monitorResponseTime");
+            }
+            if (order === "uptime-desc") {
+                return numeric(b, "monitorUptime") - numeric(a, "monitorUptime");
+            }
+            const statusDiff = numeric(a, "monitorStatusRank") - numeric(b, "monitorStatusRank");
+            if (statusDiff !== 0) return statusDiff;
+            return text(a, "monitorName").localeCompare(text(b, "monitorName"), "de");
+        }
+
+        function sortMonitorCards() {
+            syncSortInput();
+            const order = getSortOrder();
+            document.querySelectorAll("#monitor-cards-shell .monitor-card-grid").forEach((grid) => {
+                const cards = [...grid.querySelectorAll(".monitor-card")];
+                if (!cards.length) return;
+                cards.sort((a, b) => compareMonitorCards(a, b, order));
+                cards.forEach((card) => grid.appendChild(card));
+            });
+        }
+
         function applyMonitorFilters() {
             const filter = getStatusFilter();
             const query = getSearchQuery();
             syncSearchInput();
+            syncSortInput();
             document.querySelectorAll(".status-filter-card").forEach((card) => {
                 card.classList.toggle("is-active", card.dataset.filter === filter);
             });
@@ -687,6 +724,7 @@
                 const matchesSearch = !query || haystack.includes(query);
                 card.classList.toggle("is-hidden", !(matchesStatus && matchesSearch));
             });
+            sortMonitorCards();
         }
 
         async function ensureMonitorDetailsLoaded(monitorId) {

@@ -63,6 +63,13 @@ Virtuelle Umgebung anlegen und Abhängigkeiten installieren:
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+npm install
+```
+
+Frontend-CSS lokal bauen:
+
+```bash
+npm run build:css
 ```
 
 App lokal starten:
