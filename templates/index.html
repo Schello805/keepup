@@ -561,7 +561,7 @@
             {% else %}
                 <section class="space-y-4">
                     {% if cold_start_loading %}
-                    <div class="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 shadow-panel">
+                    <div id="dashboard-cold-start-hint" class="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 shadow-panel">
                         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                             <div class="flex items-center gap-4">
                                 <div class="relative flex h-14 w-14 items-center justify-center">
@@ -621,7 +621,7 @@
         }
 
         function getStatusFilter() {
-            return window.localStorage.getItem("keepup-status-filter") || "all";
+            return window.__keepupStatusFilter || "all";
         }
 
         function getSearchQuery() {
@@ -641,7 +641,7 @@
         }
 
         function setStatusFilter(filter) {
-            window.localStorage.setItem("keepup-status-filter", filter);
+            window.__keepupStatusFilter = filter || "all";
             applyMonitorFilters();
         }
 
@@ -656,7 +656,14 @@
 
         function setSortOrder(order) {
             window.localStorage.setItem("keepup-monitor-sort", order || "all");
+            if ((order || "all") === "all") {
+                window.__keepupStatusFilter = "all";
+            }
             applyMonitorFilters();
+        }
+
+        function dismissColdStartHint() {
+            document.getElementById("dashboard-cold-start-hint")?.remove();
         }
 
         function syncSearchInput() {
@@ -989,6 +996,7 @@
         }
 
         window.setTimeout(dismissToast, 4200);
+        window.__keepupStatusFilter = "all";
         applyMonitorFilters();
         restoreOpenDetails();
         bindMonitorToggleForms();
@@ -1033,10 +1041,17 @@
             );
         }
         document.body.addEventListener("htmx:afterSwap", () => {
+            dismissColdStartHint();
             applyMonitorFilters();
             restoreOpenDetails();
             window.bindCardFlipHandlers?.();
             bindMonitorToggleForms();
+        });
+        document.body.addEventListener("htmx:beforeRequest", (event) => {
+            const target = event.detail?.elt;
+            if (target && target.id === "monitor-cards-shell") {
+                dismissColdStartHint();
+            }
         });
     </script>
 </body>
