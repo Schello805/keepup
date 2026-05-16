@@ -140,6 +140,26 @@ systemctl restart keepup.service</p>
                             <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200/80">Neustart läuft</p>
                             <h3 class="mt-1 text-xl font-semibold text-slate-50">KeepUp wird gerade neu gestartet</h3>
                             <p id="update-restart-text" class="mt-2 text-sm text-slate-300">Das Update wurde eingespielt. Bitte warte einen Moment, bis die App wieder vollständig bereit ist.</p>
+                            <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div class="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-200/75">Instanz</p>
+                                    <p id="update-restart-instance" class="mt-1 truncate text-sm font-semibold text-sky-50">KeepUp</p>
+                                </div>
+                                <div class="rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-3">
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.24em] text-emerald-200/75">Codename</p>
+                                    <p id="update-restart-codename" class="mt-1 text-sm font-semibold text-emerald-50">Wird berechnet…</p>
+                                </div>
+                            </div>
+                            <div class="mt-3 rounded-2xl border border-white/10 bg-slate-950/45 px-4 py-3 text-sm text-slate-300">
+                                <span class="text-xs uppercase tracking-wide text-slate-500">Status</span>
+                                <p id="update-restart-fact" class="mt-1 text-sm text-slate-200">Initialisiere Neustart-Sequenz…</p>
+                            </div>
+                            <div class="mt-4 flex flex-wrap items-center gap-3">
+                                <button id="update-restart-reload" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
+                                    Seite neu laden
+                                </button>
+                                <span id="update-restart-countdown" class="text-sm text-slate-300">Automatisch in 10 s</span>
+                            </div>
                             <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">
                                 Währenddessen bleibt diese Seite bewusst geöffnet. Du musst nichts neu laden.
                             </div>
@@ -152,6 +172,43 @@ systemctl restart keepup.service</p>
         <script>
             (function () {
                 let updateProof = null;
+                let restartFactTimer = null;
+                let restartReloadTimer = null;
+                let restartReloadCountdownTimer = null;
+
+                function hashString(value) {
+                    let hash = 0;
+                    const input = String(value || '');
+                    for (let i = 0; i < input.length; i += 1) {
+                        hash = ((hash << 5) - hash) + input.charCodeAt(i);
+                        hash |= 0;
+                    }
+                    return Math.abs(hash);
+                }
+
+                function buildInstanceFlavor() {
+                    const host = window.location.host || 'keepup.local';
+                    const title = (document.title || 'KeepUp').split(' ').slice(0, 2).join(' ').trim() || 'KeepUp';
+                    const hash = hashString(`${host}|${window.location.pathname}|${title}`);
+                    const adjectives = ['Nordlicht', 'Orbit', 'Komet', 'Echo', 'Aurora', 'Funk', 'Atlas', 'Nova', 'Signal', 'Zenit'];
+                    const nouns = ['Monitor', 'Hafen', 'Radar', 'Impuls', 'Wächter', 'Matrix', 'Brücke', 'Takt', 'Anker', 'Scout'];
+                    const adjective = adjectives[hash % adjectives.length];
+                    const noun = nouns[Math.floor(hash / adjectives.length) % nouns.length];
+                    const codename = `${adjective}-${noun} ${String((hash % 89) + 11).padStart(2, '0')}`;
+                    const facts = [
+                        `Synchronisiere ${title} auf ${host}.`,
+                        `Instanz ${host} richtet ihre Statuskanäle neu aus.`,
+                        `Codename ${codename} prüft, ob alle Monitore wieder bereitstehen.`,
+                        `Die Verbindung zu ${host} wird gleich automatisch wieder aufgenommen.`,
+                        `KeepUp auf ${host} startet im Hintergrund seine Dienste neu.`
+                    ];
+                    return {
+                        host,
+                        title,
+                        codename,
+                        facts,
+                    };
+                }
 
                 async function waitForServiceReady(maxAttempts = 40, delayMs = 900) {
                     for (let i = 0; i < maxAttempts; i += 1) {
@@ -168,14 +225,77 @@ systemctl restart keepup.service</p>
                 function showRestartOverlay(message) {
                     const overlay = document.getElementById('update-restart-overlay');
                     const text = document.getElementById('update-restart-text');
+                    const instance = document.getElementById('update-restart-instance');
+                    const codename = document.getElementById('update-restart-codename');
+                    const fact = document.getElementById('update-restart-fact');
+                    const reloadBtn = document.getElementById('update-restart-reload');
+                    const countdown = document.getElementById('update-restart-countdown');
                     if (!overlay) return;
+                    const flavor = buildInstanceFlavor();
                     if (text && message) {
                         text.textContent = message;
                     }
+                    if (instance) {
+                        instance.textContent = `${flavor.title} @ ${flavor.host}`;
+                    }
+                    if (codename) {
+                        codename.textContent = flavor.codename;
+                    }
+                    if (fact) {
+                        let idx = 0;
+                        fact.textContent = flavor.facts[0];
+                        if (restartFactTimer) {
+                            window.clearInterval(restartFactTimer);
+                        }
+                        restartFactTimer = window.setInterval(() => {
+                            idx = (idx + 1) % flavor.facts.length;
+                            fact.textContent = flavor.facts[idx];
+                        }, 1800);
+                    }
+                    if (reloadBtn) {
+                        reloadBtn.onclick = () => window.location.reload();
+                    }
+                    if (restartReloadTimer) {
+                        window.clearTimeout(restartReloadTimer);
+                        restartReloadTimer = null;
+                    }
+                    if (restartReloadCountdownTimer) {
+                        window.clearInterval(restartReloadCountdownTimer);
+                        restartReloadCountdownTimer = null;
+                    }
+                    if (countdown) {
+                        let remaining = 10;
+                        countdown.textContent = `Automatisch in ${remaining} s`;
+                        restartReloadCountdownTimer = window.setInterval(() => {
+                            remaining -= 1;
+                            if (remaining <= 0) {
+                                countdown.textContent = 'Automatischer Neuladeversuch läuft…';
+                                window.clearInterval(restartReloadCountdownTimer);
+                                restartReloadCountdownTimer = null;
+                                return;
+                            }
+                            countdown.textContent = `Automatisch in ${remaining} s`;
+                        }, 1000);
+                    }
+                    restartReloadTimer = window.setTimeout(() => {
+                        window.location.reload();
+                    }, 10000);
                     overlay.classList.remove('hidden');
                 }
 
                 function hideRestartOverlay() {
+                    if (restartFactTimer) {
+                        window.clearInterval(restartFactTimer);
+                        restartFactTimer = null;
+                    }
+                    if (restartReloadTimer) {
+                        window.clearTimeout(restartReloadTimer);
+                        restartReloadTimer = null;
+                    }
+                    if (restartReloadCountdownTimer) {
+                        window.clearInterval(restartReloadCountdownTimer);
+                        restartReloadCountdownTimer = null;
+                    }
                     document.getElementById('update-restart-overlay')?.classList.add('hidden');
                 }
 
@@ -207,13 +327,7 @@ systemctl restart keepup.service</p>
 
                 async function waitForRestartAndReload() {
                     showRestartOverlay('Das Update wurde eingespielt. KeepUp startet jetzt neu und lädt danach automatisch wieder.');
-                    const ready = await waitForServiceReady();
-                    if (ready) {
-                        window.location.reload();
-                        return true;
-                    }
-                    showRestartOverlay('KeepUp braucht noch etwas länger für den Neustart. Bitte warte einen Moment und lade notfalls gleich manuell neu.');
-                    return false;
+                    return true;
                 }
 
                 function showUpdateResult(payload) {
