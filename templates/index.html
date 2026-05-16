@@ -335,12 +335,6 @@
             {% endfor %}
         </section>
     </section>
-    <script>
-        if (typeof restoreOpenDetails === 'function') {
-            applyMonitorFilters();
-            restoreOpenDetails();
-        }
-    </script>
 {%- endmacro %}
 
 {% if not partial %}
@@ -667,8 +661,16 @@
             applyMonitorFilters();
         }
 
+        function resetDashboardFiltersForAllSort() {
+            if (getSortOrder() !== "all") return;
+            window.__keepupStatusFilter = "all";
+            if (window.localStorage.getItem("keepup-monitor-search")) {
+                window.localStorage.setItem("keepup-monitor-search", "");
+            }
+        }
+
         function dismissColdStartHint() {
-            if (document.querySelector(".monitor-card")) {
+            if (document.querySelector("#monitor-cards-shell .monitor-card-grid .monitor-card")) {
                 document.getElementById("dashboard-cold-start-shell")?.remove();
                 document.getElementById("dashboard-cold-start-hint")?.remove();
             }
@@ -721,6 +723,9 @@
         function sortMonitorCards() {
             syncSortInput();
             const order = getSortOrder();
+            if (order === "all") {
+                return;
+            }
             document.querySelectorAll("#monitor-cards-shell .monitor-card-grid").forEach((grid) => {
                 const cards = [...grid.querySelectorAll(".monitor-card")];
                 if (!cards.length) return;
@@ -1008,6 +1013,8 @@
 
         window.setTimeout(dismissToast, 4200);
         window.__keepupStatusFilter = "all";
+        resetDashboardFiltersForAllSort();
+        dismissColdStartHint();
         applyMonitorFilters();
         restoreOpenDetails();
         bindMonitorToggleForms();
@@ -1052,6 +1059,7 @@
             );
         }
         document.body.addEventListener("htmx:afterSwap", () => {
+            resetDashboardFiltersForAllSort();
             dismissColdStartHint();
             applyMonitorFilters();
             restoreOpenDetails();
