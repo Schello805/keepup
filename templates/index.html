@@ -493,7 +493,7 @@
                     <input type="number" min="0" max="5" step="1" name="retry_count" value="2" class="{{ input_classes() }}">
                 </label>
                 <label class="space-y-2 md:col-span-2">
-                    <p class="text-xs text-slate-500">`HEAD` ist fuer viele Webseiten schonender. `Retries` steuert, wie oft KeepUp nach einem HTTP- oder Ping-Fehler direkt erneut prueft.</p>
+                    <p class="text-xs text-slate-500">`HEAD` ist für viele Webseiten schonender. `Retries` steuert, wie oft KeepUp nach einem HTTP- oder Ping-Fehler direkt erneut prüft.</p>
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Timeout (Sekunden)</span>
@@ -591,18 +591,18 @@
                                 </div>
                                 <div>
                                     <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200/80">Warmup</p>
-                                    <h3 class="mt-1 text-lg font-semibold text-slate-50">Dashboard wird fuer den ersten Abruf vorbereitet</h3>
+                                    <h3 class="mt-1 text-lg font-semibold text-slate-50">Dashboard wird für den ersten Abruf vorbereitet</h3>
                                     <p class="mt-1 max-w-2xl text-sm text-slate-300">
                                         Nach einem Neustart oder Update baut KeepUp den ersten Karten-Cache neu auf.
                                         {% if summary.total %}
-                                        Bei aktuell {{ summary.total }} Monitor{{ "en" if summary.total != 1 else "" }} kann das kurz dauern.
+                                        Aktuell sind {{ summary.total }} Monitor{{ "" if summary.total == 1 else "e" }} konfiguriert, daher kann das kurz dauern.
                                         {% endif %}
                                     </p>
                                 </div>
                             </div>
                             <div class="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-300">
                                 <span class="block text-xs uppercase tracking-wide text-slate-500">Hinweis</span>
-                                <span class="mt-1 block">Die Seite ist gleich da und laedt danach wieder sofort.</span>
+                                <span class="mt-1 block">Die Seite ist gleich da und lädt danach wieder sofort.</span>
                             </div>
                         </div>
                     </div>
