@@ -53,6 +53,7 @@ mkdir -p "$BACKUP_DIR"
 TIMESTAMP="$(date +%F-%H%M%S)"
 
 ENABLE_BACKUPS="${KEEPUP_ENABLE_BACKUPS:-0}"
+FRONTEND_UPDATE_MODE="${KEEPUP_FRONTEND_UPDATE:-0}"
 
 run_with_timeout() {
   local seconds="$1"; shift
@@ -168,7 +169,9 @@ else
   echo "[update] Warning: check_and_configure.sh not found or not executable"
 fi
 
-if command -v systemctl >/dev/null 2>&1 && can_run_as_root; then
+if [ "$FRONTEND_UPDATE_MODE" = "1" ]; then
+  echo "[update] Frontend update mode active, skipping direct service restart."
+elif command -v systemctl >/dev/null 2>&1 && can_run_as_root; then
   echo "[update] Restarting keepup service"
   run_as_root systemctl restart keepup.service
   run_as_root systemctl is-active --quiet keepup.service

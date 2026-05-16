@@ -175,6 +175,7 @@ systemctl restart keepup.service</p>
                 let restartFactTimer = null;
                 let restartReloadTimer = null;
                 let restartReloadCountdownTimer = null;
+                window.__keepupRestarting = false;
 
                 function hashString(value) {
                     let hash = 0;
@@ -231,6 +232,7 @@ systemctl restart keepup.service</p>
                     const reloadBtn = document.getElementById('update-restart-reload');
                     const countdown = document.getElementById('update-restart-countdown');
                     if (!overlay) return;
+                    window.__keepupRestarting = true;
                     const flavor = buildInstanceFlavor();
                     if (text && message) {
                         text.textContent = message;
@@ -284,6 +286,7 @@ systemctl restart keepup.service</p>
                 }
 
                 function hideRestartOverlay() {
+                    window.__keepupRestarting = false;
                     if (restartFactTimer) {
                         window.clearInterval(restartFactTimer);
                         restartFactTimer = null;
@@ -298,6 +301,12 @@ systemctl restart keepup.service</p>
                     }
                     document.getElementById('update-restart-overlay')?.classList.add('hidden');
                 }
+
+                document.body?.addEventListener('htmx:beforeRequest', (evt) => {
+                    if (window.__keepupRestarting) {
+                        evt.preventDefault();
+                    }
+                });
 
                 async function downloadBackupAfterUpdate(reloadAfter = false) {
                     const ready = await waitForServiceReady();

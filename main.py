@@ -1071,6 +1071,7 @@ async def run_update(request: Request) -> JSONResponse:
                 stderr=subprocess.PIPE,
                 text=True,
                 timeout=240,
+                env={**os.environ, "KEEPUP_FRONTEND_UPDATE": "1"},
             )
         )
     except subprocess.TimeoutExpired:
