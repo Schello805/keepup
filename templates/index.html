@@ -638,6 +638,28 @@
             window.__keepupOpenDetails = new Set();
         }
 
+        function normalizeAllCardsView() {
+            if (getSortOrder() !== "all") return;
+            const query = getSearchQuery();
+            const filter = getStatusFilter();
+            if (query || filter !== "all") return;
+
+            clearOpenDetails();
+            document.querySelectorAll(".monitor-card").forEach((card) => {
+                card.classList.remove("is-hidden");
+                const inner = card.querySelector("[id^='card-inner-']");
+                if (inner) {
+                    inner.classList.remove("is-flipped");
+                }
+            });
+
+            document.querySelectorAll("#monitor-cards-shell .monitor-card-grid").forEach((grid) => {
+                const cards = [...grid.querySelectorAll(".monitor-card")];
+                cards.sort((a, b) => compareMonitorCards(a, b, "all"));
+                cards.forEach((card) => grid.appendChild(card));
+            });
+        }
+
         function setStatusFilter(filter) {
             window.__keepupStatusFilter = filter || "all";
             applyMonitorFilters();
@@ -751,6 +773,7 @@
                 card.classList.toggle("is-hidden", !(matchesStatus && matchesSearch));
             });
             sortMonitorCards();
+            normalizeAllCardsView();
             dismissColdStartHint();
         }
 
