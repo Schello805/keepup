@@ -211,6 +211,7 @@ systemctl restart keepup.service</p>
                 let restartReloadTimer = null;
                 let restartReloadCountdownTimer = null;
                 let restartReadyPollTimer = null;
+                let restartPollingStartedAt = null;
                 let latestUpdateStatus = null;
                 window.__keepupRestarting = false;
 
@@ -260,18 +261,11 @@ systemctl restart keepup.service</p>
                     return false;
                 }
 
-                async function reloadCurrentPageInPlace() {
-                    try {
-                        const res = await fetch(window.location.href, { cache: 'no-store' });
-                        if (!res.ok) return false;
-                        const html = await res.text();
-                        document.open();
-                        document.write(html);
-                        document.close();
-                        return true;
-                    } catch (_) {
-                        return false;
-                    }
+                function reloadCurrentPageSafely() {
+                    const nextUrl = new URL(window.location.href);
+                    nextUrl.searchParams.set('_ready', String(Date.now()));
+                    window.location.replace(nextUrl.toString());
+                    return true;
                 }
 
                 function renderRestartMetrics(metrics) {
@@ -316,12 +310,28 @@ systemctl restart keepup.service</p>
 
                 function startReadyPolling() {
                     const countdown = document.getElementById('update-restart-countdown');
+                    const text = document.getElementById('update-restart-text');
                     if (restartReadyPollTimer) return;
+                    restartPollingStartedAt = Date.now();
                     setRestartStage("ready");
                     if (countdown) {
                         countdown.textContent = 'Prüfe, ob KeepUp wieder bereit ist…';
                     }
                     restartReadyPollTimer = window.setInterval(async () => {
+                        const elapsedSeconds = restartPollingStartedAt ? Math.floor((Date.now() - restartPollingStartedAt) / 1000) : 0;
+                        if (elapsedSeconds >= 90) {
+                            if (restartReadyPollTimer) {
+                                window.clearInterval(restartReadyPollTimer);
+                                restartReadyPollTimer = null;
+                            }
+                            if (countdown) {
+                                countdown.textContent = 'KeepUp braucht ungewöhnlich lange. Bitte Dienst und Logs prüfen.';
+                            }
+                            if (text) {
+                                text.textContent = 'Der Neustart dauert länger als erwartet. Prüfe bitte keepup.service oder lade die Seite später erneut.';
+                            }
+                            return;
+                        }
                         try {
                             const res = await fetch('/ready', { cache: 'no-store' });
                             if (res.ok) {
@@ -333,10 +343,7 @@ systemctl restart keepup.service</p>
                                     countdown.textContent = 'KeepUp ist wieder da. Lade neu…';
                                 }
                                 setRestartStage("ready");
-                                const reloaded = await reloadCurrentPageInPlace();
-                                if (!reloaded && countdown) {
-                                    countdown.textContent = 'KeepUp antwortet, aber die Seite lädt noch nicht neu. Wir versuchen es weiter…';
-                                }
+                                reloadCurrentPageSafely();
                             }
                         } catch (_) {
                         }
@@ -425,6 +432,7 @@ systemctl restart keepup.service</p>
                         window.clearInterval(restartReadyPollTimer);
                         restartReadyPollTimer = null;
                     }
+                    restartPollingStartedAt = null;
                     document.getElementById('update-restart-overlay')?.classList.add('hidden');
                 }
 
@@ -453,7 +461,7 @@ systemctl restart keepup.service</p>
                         window.URL.revokeObjectURL(downloadUrl);
                         if (reloadAfter) {
                             window.setTimeout(() => {
-                                reloadCurrentPageInPlace();
+                                reloadCurrentPageSafely();
                             }, 1200);
                         }
                         return true;
@@ -497,7 +505,7 @@ systemctl restart keepup.service</p>
                     if (closeBtn) {
                         closeBtn.onclick = hideModal;
                     }
-                    reloadBtn.onclick = () => reloadCurrentPageInPlace();
+                    reloadBtn.onclick = () => reloadCurrentPageSafely();
                     downloadBtn.onclick = async () => {
                         downloadBtn.disabled = true;
                         downloadBtn.textContent = 'Lade Backup…';
