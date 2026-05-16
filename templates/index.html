@@ -563,7 +563,7 @@
             {% if initial_cards_html %}
                 {{ initial_cards_html | safe }}
             {% else %}
-                <section class="space-y-4">
+                <section id="dashboard-cold-start-shell" class="space-y-4">
                     {% if cold_start_loading %}
                     <div id="dashboard-cold-start-hint" class="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 shadow-panel">
                         <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -662,12 +662,14 @@
             window.localStorage.setItem("keepup-monitor-sort", order || "all");
             if ((order || "all") === "all") {
                 window.__keepupStatusFilter = "all";
+                window.localStorage.setItem("keepup-monitor-search", "");
             }
             applyMonitorFilters();
         }
 
         function dismissColdStartHint() {
             if (document.querySelector(".monitor-card")) {
+                document.getElementById("dashboard-cold-start-shell")?.remove();
                 document.getElementById("dashboard-cold-start-hint")?.remove();
             }
         }
