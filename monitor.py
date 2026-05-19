@@ -487,44 +487,27 @@ def build_notification_message(
     monitor: dict[str, Any],
     result: dict[str, Any],
 ) -> tuple[str, str]:
-    transition = f"{result['previous_status']} -> {result['status']}"
     is_recovered = result["status"] == "up"
     title_status = "RECOVERED" if is_recovered else "DOWN"
     subject = f"{monitor['name']} {title_status}"
     response_text = (
-        f"{result['response_time']:.2f} ms" if result.get("response_time") is not None else "n/a"
+        f"{result['response_time']:.0f} ms" if result.get("response_time") is not None else "n/a"
     )
     reason = result.get("error_msg") or (
         "Wieder erreichbar." if is_recovered else "Keine Fehlermeldung verfügbar."
     )
     checked_at = format_timestamp_for_notification(result["checked_at"], settings.get("app_timezone", "UTC"))
-    threshold = int(result.get("down_failures_threshold") or settings.get("down_failures_threshold") or 1)
-    up_threshold = int(result.get("up_successes_threshold") or settings.get("up_successes_threshold") or 1)
-    failures = int(result.get("consecutive_failures") or 0)
-    successes = int(result.get("consecutive_successes") or 0)
-    detection_note = (
-        f"Recovery nach {successes}/{up_threshold} erfolgreichen Checks bestätigt."
-        if is_recovered
-        else f"DOWN erst nach {failures}/{threshold} bestätigten Fehlschlägen gemeldet."
-    )
-    category = result.get("error_category") or ("recovery" if is_recovered else "unknown")
-    flapping_note = "Ja" if result.get("is_flapping") else "Nein"
     app_url = _notification_app_url(settings)
-    app_url_line = f"KeepUp: {app_url}\n" if app_url else ""
-    body = (
-        f"Monitor: {monitor['name']}\n"
-        f"Target: {monitor['target']}\n"
-        f"Type: {monitor['type'].upper()}\n"
-        f"Transition: {transition}\n"
-        f"Checked at: {checked_at}\n"
-        f"Response time: {response_text}\n"
-        f"Detection: {detection_note}\n"
-        f"Category: {category}\n"
-        f"Flapping: {flapping_note}\n"
-        f"Details: {reason}\n"
-        f"{app_url_line}\n"
-        f"Powered by KeepUp"
-    )
+    lines = [
+        f"{monitor['name']} ist {'wieder erreichbar' if is_recovered else 'nicht erreichbar'}",
+        f"Ziel: {monitor['target']} ({monitor['type'].upper()})",
+        f"Zeit: {checked_at}",
+        f"Antwortzeit: {response_text}",
+        f"Grund: {reason}",
+    ]
+    if app_url:
+        lines.append(f"KeepUp: {app_url}")
+    body = "\n".join(lines)
     return subject, body
 
 
@@ -543,63 +526,36 @@ async def send_telegram_notification(
     monitor: dict[str, Any],
     result: dict[str, Any],
 ) -> None:
-    # Build an HTML-formatted message suitable for Telegram
-    # First line: icon + bold monitor name + status
     status_icon = "✅" if result.get("status") == "up" else "❌"
     status_text = "UP" if result.get("status") == "up" else "DOWN"
+    is_recovered = result.get("status") == "up"
 
-    # Escape user-provided fields to avoid HTML injection
     monitor_name = html.escape(str(monitor.get("name", "")))
     monitor_target = html.escape(str(monitor.get("target", "")))
     monitor_type = html.escape(str(monitor.get("type", "")).upper())
-    transition = html.escape(f"{result.get('previous_status')} -> {result.get('status')}")
-    threshold = int(result.get("down_failures_threshold") or settings.get("down_failures_threshold") or 1)
-    up_threshold = int(result.get("up_successes_threshold") or settings.get("up_successes_threshold") or 1)
-    failures = int(result.get("consecutive_failures") or 0)
-    successes = int(result.get("consecutive_successes") or 0)
-    detection_note = (
-        f"Recovery bestätigt nach {successes}/{up_threshold} Erfolgen."
-        if result.get("status") == "up"
-        else f"DOWN bestätigt nach {failures}/{threshold} Fehlschlägen."
-    )
-    category = html.escape(str(result.get("error_category") or ("recovery" if result.get("status") == "up" else "unknown")))
-    flapping_note = "Ja" if result.get("is_flapping") else "Nein"
     reason = result.get("error_msg") or (
-        "Wieder erreichbar." if result.get("status") == "up" else "Keine Fehlermeldung verfügbar."
+        "Wieder erreichbar." if is_recovered else "Keine Fehlermeldung verfügbar."
     )
-    detection_note = html.escape(detection_note)
     reason = html.escape(str(reason))
 
     response_text = (
-        f"{result['response_time']:.2f} ms" if result.get("response_time") is not None else "n/a"
+        f"{result['response_time']:.0f} ms" if result.get("response_time") is not None else "n/a"
     )
     response_text = html.escape(response_text)
     checked_at = format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
     checked_at = html.escape(checked_at)
     app_url = _notification_app_url(settings)
 
-    # Compose Telegram HTML message. Note: Telegram does not support smaller font sizes,
-    # so we use italics for the "Powered by" footer as a visual de-emphasis.
     telegram_lines = [
         f"{status_icon} <b>{monitor_name} {status_text}</b>",
-        f"Monitor: {monitor_name}",
-        f"Target: {monitor_target}",
-        f"Type: {monitor_type}",
-        f"Transition: {transition}",
-        f"Checked at: {checked_at}",
-        f"Response time: {response_text}",
-        f"Detection: {detection_note}",
-        f"Category: {category}",
-        f"Flapping: {flapping_note}",
-        f"Details: {reason}",
+        f"{'Wieder erreichbar' if is_recovered else 'Nicht erreichbar'}: {monitor_target} ({monitor_type})",
+        f"Zeit: {checked_at}",
+        f"Antwortzeit: {response_text}",
+        f"Grund: {reason}",
     ]
     if app_url:
         safe_url = html.escape(app_url, quote=True)
         telegram_lines.append(f'KeepUp: <a href="{safe_url}">{safe_url}</a>')
-    telegram_lines.extend([
-        "",
-        "<i>Powered by KeepUp</i>",
-    ])
 
     text = "\n".join(telegram_lines)
 
