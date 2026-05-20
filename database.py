@@ -465,6 +465,21 @@ def list_monitors(
             for row in cursor.fetchall()
         }
 
+        cursor.execute(
+            f"""
+            SELECT monitor_id, MAX(checked_at) AS last_down_at
+            FROM checks
+            WHERE status = 'down'
+              AND monitor_id IN ({placeholders})
+            GROUP BY monitor_id
+            """,
+            tuple(resolved_monitor_ids),
+        )
+        last_down_map = {
+            row["monitor_id"]: row["last_down_at"]
+            for row in cursor.fetchall()
+        }
+
         incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {}
         if include_heavy_details:
             cursor.execute(
@@ -491,6 +506,7 @@ def list_monitors(
             monitor["uptime_percentage"] = round((up_count / total) * 100, 1) if total else None
 
             monitor["last_success_at"] = last_success_map.get(monitor["id"])
+            monitor["last_down_at"] = last_down_map.get(monitor["id"])
             if include_heavy_details:
                 monitor["chart_data_json"] = json.dumps([
                     {"x": r["checked_at"], "y": r["response_time"]}

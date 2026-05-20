@@ -512,6 +512,7 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
         monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
+        monitor["last_down_at"] = format_timestamp(monitor.get("last_down_at"), app_timezone)
     return {
         "monitors": monitors,
         "settings": settings,
@@ -534,6 +535,7 @@ def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[
     monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
     monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
     monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
+    monitor["last_down_at"] = format_timestamp(monitor.get("last_down_at"), app_timezone)
     for log in monitor["logs"]:
         log["checked_at"] = format_timestamp(log.get("checked_at"), app_timezone)
 
