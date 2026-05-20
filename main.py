@@ -149,15 +149,31 @@ def days_since(timestamp: Optional[str]) -> Optional[int]:
     return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 86400))
 
 
-def outage_hours_between(success_at: Optional[str], down_at: Optional[str]) -> Optional[float]:
+def outage_hours_between(success_at: Optional[str], down_at: Optional[str]) -> Optional[str]:
     success_dt = parse_iso_datetime(success_at)
     down_dt = parse_iso_datetime(down_at)
     if success_dt is None or down_dt is None:
         return None
-    delta_seconds = (down_dt - success_dt).total_seconds()
+    delta_seconds = int(round((down_dt - success_dt).total_seconds()))
     if delta_seconds <= 0:
         return None
-    return round(delta_seconds / 3600, 1)
+    return format_duration_compact(delta_seconds)
+
+
+def format_duration_compact(seconds: Optional[int]) -> Optional[str]:
+    if seconds is None:
+        return None
+    seconds = max(0, int(seconds))
+    minutes, _sec = divmod(seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    if days:
+        return f"{days} Tage {hours} Std." if hours else f"{days} Tage"
+    if hours:
+        return f"{hours} Std. {minutes} Min." if minutes else f"{hours} Std."
+    if minutes:
+        return f"{minutes} Min."
+    return f"{seconds} Sek."
 
 
 def format_duration_short(seconds: Optional[int]) -> Optional[str]:
