@@ -127,7 +127,7 @@ def format_timestamp(timestamp: Optional[str], timezone_name: str) -> Optional[s
         return timestamp
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S %Z")
+    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S")
 
 
 def format_timestamp_without_tz(timestamp: Optional[str], timezone_name: str) -> Optional[str]:
@@ -147,6 +147,17 @@ def days_since(timestamp: Optional[str]) -> Optional[int]:
     if dt is None:
         return None
     return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 86400))
+
+
+def outage_hours_between(success_at: Optional[str], down_at: Optional[str]) -> Optional[float]:
+    success_dt = parse_iso_datetime(success_at)
+    down_dt = parse_iso_datetime(down_at)
+    if success_dt is None or down_dt is None:
+        return None
+    delta_seconds = (down_dt - success_dt).total_seconds()
+    if delta_seconds <= 0:
+        return None
+    return round(delta_seconds / 3600, 1)
 
 
 def format_duration_short(seconds: Optional[int]) -> Optional[str]:
@@ -526,12 +537,15 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
     app_timezone = settings.get("app_timezone", "UTC")
     global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
     for monitor in monitors:
+        last_success_raw = monitor.get("last_success_at")
+        last_down_raw = monitor.get("last_down_at")
         monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
         monitor["effective_interval"] = global_interval_override or int(monitor.get("interval") or 60)
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
-        monitor["last_success_at"] = format_timestamp_without_tz(monitor.get("last_success_at"), app_timezone)
-        monitor["last_down_at"] = format_timestamp_without_tz(monitor.get("last_down_at"), app_timezone)
+        monitor["last_success_at"] = format_timestamp_without_tz(last_success_raw, app_timezone)
+        monitor["last_down_at"] = format_timestamp_without_tz(last_down_raw, app_timezone)
+        monitor["outage_hours"] = outage_hours_between(last_success_raw, last_down_raw)
         monitor["uptime_since_days"] = days_since(monitor.get("created_at"))
     return {
         "monitors": monitors,
