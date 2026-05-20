@@ -236,15 +236,15 @@
                         </div>
 
                         <div class="mt-3 grid grid-cols-3 gap-2 text-xs flex-shrink-0">
-                            <div class="rounded-xl bg-slate-950/45 p-2.5">
+                            <div class="rounded-xl bg-slate-950/45 p-2.5 text-center">
                                 <p class="text-[10px] uppercase tracking-wide text-slate-400">Seit {{ monitor.uptime_since_days if monitor.uptime_since_days is not none else "-" }} T</p>
                                 <p class="mt-1 text-sm font-semibold text-slate-100">{{ monitor.uptime_since_created if monitor.uptime_since_created is not none else "-" }}%</p>
                             </div>
-                            <div class="rounded-xl bg-slate-950/45 p-2.5">
+                            <div class="rounded-xl bg-slate-950/45 p-2.5 text-center">
                                 <p class="text-[10px] uppercase tracking-wide text-slate-400">30 Tage</p>
                                 <p class="mt-1 text-sm font-semibold text-slate-100">{{ monitor.uptime_30d if monitor.uptime_30d is not none else "-" }}%</p>
                             </div>
-                            <div class="rounded-xl bg-slate-950/45 p-2.5">
+                            <div class="rounded-xl bg-slate-950/45 p-2.5 text-center">
                                 <p class="text-[10px] uppercase tracking-wide text-slate-400">Aktuell</p>
                                 <p class="mt-1 text-sm font-semibold text-slate-100">{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else "-" }}%</p>
                             </div>
