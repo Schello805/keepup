@@ -227,7 +227,7 @@
                                 {% set _crit_val = 1000 if monitor.type == 'http' else 200 %}
                                 {% set _rt = monitor.last_response_time %}
                                 {% set _rt_class = 'text-rose-400' if _rt and _rt >= _crit_val else 'text-amber-300' if _rt and _rt >= _warn_val else 'text-slate-100' %}
-                                <p class="mt-1 text-lg font-semibold {{ _rt_class }}">
+                                <p class="mt-1 text-base font-semibold {{ _rt_class }}">
                                     {% if monitor.last_response_time %}
                                         {{ "%.0f"|format(monitor.last_response_time) }} ms
                                     {% else %}
@@ -237,13 +237,20 @@
                             </div>
                             <div class="rounded-2xl bg-slate-950/45 p-3">
                                 <p class="text-slate-400">Uptime</p>
-                                <p class="mt-1 text-lg font-semibold">
-                                    {% if monitor.uptime_percentage is not none %}
-                                        {{ monitor.uptime_percentage }} %
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </p>
+                                <div class="mt-1 space-y-1 text-xs">
+                                    <p class="text-slate-300">
+                                        Seit {{ monitor.uptime_since_days if monitor.uptime_since_days is not none else "-" }} Tagen:
+                                        <span class="font-semibold text-slate-100">{{ monitor.uptime_since_created if monitor.uptime_since_created is not none else "-" }}%</span>
+                                    </p>
+                                    <p class="text-slate-300">
+                                        Letzte 30 Tage:
+                                        <span class="font-semibold text-slate-100">{{ monitor.uptime_30d if monitor.uptime_30d is not none else "-" }}%</span>
+                                    </p>
+                                    <p class="text-slate-300">
+                                        Aktuell:
+                                        <span class="font-semibold text-slate-100">{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else "-" }}%</span>
+                                    </p>
+                                </div>
                             </div>
                         </div>
 

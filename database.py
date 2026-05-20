@@ -480,6 +480,26 @@ def list_monitors(
             for row in cursor.fetchall()
         }
 
+        cutoff_30d = (now_dt - timedelta(days=30)).isoformat()
+        cursor.execute(
+            f"""
+            SELECT
+                monitor_id,
+                SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS up_total,
+                COUNT(*) AS checks_total,
+                SUM(CASE WHEN checked_at >= ? AND status = 'up' THEN 1 ELSE 0 END) AS up_30d,
+                SUM(CASE WHEN checked_at >= ? THEN 1 ELSE 0 END) AS checks_30d
+            FROM checks
+            WHERE monitor_id IN ({placeholders})
+            GROUP BY monitor_id
+            """,
+            (cutoff_30d, cutoff_30d, *resolved_monitor_ids),
+        )
+        uptime_rollup_map: dict[int, sqlite3.Row] = {
+            row["monitor_id"]: row
+            for row in cursor.fetchall()
+        }
+
         incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {}
         if include_heavy_details:
             cursor.execute(
@@ -507,6 +527,17 @@ def list_monitors(
 
             monitor["last_success_at"] = last_success_map.get(monitor["id"])
             monitor["last_down_at"] = last_down_map.get(monitor["id"])
+            rollup = uptime_rollup_map.get(monitor["id"])
+            if rollup:
+                total_checks = int(rollup["checks_total"] or 0)
+                total_up = int(rollup["up_total"] or 0)
+                checks_30d = int(rollup["checks_30d"] or 0)
+                up_30d = int(rollup["up_30d"] or 0)
+                monitor["uptime_since_created"] = round((total_up / total_checks) * 100, 1) if total_checks else None
+                monitor["uptime_30d"] = round((up_30d / checks_30d) * 100, 1) if checks_30d else None
+            else:
+                monitor["uptime_since_created"] = None
+                monitor["uptime_30d"] = None
             if include_heavy_details:
                 monitor["chart_data_json"] = json.dumps([
                     {"x": r["checked_at"], "y": r["response_time"]}

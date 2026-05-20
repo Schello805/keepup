@@ -130,6 +130,25 @@ def format_timestamp(timestamp: Optional[str], timezone_name: str) -> Optional[s
     return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S %Z")
 
 
+def format_timestamp_without_tz(timestamp: Optional[str], timezone_name: str) -> Optional[str]:
+    if not timestamp:
+        return None
+    try:
+        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return timestamp
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S")
+
+
+def days_since(timestamp: Optional[str]) -> Optional[int]:
+    dt = parse_iso_datetime(timestamp)
+    if dt is None:
+        return None
+    return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 86400))
+
+
 def format_duration_short(seconds: Optional[int]) -> Optional[str]:
     if seconds is None:
         return None
@@ -511,8 +530,9 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
         monitor["effective_interval"] = global_interval_override or int(monitor.get("interval") or 60)
         monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
         monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
-        monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
-        monitor["last_down_at"] = format_timestamp(monitor.get("last_down_at"), app_timezone)
+        monitor["last_success_at"] = format_timestamp_without_tz(monitor.get("last_success_at"), app_timezone)
+        monitor["last_down_at"] = format_timestamp_without_tz(monitor.get("last_down_at"), app_timezone)
+        monitor["uptime_since_days"] = days_since(monitor.get("created_at"))
     return {
         "monitors": monitors,
         "settings": settings,
