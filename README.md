@@ -211,3 +211,9 @@ KeepUp ist für lokale Self-Hosted-Umgebungen optimiert. Für gute Reaktionszeit
 ## Screenshot
 
 <img width="1238" height="787" alt="KeepUp Screenshot" src="https://github.com/user-attachments/assets/7ec23fc3-0afb-4380-becc-e7786fe682e0" />
+
+<img width="1239" height="866" alt="Bildschirmfoto 2026-06-03 um 19 09 58" src="https://github.com/user-attachments/assets/5de61e8d-37ca-42a8-994f-230c5dd9e051" />
+
+<img width="1231" height="890" alt="Bildschirmfoto 2026-06-03 um 19 10 15" src="https://github.com/user-attachments/assets/4ca0e012-04b3-492c-bcc1-1c4035362d35" />
+
+<img width="1259" height="574" alt="Bildschirmfoto 2026-06-03 um 19 10 47" src="https://github.com/user-attachments/assets/b695cd33-5061-4032-b37b-ba987483dd61" />
