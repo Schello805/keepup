@@ -1,6 +1,7 @@
 # KeepUp
 
 KeepUp ist eine leichtgewichtige, mobile-optimierte Self-Hosted-Monitoring-App für den lokalen Betrieb. Sie überwacht HTTP(S)-Ziele sowie Hostnamen/IPs per Ping und verschickt bei Statusänderungen Benachrichtigungen über Telegram oder SMTP.
+Das gesamte Projekt wurde mittels VibeCoding erstellt und gepflegt. Ich freue mich über Feedback von Usern und / oder professionellen Entwicklern. 
 
 Die App setzt auf:
 
