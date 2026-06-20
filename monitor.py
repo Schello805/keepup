@@ -245,9 +245,12 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
             if method == "HEAD" and response.status_code == 405:
                 response = await client.get(monitor["target"], timeout=timeout)
         response_time = round((time.perf_counter() - start) * 1000, 2)
-        if 200 <= response.status_code < 400:
-            expected_text = str(monitor.get("expected_text") or "").strip()
-            forbidden_text = str(monitor.get("forbidden_text") or "").strip()
+        expected_text = str(monitor.get("expected_text") or "").strip()
+        forbidden_text = str(monitor.get("forbidden_text") or "").strip()
+        # Protected dashboards commonly answer with 401/403 before login. The
+        # HTTP service is still reachable, unless a content rule says otherwise.
+        successful_status = 200 <= response.status_code < 400 or response.status_code in {401, 403}
+        if successful_status:
             body_text = response.text if (expected_text or forbidden_text) else ""
             if expected_text and expected_text not in body_text:
                 error_message = f"Erwarteter Inhalt nicht gefunden: {expected_text}"
