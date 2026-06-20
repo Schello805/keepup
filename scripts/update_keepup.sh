@@ -146,8 +146,20 @@ else
   echo "[update] Skipping pre-update backups (set KEEPUP_ENABLE_BACKUPS=1 to enable)"
 fi
 
-if [ ! -d "$VENV_DIR" ]; then
+recreate_virtualenv() {
+  echo "[update] Rebuilding Python virtual environment..."
+  # The virtual environment only contains reproducible dependencies. Removing it
+  # repairs corrupt Python bytecode without touching monitors or the SQLite data.
+  run_as_project_owner rm -rf "$VENV_DIR"
   run_as_project_owner python3 -m venv "$VENV_DIR"
+}
+
+if [ ! -x "$VENV_DIR/bin/python" ]; then
+  echo "[update] Virtual environment is missing. Creating it..."
+  recreate_virtualenv
+elif ! run_as_project_owner "$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1; then
+  echo "[update] Virtual environment is damaged (pip cannot start)."
+  recreate_virtualenv
 fi
 
 if [ -d "$ROOT_DIR/.git" ]; then

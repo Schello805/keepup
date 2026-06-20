@@ -40,8 +40,13 @@ ensure_ping_capability() {
 }
 
 echo "[keepup] Checking virtualenv..."
-if [ ! -d "$VENV_DIR" ]; then
+if [ ! -x "$VENV_DIR/bin/python" ]; then
   echo "- virtualenv not found, creating..."
+  run_as_root python3 -m venv "$VENV_DIR"
+elif ! run_as_root "$VENV_DIR/bin/python" -m pip --version >/dev/null 2>&1; then
+  echo "- virtualenv is damaged, rebuilding..."
+  # The virtual environment is disposable; monitor data remains in keepup.db.
+  run_as_root rm -rf "$VENV_DIR"
   run_as_root python3 -m venv "$VENV_DIR"
 fi
 
