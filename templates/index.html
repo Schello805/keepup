@@ -665,7 +665,10 @@
                 if (!response.ok) throw new Error("failed");
                 if (content) {
                     content.innerHTML = await response.text();
-                    await renderCharts(content);
+                    // Charts are optional. A charting error must never hide the loaded detail data.
+                    renderCharts(content).catch((error) => {
+                        console.warn("Detail chart skipped", error);
+                    });
                 }
             } catch (error) {
                 if (content) {
