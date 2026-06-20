@@ -270,7 +270,7 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
 
 
 async def check_ping_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Optional[str], Optional[str]]:
-    ping_target = str(monitor.get("ping_target") or "").strip() or (urlparse(str(monitor.get("target") or "")).hostname or "")
+    ping_target = _resolve_ping_target(monitor.get("ping_target") or monitor.get("target"))
     if not ping_target:
         return "down", 0.0, "Ping-Ziel konnte nicht aus der HTTP-URL ermittelt werden.", "ping"
 
@@ -293,6 +293,18 @@ async def check_ping_http_target_raw(monitor: dict[str, Any]) -> tuple[str, floa
         failures.append(f"HTTP: {http_error or 'nicht erreichbar'}")
     error_category = ping_category if ping_status != "up" else http_category
     return "down", response_time, " | ".join(failures), error_category
+
+
+def _resolve_ping_target(value: Any) -> str:
+    candidate = str(value or "").strip()
+    if not candidate:
+        return ""
+    parsed = urlparse(candidate)
+    if parsed.hostname:
+        return parsed.hostname
+    # Also support host:port entries without a URL scheme.
+    parsed = urlparse(f"//{candidate}")
+    return parsed.hostname or candidate
 
 
 async def check_ping_target_raw(
