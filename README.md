@@ -14,6 +14,7 @@ Die App setzt auf:
 ## Funktionen
 
 - HTTP/S- und Ping-Monitore
+- Kombinierte PING- + HTTP/S-Monitore mit getrenntem Ping-Ziel
 - Benachrichtigungen bei Statusänderungen per Telegram und SMTP
 - Bestätigte DOWN-/UP-Logik mit Schwellwerten
 - Flapping-Erkennung

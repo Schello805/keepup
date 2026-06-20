@@ -188,17 +188,21 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target)|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
+            {% set monitor_type_label = 'PING + HTTP' if monitor.ping_enabled else monitor.type|upper %}
+            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-4 shadow-panel card-sheen">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
                             <div class="min-w-0">
                                 <div class="mb-2 flex items-center gap-2">
                                     <span class="inline-flex h-3 w-3 rounded-full {{ status_dot_classes(status) }}"></span>
-                                    <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor.type | upper }}</p>
+                                    <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor_type_label }}</p>
                                 </div>
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
                                 <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
+                                {% if monitor.ping_enabled %}
+                                <p class="truncate text-xs text-slate-500">Ping: {{ monitor.ping_target or 'Hostname der URL' }}</p>
+                                {% endif %}
                             </div>
                             <div class="card-front-interactive flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
                                 <div class="flex items-center gap-2">
@@ -294,7 +298,7 @@
                                     <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
                                 </button>
                             </form>
-                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ 'ping_http' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
                                 <span class="sr-only">Bearbeiten</span>
                             </button>
@@ -448,14 +452,19 @@
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Typ</span>
-                    <select name="monitor_type" class="{{ select_classes() }}">
+                    <select id="new-monitor-type" name="monitor_type" onchange="togglePingTargetField('new')" class="{{ select_classes() }}">
                         <option value="http">HTTP/S</option>
                         <option value="ping">Ping (IP/Host)</option>
+                        <option value="ping_http">PING + HTTP</option>
                     </select>
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Ziel</span>
                     <input name="target" required class="{{ input_classes() }}" placeholder="https://example.com oder 1.1.1.1">
+                </label>
+                <label id="new-ping-target-field" class="hidden space-y-2 md:col-span-2">
+                    <span class="text-sm text-slate-300">Ping-Ziel (optional)</span>
+                    <input name="ping_target" class="{{ input_classes() }}" placeholder="z. B. 192.168.1.7; leer = Hostname aus der HTTP-URL">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Intervall (Sekunden)</span>
@@ -509,14 +518,19 @@
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Typ</span>
-                    <select id="edit-monitor-type" name="monitor_type" class="{{ select_classes() }}">
+                    <select id="edit-monitor-type" name="monitor_type" onchange="togglePingTargetField('edit')" class="{{ select_classes() }}">
                         <option value="http">HTTP/S</option>
                         <option value="ping">Ping (IP/Host)</option>
+                        <option value="ping_http">PING + HTTP</option>
                     </select>
                 </label>
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300">Ziel</span>
                     <input id="edit-monitor-target" name="target" required class="{{ input_classes() }}">
+                </label>
+                <label id="edit-ping-target-field" class="hidden space-y-2 md:col-span-2">
+                    <span class="text-sm text-slate-300">Ping-Ziel (optional)</span>
+                    <input id="edit-monitor-ping-target" name="ping_target" class="{{ input_classes() }}" placeholder="leer = Hostname aus der HTTP-URL">
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">HTTP-Methode</span>
@@ -837,12 +851,14 @@
             document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
             document.getElementById("edit-monitor-type").value = button.dataset.monitorType || "http";
             document.getElementById("edit-monitor-target").value = button.dataset.monitorTarget || "";
+            document.getElementById("edit-monitor-ping-target").value = button.dataset.monitorPingTarget || "";
             document.getElementById("edit-monitor-http-method").value = button.dataset.monitorHttpMethod || "GET";
             document.getElementById("edit-monitor-retry-count").value = button.dataset.monitorRetryCount || "2";
             document.getElementById("edit-monitor-interval").value = button.dataset.monitorInterval || "60";
             document.getElementById("edit-monitor-timeout").value = button.dataset.monitorTimeout || "10";
             document.getElementById("edit-monitor-expected-text").value = button.dataset.monitorExpectedText || "";
             document.getElementById("edit-monitor-forbidden-text").value = button.dataset.monitorForbiddenText || "";
+            togglePingTargetField("edit");
 
             panel.classList.remove("hidden");
             panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -850,6 +866,13 @@
 
         function closeEditPanel() {
             document.getElementById("edit-monitor-panel")?.classList.add("hidden");
+        }
+
+        function togglePingTargetField(mode) {
+            const select = document.getElementById(`${mode}-monitor-type`);
+            const field = document.getElementById(`${mode}-ping-target-field`);
+            if (!select || !field) return;
+            field.classList.toggle("hidden", select.value !== "ping_http");
         }
 
         function dismissToast() {
@@ -1032,6 +1055,7 @@
         }
 
         window.setTimeout(dismissToast, 4200);
+        togglePingTargetField("new");
         clearOpenDetails();
         dismissColdStartHint();
         applyMonitorFilters();

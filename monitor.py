@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any, Optional
+from urllib.parse import urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
@@ -177,7 +178,9 @@ async def execute_monitor_check(monitor_id: int) -> Optional[dict[str, Any]]:
     error_category = None
 
     for attempt in range(total_attempts):
-        if monitor["type"] == "http":
+        if monitor.get("ping_enabled"):
+            status, response_time, error_message, error_category = await check_ping_http_target_raw(monitor)
+        elif monitor["type"] == "http":
             status, response_time, error_message, error_category = await check_http_target_raw(monitor)
         else:
             status, response_time, error_message, error_category = await check_ping_target_raw(monitor)
@@ -266,17 +269,46 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
     return status, response_time, error_message, categorize_monitor_error(error_message, status)
 
 
-async def check_ping_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Optional[str], Optional[str]]:
+async def check_ping_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Optional[str], Optional[str]]:
+    ping_target = str(monitor.get("ping_target") or "").strip() or (urlparse(str(monitor.get("target") or "")).hostname or "")
+    if not ping_target:
+        return "down", 0.0, "Ping-Ziel konnte nicht aus der HTTP-URL ermittelt werden.", "ping"
+
+    ping_monitor = {**monitor, "target": ping_target}
+    ping_result, http_result = await asyncio.gather(
+        check_ping_target_raw(ping_monitor),
+        check_http_target_raw(monitor),
+    )
+    ping_status, ping_time, ping_error, ping_category = ping_result
+    http_status, http_time, http_error, http_category = http_result
+    response_time = max(ping_time, http_time)
+
+    if ping_status == "up" and http_status == "up":
+        return "up", response_time, None, None
+
+    failures = []
+    if ping_status != "up":
+        failures.append(f"Ping ({ping_target}): {ping_error or 'nicht erreichbar'}")
+    if http_status != "up":
+        failures.append(f"HTTP: {http_error or 'nicht erreichbar'}")
+    error_category = ping_category if ping_status != "up" else http_category
+    return "down", response_time, " | ".join(failures), error_category
+
+
+async def check_ping_target_raw(
+    monitor: dict[str, Any], target: Optional[str] = None
+) -> tuple[str, float, Optional[str], Optional[str]]:
     start = time.perf_counter()
     system = platform.system().lower()
     timeout = int(monitor["timeout"])
+    ping_target = target or monitor["target"]
 
     if system == "windows":
-        command = ["ping", "-n", "1", "-w", str(timeout * 1000), monitor["target"]]
+        command = ["ping", "-n", "1", "-w", str(timeout * 1000), ping_target]
     elif system == "darwin":
-        command = ["ping", "-c", "1", "-W", str(timeout), monitor["target"]]
+        command = ["ping", "-c", "1", "-W", str(timeout), ping_target]
     else:
-        command = ["ping", "-c", "1", "-W", str(timeout), monitor["target"]]
+        command = ["ping", "-c", "1", "-W", str(timeout), ping_target]
 
     try:
         process = await asyncio.create_subprocess_exec(
@@ -553,7 +585,7 @@ def _telegram_batch_item(
     monitor: dict[str, Any], result: dict[str, Any], settings: dict[str, Any]
 ) -> str:
     name = html.escape(str(monitor.get("name") or "Unbenannter Monitor"))
-    monitor_type = html.escape(str(monitor.get("type") or "").upper())
+    monitor_type = _monitor_type_display(monitor)
     checked_at = html.escape(
         format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
     )
@@ -564,6 +596,12 @@ def _telegram_batch_item(
 def _telegram_type_label(monitor_type: Any) -> str:
     normalized = str(monitor_type or "").lower()
     return html.escape(normalized.upper() or "CHECK")
+
+
+def _monitor_type_display(monitor: dict[str, Any]) -> str:
+    if monitor.get("ping_enabled"):
+        return "PING + HTTP"
+    return _telegram_type_label(monitor.get("type"))
 
 
 def _telegram_error_label(category: Any) -> str:
@@ -606,7 +644,7 @@ def build_telegram_notification_payload(
     lines.extend(
         [
             f"<b>Ziel:</b> <code>{monitor_target}</code>",
-            f"<b>Check:</b> {_telegram_type_label(monitor.get('type'))}",
+            f"<b>Check:</b> {_monitor_type_display(monitor)}",
             f"<b>Zeit:</b> {checked_at}",
         ]
     )
@@ -661,7 +699,7 @@ def build_notification_message(
     app_url = _notification_app_url(settings)
     lines = [
         f"{monitor['name']} ist {'wieder erreichbar' if is_recovered else 'nicht erreichbar'}",
-        f"Ziel: {monitor['target']} ({monitor['type'].upper()})",
+        f"Ziel: {monitor['target']} ({_monitor_type_display(monitor)})",
         f"Zeit: {checked_at}",
         f"Antwortzeit: {response_text}",
         f"Grund: {reason}",

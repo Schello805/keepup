@@ -1340,6 +1340,7 @@ async def create_monitor_route(
     name: str = Form(...),
     monitor_type: str = Form(...),
     target: str = Form(...),
+    ping_target: str = Form(""),
     http_method: str = Form("GET"),
     retry_count: int = Form(2),
     interval: int = Form(...),
@@ -1347,14 +1348,19 @@ async def create_monitor_route(
     expected_text: str = Form(""),
     forbidden_text: str = Form(""),
 ) -> RedirectResponse:
-    if monitor_type not in {"http", "ping"}:
+    if monitor_type not in {"http", "ping", "ping_http"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
         raise HTTPException(status_code=400, detail="Unsupported HTTP method")
+    is_combo = monitor_type == "ping_http"
+    if is_combo and not ping_target.strip() and not urlparse(target).hostname:
+        return flash_redirect("/", "Für PING + HTTP bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
     monitor_id = create_monitor(
         name=name,
-        monitor_type=monitor_type,
+        monitor_type="http" if is_combo else monitor_type,
         target=target,
+        ping_enabled=is_combo,
+        ping_target=ping_target,
         http_method=http_method,
         retry_count=max(0, min(5, retry_count)),
         interval=max(10, interval),
@@ -1373,6 +1379,7 @@ async def edit_monitor_route(
     name: str = Form(...),
     monitor_type: str = Form(...),
     target: str = Form(...),
+    ping_target: str = Form(""),
     http_method: str = Form("GET"),
     retry_count: int = Form(2),
     interval: int = Form(...),
@@ -1383,16 +1390,21 @@ async def edit_monitor_route(
     monitor = get_monitor(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
-    if monitor_type not in {"http", "ping"}:
+    if monitor_type not in {"http", "ping", "ping_http"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
         raise HTTPException(status_code=400, detail="Unsupported HTTP method")
+    is_combo = monitor_type == "ping_http"
+    if is_combo and not ping_target.strip() and not urlparse(target).hostname:
+        return flash_redirect("/", "Für PING + HTTP bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
 
     update_monitor(
         monitor_id=monitor_id,
         name=name,
-        monitor_type=monitor_type,
+        monitor_type="http" if is_combo else monitor_type,
         target=target,
+        ping_enabled=is_combo,
+        ping_target=ping_target,
         http_method=http_method,
         retry_count=max(0, min(5, retry_count)),
         interval=max(10, interval),
