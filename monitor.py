@@ -596,10 +596,21 @@ def _telegram_open_button(settings: dict[str, Any]) -> Optional[dict[str, Any]]:
     return {"inline_keyboard": [[{"text": "↗ KeepUp öffnen", "url": app_url}]]}
 
 
+def _telegram_source_url(monitor: dict[str, Any]) -> Optional[str]:
+    target = str(monitor.get("target") or "").strip()
+    parsed = urlparse(target)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return target
+    return None
+
+
 def _telegram_batch_item(
     monitor: dict[str, Any], result: dict[str, Any], settings: dict[str, Any]
 ) -> str:
     name = html.escape(str(monitor.get("name") or "Unbenannter Monitor"))
+    source_url = _telegram_source_url(monitor)
+    if source_url:
+        name = f'<a href="{html.escape(source_url, quote=True)}">{name}</a>'
     monitor_type = _monitor_type_display(monitor)
     checked_at = html.escape(
         format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
@@ -641,7 +652,7 @@ def build_telegram_notification_payload(
     recent_logs: Optional[list[dict[str, Any]]] = None,
 ) -> dict[str, Any]:
     is_recovered = result.get("status") == "up"
-    app_url = _notification_app_url(settings)
+    source_url = _telegram_source_url(monitor)
     monitor_name = html.escape(str(monitor.get("name") or "Unbenannter Monitor"))
     monitor_target = html.escape(str(monitor.get("target") or "-"))
     checked_at = html.escape(
@@ -651,8 +662,8 @@ def build_telegram_notification_payload(
     history = _telegram_status_history(recent_logs or [])
     lines = ["<b>🟢 Wieder erreichbar</b>" if is_recovered else "<b>🔴 Ausfall erkannt</b>"]
 
-    if app_url:
-        safe_url = html.escape(app_url, quote=True)
+    if source_url:
+        safe_url = html.escape(source_url, quote=True)
         lines.append(f'<b>Monitor:</b> <a href="{safe_url}">{monitor_name}</a>')
     else:
         lines.append(f"<b>Monitor:</b> {monitor_name}")
