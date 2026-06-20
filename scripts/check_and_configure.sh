@@ -16,6 +16,25 @@ run_as_root() {
   fi
 }
 
+ensure_system_python() {
+  if python3 -c "import venv" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[keepup] System Python cannot import its standard library. Clearing compiled Python caches..."
+  local python_library
+  for python_library in /usr/lib/python3* /usr/local/lib/python3*; do
+    if [ -d "$python_library" ]; then
+      run_as_root find "$python_library" -type f -name '*.pyc' -delete
+    fi
+  done
+
+  if ! python3 -c "import venv" >/dev/null 2>&1; then
+    echo "[keepup] System Python remains damaged. Reinstall Python packages with apt before continuing." >&2
+    exit 1
+  fi
+}
+
 ensure_ping_capability() {
   local ping_bin
   ping_bin=$(command -v ping 2>/dev/null || true)
@@ -38,6 +57,8 @@ ensure_ping_capability() {
     run_as_root chmod u+s "$ping_bin" || true
   fi
 }
+
+ensure_system_python
 
 echo "[keepup] Checking virtualenv..."
 if [ ! -x "$VENV_DIR/bin/python" ]; then

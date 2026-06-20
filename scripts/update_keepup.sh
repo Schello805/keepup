@@ -48,6 +48,32 @@ can_run_as_root() {
   return 1
 }
 
+ensure_system_python() {
+  if python3 -c "import venv" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "[update] System Python cannot import its standard library. Clearing compiled Python caches..."
+  if ! can_run_as_root; then
+    echo "[update] System Python needs repair. Run this update with sudo once." >&2
+    return 1
+  fi
+
+  local python_library
+  for python_library in /usr/lib/python3* /usr/local/lib/python3*; do
+    if [ -d "$python_library" ]; then
+      run_as_root find "$python_library" -type f -name '*.pyc' -delete
+    fi
+  done
+
+  if ! python3 -c "import venv" >/dev/null 2>&1; then
+    echo "[update] System Python is still damaged after clearing its cache. Please reinstall Python with apt." >&2
+    return 1
+  fi
+
+  echo "[update] System Python cache repaired."
+}
+
 BACKUP_DIR="$ROOT_DIR/backups"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP="$(date +%F-%H%M%S)"
@@ -145,6 +171,8 @@ if [ "$ENABLE_BACKUPS" = "1" ]; then
 else
   echo "[update] Skipping pre-update backups (set KEEPUP_ENABLE_BACKUPS=1 to enable)"
 fi
+
+ensure_system_python
 
 recreate_virtualenv() {
   echo "[update] Rebuilding Python virtual environment..."
