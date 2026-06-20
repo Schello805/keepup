@@ -402,11 +402,11 @@ async def send_telegram_batch_notification(
     if down_items:
         lines.append("\n<b>Ausfälle</b>")
         for monitor, result in down_items:
-            lines.append(_telegram_batch_item(monitor, result, settings, "🔴"))
+            lines.append(_telegram_batch_item(monitor, result, settings))
     if up_items:
         lines.append("\n<b>Wieder erreichbar</b>")
         for monitor, result in up_items:
-            lines.append(_telegram_batch_item(monitor, result, settings, "🟢"))
+            lines.append(_telegram_batch_item(monitor, result, settings))
 
     text = "\n".join(lines)
     url = f"https://api.telegram.org/bot{settings['telegram_bot_token']}/sendMessage"
@@ -550,7 +550,7 @@ def _telegram_open_button(settings: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 
 def _telegram_batch_item(
-    monitor: dict[str, Any], result: dict[str, Any], settings: dict[str, Any], icon: str
+    monitor: dict[str, Any], result: dict[str, Any], settings: dict[str, Any]
 ) -> str:
     name = html.escape(str(monitor.get("name") or "Unbenannter Monitor"))
     monitor_type = html.escape(str(monitor.get("type") or "").upper())
@@ -558,13 +558,12 @@ def _telegram_batch_item(
         format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
     )
     reason = html.escape(str(result.get("error_msg") or "Wieder erreichbar."))
-    return f"{icon} <b>{name}</b> · {monitor_type}\n   {checked_at} · {reason}"
+    return f"• <b>{name}</b> · {monitor_type}\n  {checked_at} · {reason}"
 
 
 def _telegram_type_label(monitor_type: Any) -> str:
     normalized = str(monitor_type or "").lower()
-    icon = "🌐" if normalized == "http" else "📡" if normalized == "ping" else "🖥️"
-    return f"{icon} {html.escape(normalized.upper() or 'CHECK')}"
+    return html.escape(normalized.upper() or "CHECK")
 
 
 def _telegram_error_label(category: Any) -> str:
@@ -601,37 +600,37 @@ def build_telegram_notification_payload(
 
     if app_url:
         safe_url = html.escape(app_url, quote=True)
-        lines.append(f'📍 <b>Monitor:</b> <a href="{safe_url}">{monitor_name}</a>')
+        lines.append(f'<b>Monitor:</b> <a href="{safe_url}">{monitor_name}</a>')
     else:
-        lines.append(f"📍 <b>Monitor:</b> {monitor_name}")
+        lines.append(f"<b>Monitor:</b> {monitor_name}")
     lines.extend(
         [
-            f"🎯 <b>Ziel:</b> <code>{monitor_target}</code>",
-            f"🔎 <b>Check:</b> {_telegram_type_label(monitor.get('type'))}",
-            f"🕒 <b>Zeit:</b> {checked_at}",
+            f"<b>Ziel:</b> <code>{monitor_target}</code>",
+            f"<b>Check:</b> {_telegram_type_label(monitor.get('type'))}",
+            f"<b>Zeit:</b> {checked_at}",
         ]
     )
 
     if is_recovered:
         downtime = _telegram_recovery_duration(recent_logs or [], result.get("checked_at", ""))
         if downtime:
-            lines.append(f"⏱ <b>Ausfallzeit:</b> {downtime}")
+            lines.append(f"<b>Ausfallzeit:</b> {downtime}")
         if response_time is not None:
-            lines.append(f"⚡ <b>Antwortzeit:</b> {response_time:.0f} ms")
+            lines.append(f"<b>Antwortzeit:</b> {response_time:.0f} ms")
     else:
         category = _telegram_error_label(result.get("error_category"))
         reason = html.escape(str(result.get("error_msg") or "Keine Detailmeldung verfügbar."))
-        lines.append(f"⚠️ <b>Ursache:</b> {category}")
+        lines.append(f"<b>Ursache:</b> {category}")
         if reason.lower() != category.lower():
             lines.append(f"<i>{reason}</i>")
         failures = result.get("consecutive_failures")
         threshold = result.get("down_failures_threshold")
         if failures and threshold:
-            lines.append(f"🧪 <b>Bestätigt:</b> {failures}/{threshold} Fehlversuche")
+            lines.append(f"<b>Bestätigt:</b> {failures}/{threshold} Fehlversuche")
 
     if history:
-        lines.append(f"📊 <b>Letzte Checks:</b> {history}")
-        lines.append("<i>🟩 erreichbar · 🟥 nicht erreichbar · 🟨 unbekannt</i>")
+        lines.append(f"<b>Letzte Checks:</b> {history}")
+        lines.append("<i>Grün = erreichbar · Rot = nicht erreichbar · Gelb = unbekannt</i>")
 
     payload: dict[str, Any] = {
         "chat_id": settings["telegram_chat_id"],
