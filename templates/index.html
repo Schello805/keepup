@@ -367,10 +367,10 @@
         }
         .monitor-card-grid {
             grid-auto-flow: row dense;
-            align-items: start;
+            align-items: stretch;
         }
         .monitor-card {
-            min-height: 340px;
+            height: 430px;
         }
         .status-filter-card.is-active {
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 18px 40px rgba(7, 17, 31, 0.28);
@@ -634,14 +634,10 @@
 
         function clearOpenDetails() {}
 
-        async function handleMonitorCardClick(event, monitorId) {
-            if (!(event?.target instanceof Element)) return;
-            if (event.target.closest("button, a, input, select, textarea, label, form")) return;
-            
+        async function openMonitorDetails(monitorId) {
             const inner = document.getElementById(`card-inner-${monitorId}`);
-            if (!inner) return;
-            if (inner.classList.contains("is-flipped")) return;
-            
+            if (!inner || inner.classList.contains("is-flipped")) return;
+
             const content = document.getElementById(`card-back-content-${monitorId}`);
             if (content) {
                 content.innerHTML = `
@@ -657,9 +653,9 @@
                     </div>
                 `;
             }
-            
+
             inner.classList.add("is-flipped");
-            
+
             try {
                 const response = await fetch(`/api/monitors/${monitorId}/details`, { headers: { "HX-Request": "true" } });
                 if (!response.ok) throw new Error("failed");
@@ -679,6 +675,12 @@
                     `;
                 }
             }
+        }
+
+        async function handleMonitorCardClick(event, monitorId) {
+            if (!(event?.target instanceof Element)) return;
+            if (event.target.closest("button, a, input, select, textarea, label, form")) return;
+            await openMonitorDetails(monitorId);
         }
 
         function normalizeAllCardsView() {
@@ -813,11 +815,15 @@
             dismissColdStartHint();
         }
 
-        function flipCard(id) {
+        async function flipCard(id) {
             const inner = document.getElementById(id);
-            if (inner) {
+            if (!inner) return;
+            if (inner.classList.contains("is-flipped")) {
                 inner.classList.remove("is-flipped");
+                return;
             }
+            const monitorId = id.replace("card-inner-", "");
+            await openMonitorDetails(monitorId);
         }
 
         function restoreOpenDetails() {}

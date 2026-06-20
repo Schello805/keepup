@@ -18,7 +18,7 @@ Die App setzt auf:
 - Bestätigte DOWN-/UP-Logik mit Schwellwerten
 - Flapping-Erkennung
 - Incident-Timeline
-- JSON-Export und -Import für komplettes Backup / Restore
+- Kompakter JSON-Export und -Import für Konfiguration und aktuelle Historie
 - Mobile-First-Dashboard mit Live-Updates
 - Separate Einstellungsseite
 - Testversand für Telegram und SMTP
@@ -126,9 +126,11 @@ In den Einstellungen kannst du:
 Der Export enthält:
 
 - Monitore
-- Checks
-- Incidents
 - Einstellungen
+- Checks der letzten 24 Stunden
+- Incidents der letzten 24 Stunden sowie weiterhin offene Incidents
+
+Dadurch bleiben Backups auch bei vielen Monitoren handlich. Beim Import wird dieselbe Begrenzung auf ältere Backups angewandt.
 
 ## Benachrichtigungen
 

@@ -1363,8 +1363,8 @@ async def create_monitor_route(
         forbidden_text=forbidden_text,
     )
     reschedule_monitor_jobs(scheduler)
-    await execute_monitor_check(monitor_id)
-    return flash_redirect("/", "Monitor wurde angelegt und sofort geprüft.")
+    asyncio.create_task(execute_monitor_check(monitor_id))
+    return flash_redirect("/", "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.")
 
 
 @app.post("/monitors/{monitor_id}/edit")

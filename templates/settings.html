@@ -239,7 +239,7 @@
                             JSON importieren
                         </button>
                     </div>
-                    <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Danach startet KeepUp die Checks für aktive Monitore erneut.</p>
+                    <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Monitore und Einstellungen werden vollständig gesichert, Check- und Incident-Historie jedoch nur für die letzten 24 Stunden. Danach startet KeepUp die Checks für aktive Monitore erneut.</p>
                 {% endcall %}
 
                 {% call accordion_section('settings-help', 'Hilfe', 'Wie funktionieren Ping- und HTTP/S-Monitore und wann verwendet man sie?', False) %}
@@ -296,10 +296,21 @@
                 </button>
             </form>
             <form id="import-form" action="/api/import" method="post" enctype="multipart/form-data" class="hidden">
-                <input id="import-file-input" type="file" name="file" accept="application/json,.json" onchange="document.getElementById('import-form').submit()">
+                <input id="import-file-input" type="file" name="file" accept="application/json,.json">
             </form>
         </section>
     </main>
+
+    <div id="import-progress-overlay" class="fixed inset-0 z-[60] hidden items-center justify-center bg-slate-950/90 px-4 backdrop-blur-sm" role="status" aria-live="polite" aria-modal="true">
+        <div class="w-full max-w-md rounded-3xl border border-sky-300/20 bg-keepup-panel p-6 text-center shadow-panel">
+            <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full border-2 border-sky-300/20 border-t-sky-300 animate-spin">
+                <span class="h-2.5 w-2.5 rounded-full bg-sky-200"></span>
+            </div>
+            <p class="mt-5 text-lg font-semibold text-slate-100">Backup wird importiert</p>
+            <p id="import-progress-file" class="mt-2 truncate text-sm text-sky-100"></p>
+            <p class="mt-3 text-sm text-slate-400">Upload und Datenübernahme laufen. Bitte diese Seite geöffnet lassen.</p>
+        </div>
+    </div>
 
     {{ render_footer("https://github.com/Schello805/keepup", app_version, active_page) }}
 
@@ -316,6 +327,20 @@
                 window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
             }
         }
+
+        function startBackupImport() {
+            const form = document.getElementById("import-form");
+            const input = document.getElementById("import-file-input");
+            const overlay = document.getElementById("import-progress-overlay");
+            const fileLabel = document.getElementById("import-progress-file");
+            if (!form || !input?.files?.length || !overlay) return;
+            if (fileLabel) fileLabel.textContent = input.files[0].name;
+            overlay.classList.remove("hidden");
+            overlay.classList.add("flex");
+            form.requestSubmit();
+        }
+
+        document.getElementById("import-file-input")?.addEventListener("change", startBackupImport);
 
         window.setTimeout(dismissToast, 4200);
     </script>

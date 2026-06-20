@@ -11,6 +11,7 @@ from typing import Any, Optional
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = BASE_DIR / "keepup.db"
 HISTORY_LIMIT = 30
+BACKUP_HISTORY_HOURS = 24
 
 DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
@@ -43,6 +44,16 @@ DEFAULT_SETTINGS = {
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+def _backup_history_cutoff() -> datetime:
+    return datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=BACKUP_HISTORY_HOURS)
+
+
+def _is_within_backup_history(timestamp: Optional[str], cutoff: datetime) -> bool:
+    parsed = _parse_iso(timestamp)
+    # Keep malformed legacy timestamps instead of silently discarding data.
+    return parsed is None or parsed >= cutoff
 
 
 def _parse_iso(ts: Optional[str]) -> Optional[datetime]:
@@ -1185,13 +1196,24 @@ def list_incidents(
 
 
 def export_backup() -> dict[str, Any]:
+    cutoff = _backup_history_cutoff()
     with closing(get_db()) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM monitors ORDER BY id ASC")
         monitors = [dict(row) for row in cursor.fetchall()]
-        cursor.execute("SELECT * FROM checks ORDER BY id ASC")
+        cursor.execute(
+            "SELECT * FROM checks WHERE checked_at >= ? ORDER BY id ASC",
+            (cutoff.isoformat(),),
+        )
         checks = [dict(row) for row in cursor.fetchall()]
-        cursor.execute("SELECT * FROM incidents ORDER BY id ASC")
+        cursor.execute(
+            """
+            SELECT * FROM incidents
+            WHERE ended_at IS NULL OR ended_at >= ?
+            ORDER BY id ASC
+            """,
+            (cutoff.isoformat(),),
+        )
         incidents = [dict(row) for row in cursor.fetchall()]
         cursor.execute("SELECT key, value FROM settings ORDER BY key ASC")
         settings = {row["key"]: deserialize_setting(row["value"]) for row in cursor.fetchall()}
@@ -1199,6 +1221,7 @@ def export_backup() -> dict[str, Any]:
     return {
         "version": 1,
         "exported_at": utc_now(),
+        "history_window_hours": BACKUP_HISTORY_HOURS,
         "monitors": monitors,
         "checks": checks,
         "incidents": incidents,
@@ -1208,9 +1231,20 @@ def export_backup() -> dict[str, Any]:
 
 def import_backup(payload: dict[str, Any]) -> None:
     monitors = payload.get("monitors", [])
-    checks = payload.get("checks", [])
-    incidents = payload.get("incidents", [])
+    cutoff = _backup_history_cutoff()
+    checks = [
+        check
+        for check in payload.get("checks", [])
+        if _is_within_backup_history(check.get("checked_at"), cutoff)
+    ]
+    incidents = [
+        incident
+        for incident in payload.get("incidents", [])
+        if incident.get("ended_at") is None
+        or _is_within_backup_history(incident.get("ended_at"), cutoff)
+    ]
     settings = payload.get("settings", {})
+    imported_check_ids = {check.get("id") for check in checks if check.get("id") is not None}
 
     with closing(get_db()) as conn:
         cursor = conn.cursor()
@@ -1296,8 +1330,8 @@ def import_backup(payload: dict[str, Any]) -> None:
                     incident["monitor_id"],
                     incident.get("started_at", utc_now()),
                     incident.get("ended_at"),
-                    incident.get("start_check_id"),
-                    incident.get("end_check_id"),
+                    incident.get("start_check_id") if incident.get("start_check_id") in imported_check_ids else None,
+                    incident.get("end_check_id") if incident.get("end_check_id") in imported_check_ids else None,
                     incident.get("start_error_msg"),
                     incident.get("end_error_msg"),
                     incident.get("first_failed_at"),
