@@ -17,7 +17,7 @@ import httpx
 import html
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from database import get_monitor, get_settings, list_monitors, log_check_result
+from database import get_monitor, get_recent_logs, get_settings, list_monitors, log_check_result
 
 
 HTTP_USER_AGENT = "KeepUp/1.0"
@@ -392,14 +392,32 @@ async def send_telegram_batch_notification(
     settings: dict[str, Any],
     items: list[tuple[dict[str, Any], dict[str, Any]]],
 ) -> None:
-    subject, body = build_batch_notification_message(settings, items)
-    text = html.escape(body).replace("\n", "\n")
+    down_items = [(monitor, result) for monitor, result in items if result.get("status") == "down"]
+    up_items = [(monitor, result) for monitor, result in items if result.get("status") == "up"]
+    down_label = "Ausfall" if len(down_items) == 1 else "Ausfälle"
+    recovery_label = "Wiederherstellung" if len(up_items) == 1 else "Wiederherstellungen"
+    lines = ["<b>📣 KeepUp Sammelmeldung</b>"]
+    lines.append(f"🔴 {len(down_items)} {down_label} · 🟢 {len(up_items)} {recovery_label}")
+
+    if down_items:
+        lines.append("\n<b>Ausfälle</b>")
+        for monitor, result in down_items:
+            lines.append(_telegram_batch_item(monitor, result, settings, "🔴"))
+    if up_items:
+        lines.append("\n<b>Wieder erreichbar</b>")
+        for monitor, result in up_items:
+            lines.append(_telegram_batch_item(monitor, result, settings, "🟢"))
+
+    text = "\n".join(lines)
     url = f"https://api.telegram.org/bot{settings['telegram_bot_token']}/sendMessage"
     payload = {
         "chat_id": settings["telegram_chat_id"],
-        "text": f"<b>{html.escape(subject)}</b>\n\n{text}",
+        "text": text,
         "parse_mode": "HTML",
     }
+    keyboard = _telegram_open_button(settings)
+    if keyboard:
+        payload["reply_markup"] = keyboard
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(url, json=payload)
         response.raise_for_status()
@@ -464,7 +482,7 @@ def format_timestamp_for_notification(timestamp: str, timezone_name: str) -> str
         zone = ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
         zone = ZoneInfo("UTC")
-    return dt.astimezone(zone).strftime("%d.%m.%Y %H:%M:%S %Z")
+    return dt.astimezone(zone).strftime("%d.%m.%Y %H:%M:%S")
 
 
 def format_timestamp_without_tz(timestamp: str, timezone_name: str) -> str:
@@ -480,6 +498,150 @@ def format_timestamp_without_tz(timestamp: str, timezone_name: str) -> str:
         zone = ZoneInfo("UTC")
     # Do not include timezone abbreviation per user request
     return dt.astimezone(zone).strftime("%d.%m.%Y %H:%M:%S")
+
+
+def _format_notification_duration(started_at: str, ended_at: str) -> Optional[str]:
+    try:
+        start = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        end = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
+    except (AttributeError, ValueError):
+        return None
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=timezone.utc)
+    if end.tzinfo is None:
+        end = end.replace(tzinfo=timezone.utc)
+    total_seconds = max(0, int((end - start).total_seconds()))
+    minutes, _seconds = divmod(total_seconds, 60)
+    hours, minutes = divmod(minutes, 60)
+    days, hours = divmod(hours, 24)
+    if days:
+        return f"{days} Tage {hours} Std." if hours else f"{days} Tage"
+    if hours:
+        return f"{hours} Std. {minutes} Min." if minutes else f"{hours} Std."
+    return f"{minutes} Min." if minutes else "unter 1 Min."
+
+
+def _telegram_status_history(logs: list[dict[str, Any]], limit: int = 10) -> Optional[str]:
+    if not logs:
+        return None
+    icons = {"up": "🟩", "down": "🟥", "unknown": "🟨"}
+    chronological = list(reversed(logs[:limit]))
+    return "".join(icons.get(str(log.get("status")), "⬜") for log in chronological)
+
+
+def _telegram_recovery_duration(logs: list[dict[str, Any]], checked_at: str) -> Optional[str]:
+    if len(logs) < 2 or logs[0].get("status") != "up":
+        return None
+    down_logs: list[dict[str, Any]] = []
+    for log in logs[1:]:
+        if log.get("status") != "down":
+            break
+        down_logs.append(log)
+    if not down_logs:
+        return None
+    return _format_notification_duration(down_logs[-1].get("checked_at", ""), checked_at)
+
+
+def _telegram_open_button(settings: dict[str, Any]) -> Optional[dict[str, Any]]:
+    app_url = _notification_app_url(settings)
+    if not app_url:
+        return None
+    return {"inline_keyboard": [[{"text": "↗ KeepUp öffnen", "url": app_url}]]}
+
+
+def _telegram_batch_item(
+    monitor: dict[str, Any], result: dict[str, Any], settings: dict[str, Any], icon: str
+) -> str:
+    name = html.escape(str(monitor.get("name") or "Unbenannter Monitor"))
+    monitor_type = html.escape(str(monitor.get("type") or "").upper())
+    checked_at = html.escape(
+        format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
+    )
+    reason = html.escape(str(result.get("error_msg") or "Wieder erreichbar."))
+    return f"{icon} <b>{name}</b> · {monitor_type}\n   {checked_at} · {reason}"
+
+
+def _telegram_type_label(monitor_type: Any) -> str:
+    normalized = str(monitor_type or "").lower()
+    icon = "🌐" if normalized == "http" else "📡" if normalized == "ping" else "🖥️"
+    return f"{icon} {html.escape(normalized.upper() or 'CHECK')}"
+
+
+def _telegram_error_label(category: Any) -> str:
+    labels = {
+        "content_mismatch": "Inhalt stimmt nicht überein",
+        "http_status": "Unerwarteter HTTP-Status",
+        "tls": "TLS-/Zertifikatsproblem",
+        "dns": "DNS-Auflösung fehlgeschlagen",
+        "timeout": "Zeitüberschreitung",
+        "refused": "Verbindung abgelehnt",
+        "network": "Netzwerkproblem",
+        "ping": "Ping fehlgeschlagen",
+        "unknown": "Nicht erreichbar",
+    }
+    return labels.get(str(category or "unknown"), "Nicht erreichbar")
+
+
+def build_telegram_notification_payload(
+    settings: dict[str, Any],
+    monitor: dict[str, Any],
+    result: dict[str, Any],
+    recent_logs: Optional[list[dict[str, Any]]] = None,
+) -> dict[str, Any]:
+    is_recovered = result.get("status") == "up"
+    app_url = _notification_app_url(settings)
+    monitor_name = html.escape(str(monitor.get("name") or "Unbenannter Monitor"))
+    monitor_target = html.escape(str(monitor.get("target") or "-"))
+    checked_at = html.escape(
+        format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
+    )
+    response_time = result.get("response_time")
+    history = _telegram_status_history(recent_logs or [])
+    lines = ["<b>🟢 Wieder erreichbar</b>" if is_recovered else "<b>🔴 Ausfall erkannt</b>"]
+
+    if app_url:
+        safe_url = html.escape(app_url, quote=True)
+        lines.append(f'📍 <b>Monitor:</b> <a href="{safe_url}">{monitor_name}</a>')
+    else:
+        lines.append(f"📍 <b>Monitor:</b> {monitor_name}")
+    lines.extend(
+        [
+            f"🎯 <b>Ziel:</b> <code>{monitor_target}</code>",
+            f"🔎 <b>Check:</b> {_telegram_type_label(monitor.get('type'))}",
+            f"🕒 <b>Zeit:</b> {checked_at}",
+        ]
+    )
+
+    if is_recovered:
+        downtime = _telegram_recovery_duration(recent_logs or [], result.get("checked_at", ""))
+        if downtime:
+            lines.append(f"⏱ <b>Ausfallzeit:</b> {downtime}")
+        if response_time is not None:
+            lines.append(f"⚡ <b>Antwortzeit:</b> {response_time:.0f} ms")
+    else:
+        category = _telegram_error_label(result.get("error_category"))
+        reason = html.escape(str(result.get("error_msg") or "Keine Detailmeldung verfügbar."))
+        lines.append(f"⚠️ <b>Ursache:</b> {category}")
+        if reason.lower() != category.lower():
+            lines.append(f"<i>{reason}</i>")
+        failures = result.get("consecutive_failures")
+        threshold = result.get("down_failures_threshold")
+        if failures and threshold:
+            lines.append(f"🧪 <b>Bestätigt:</b> {failures}/{threshold} Fehlversuche")
+
+    if history:
+        lines.append(f"📊 <b>Letzte Checks:</b> {history}")
+        lines.append("<i>🟩 erreichbar · 🟥 nicht erreichbar · 🟨 unbekannt</i>")
+
+    payload: dict[str, Any] = {
+        "chat_id": settings["telegram_chat_id"],
+        "text": "\n".join(lines),
+        "parse_mode": "HTML",
+    }
+    keyboard = _telegram_open_button(settings)
+    if keyboard:
+        payload["reply_markup"] = keyboard
+    return payload
 
 
 def build_notification_message(
@@ -526,45 +688,14 @@ async def send_telegram_notification(
     monitor: dict[str, Any],
     result: dict[str, Any],
 ) -> None:
-    status_icon = "✅" if result.get("status") == "up" else "❌"
-    status_text = "UP" if result.get("status") == "up" else "DOWN"
-    is_recovered = result.get("status") == "up"
-
-    monitor_name = html.escape(str(monitor.get("name", "")))
-    monitor_target = html.escape(str(monitor.get("target", "")))
-    monitor_type = html.escape(str(monitor.get("type", "")).upper())
-    reason = result.get("error_msg") or (
-        "Wieder erreichbar." if is_recovered else "Keine Fehlermeldung verfügbar."
+    monitor_id = monitor.get("id")
+    recent_logs = (
+        await asyncio.to_thread(get_recent_logs, int(monitor_id), 10)
+        if monitor_id is not None
+        else []
     )
-    reason = html.escape(str(reason))
-
-    response_text = (
-        f"{result['response_time']:.0f} ms" if result.get("response_time") is not None else "n/a"
-    )
-    response_text = html.escape(response_text)
-    checked_at = format_timestamp_without_tz(result.get("checked_at", ""), settings.get("app_timezone", "UTC"))
-    checked_at = html.escape(checked_at)
-    app_url = _notification_app_url(settings)
-
-    telegram_lines = [
-        f"{status_icon} <b>{monitor_name} {status_text}</b>",
-        f"{'Wieder erreichbar' if is_recovered else 'Nicht erreichbar'}: {monitor_target} ({monitor_type})",
-        f"Zeit: {checked_at}",
-        f"Antwortzeit: {response_text}",
-        f"Grund: {reason}",
-    ]
-    if app_url:
-        safe_url = html.escape(app_url, quote=True)
-        telegram_lines.append(f'KeepUp: <a href="{safe_url}">{safe_url}</a>')
-
-    text = "\n".join(telegram_lines)
-
     url = f"https://api.telegram.org/bot{settings['telegram_bot_token']}/sendMessage"
-    payload = {
-        "chat_id": settings["telegram_chat_id"],
-        "text": text,
-        "parse_mode": "HTML",
-    }
+    payload = build_telegram_notification_payload(settings, monitor, result, recent_logs)
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(url, json=payload)
