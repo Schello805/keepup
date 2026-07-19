@@ -284,10 +284,16 @@ async def check_ping_http_target_raw(monitor: dict[str, Any]) -> tuple[str, floa
     )
     ping_status, ping_time, ping_error, ping_category = ping_result
     http_status, http_time, http_error, http_category = http_result
-    response_time = max(ping_time, http_time)
+    successful_times = [
+        result_time
+        for result_status, result_time in ((ping_status, ping_time), (http_status, http_time))
+        if result_status == "up"
+    ]
 
-    if ping_status == "up" and http_status == "up":
-        return "up", response_time, None, None
+    if successful_times:
+        return "up", min(successful_times), None, None
+
+    response_time = max(ping_time, http_time)
 
     failures = []
     if ping_status != "up":
