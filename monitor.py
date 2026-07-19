@@ -291,14 +291,19 @@ async def check_ping_http_target_raw(monitor: dict[str, Any]) -> tuple[str, floa
     )
     ping_status, ping_time, ping_error, ping_category = ping_result
     http_status, http_time, http_error, http_category = http_result
-    successful_times = [
-        result_time
-        for result_status, result_time in ((ping_status, ping_time), (http_status, http_time))
-        if result_status == "up"
-    ]
+    ping_mode = str(monitor.get("ping_mode") or "or").lower()
 
-    if successful_times:
-        return "up", min(successful_times), None, None
+    if ping_mode == "and":
+        if ping_status == "up" and http_status == "up":
+            return "up", max(ping_time, http_time), None, None
+    else:
+        successful_times = [
+            result_time
+            for result_status, result_time in ((ping_status, ping_time), (http_status, http_time))
+            if result_status == "up"
+        ]
+        if successful_times:
+            return "up", min(successful_times), None, None
 
     response_time = max(ping_time, http_time)
 
@@ -639,7 +644,7 @@ def _telegram_type_label(monitor_type: Any) -> str:
 
 def _monitor_type_display(monitor: dict[str, Any]) -> str:
     if monitor.get("ping_enabled"):
-        return "PING + HTTP"
+        return "PING + HTTP" if str(monitor.get("ping_mode") or "or").lower() == "and" else "PING oder HTTP"
     return _telegram_type_label(monitor.get("type"))
 
 

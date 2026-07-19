@@ -1350,18 +1350,20 @@ async def create_monitor_route(
     expected_text: str = Form(""),
     forbidden_text: str = Form(""),
 ) -> RedirectResponse:
-    if monitor_type not in {"http", "ping", "ping_http"}:
+    if monitor_type not in {"http", "ping", "ping_http", "ping_http_or", "ping_http_and"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
         raise HTTPException(status_code=400, detail="Unsupported HTTP method")
-    is_combo = monitor_type == "ping_http"
+    is_combo = monitor_type in {"ping_http", "ping_http_or", "ping_http_and"}
+    ping_mode = "and" if monitor_type == "ping_http_and" else "or"
     if is_combo and not ping_target.strip() and not urlparse(target).hostname:
-        return flash_redirect("/", "Für PING + HTTP bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
+        return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
     monitor_id = create_monitor(
         name=name,
         monitor_type="http" if is_combo else monitor_type,
         target=target,
         ping_enabled=is_combo,
+        ping_mode=ping_mode,
         ping_target=ping_target,
         http_method=http_method,
         retry_count=max(0, min(5, retry_count)),
@@ -1392,13 +1394,14 @@ async def edit_monitor_route(
     monitor = get_monitor(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
-    if monitor_type not in {"http", "ping", "ping_http"}:
+    if monitor_type not in {"http", "ping", "ping_http", "ping_http_or", "ping_http_and"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
         raise HTTPException(status_code=400, detail="Unsupported HTTP method")
-    is_combo = monitor_type == "ping_http"
+    is_combo = monitor_type in {"ping_http", "ping_http_or", "ping_http_and"}
+    ping_mode = "and" if monitor_type == "ping_http_and" else "or"
     if is_combo and not ping_target.strip() and not urlparse(target).hostname:
-        return flash_redirect("/", "Für PING + HTTP bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
+        return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
 
     update_monitor(
         monitor_id=monitor_id,
@@ -1406,6 +1409,7 @@ async def edit_monitor_route(
         monitor_type="http" if is_combo else monitor_type,
         target=target,
         ping_enabled=is_combo,
+        ping_mode=ping_mode,
         ping_target=ping_target,
         http_method=http_method,
         retry_count=max(0, min(5, retry_count)),

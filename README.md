@@ -14,7 +14,9 @@ Die App setzt auf:
 ## Funktionen
 
 - HTTP/S- und Ping-Monitore
-- Kombinierte PING- + HTTP/S-Monitore mit getrenntem Ping-Ziel; DOWN wird erst gemeldet, wenn beide Prüfwege fehlschlagen
+- Kombinierte PING-/HTTP/S-Monitore mit getrenntem Ping-Ziel
+- Modus `PING oder HTTP`: DOWN wird erst gemeldet, wenn beide Prüfwege fehlschlagen
+- Modus `PING + HTTP`: DOWN wird gemeldet, sobald einer der beiden Prüfwege fehlschlägt
 - Benachrichtigungen bei Statusänderungen per Telegram und SMTP
 - Bestätigte DOWN-/UP-Logik mit Schwellwerten
 - Flapping-Erkennung

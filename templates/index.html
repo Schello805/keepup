@@ -188,7 +188,7 @@
             {% for monitor in monitors %}
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
-            {% set monitor_type_label = 'PING + HTTP' if monitor.ping_enabled else monitor.type|upper %}
+            {% set monitor_type_label = ('PING + HTTP' if monitor.ping_mode == 'and' else 'PING oder HTTP') if monitor.ping_enabled else monitor.type|upper %}
             <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative w-full h-full transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-4 shadow-panel card-sheen">
@@ -298,7 +298,7 @@
                                     <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
                                 </button>
                             </form>
-                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ 'ping_http' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ 'ping_http_and' if monitor.ping_enabled and monitor.ping_mode == 'and' else 'ping_http_or' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
                                 <span class="sr-only">Bearbeiten</span>
                             </button>
@@ -455,8 +455,10 @@
                     <select id="new-monitor-type" name="monitor_type" onchange="togglePingTargetField('new')" class="{{ select_classes() }}">
                         <option value="http">HTTP/S</option>
                         <option value="ping">Ping (IP/Host)</option>
-                        <option value="ping_http">PING + HTTP</option>
+                        <option value="ping_http_or">PING oder HTTP</option>
+                        <option value="ping_http_and">PING + HTTP</option>
                     </select>
+                    <p class="text-xs text-slate-500">`oder` ist robust: ein erfolgreicher Weg reicht. `+` ist streng: beide Wege müssen erfolgreich sein.</p>
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300">Ziel</span>
@@ -524,8 +526,10 @@
                     <select id="edit-monitor-type" name="monitor_type" onchange="togglePingTargetField('edit')" class="{{ select_classes() }}">
                         <option value="http">HTTP/S</option>
                         <option value="ping">Ping (IP/Host)</option>
-                        <option value="ping_http">PING + HTTP</option>
+                        <option value="ping_http_or">PING oder HTTP</option>
+                        <option value="ping_http_and">PING + HTTP</option>
                     </select>
+                    <p class="text-xs text-slate-500">`oder` ist robust: ein erfolgreicher Weg reicht. `+` ist streng: beide Wege müssen erfolgreich sein.</p>
                 </label>
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300">Ziel</span>
@@ -878,7 +882,7 @@
             const select = document.getElementById(`${mode}-monitor-type`);
             const field = document.getElementById(`${mode}-ping-target-field`);
             if (!select || !field) return;
-            field.classList.toggle("hidden", select.value !== "ping_http");
+            field.classList.toggle("hidden", !select.value.startsWith("ping_http"));
         }
 
         function dismissToast() {

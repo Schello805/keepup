@@ -258,6 +258,7 @@ def _ensure_monitor_columns(cursor: sqlite3.Cursor) -> None:
         "expected_text": "TEXT",
         "forbidden_text": "TEXT",
         "ping_enabled": "INTEGER NOT NULL DEFAULT 0",
+        "ping_mode": "TEXT NOT NULL DEFAULT 'or'",
         "ping_target": "TEXT",
         "last_error_category": "TEXT",
         "is_flapping": "INTEGER NOT NULL DEFAULT 0",
@@ -627,6 +628,7 @@ def create_monitor(
     monitor_type: str,
     target: str,
     ping_enabled: bool,
+    ping_mode: str,
     ping_target: str,
     http_method: str,
     retry_count: int,
@@ -642,15 +644,16 @@ def create_monitor(
         cursor.execute(
             """
             INSERT INTO monitors (
-                name, type, target, ping_enabled, ping_target, http_method, retry_count, interval, timeout,
+                name, type, target, ping_enabled, ping_mode, ping_target, http_method, retry_count, interval, timeout,
                 expected_text, forbidden_text, enabled, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
             """,
             (
                 name.strip(),
                 monitor_type,
                 target.strip(),
                 int(ping_enabled),
+                "and" if str(ping_mode).lower() == "and" else "or",
                 ping_target.strip() or None,
                 http_method.strip().upper(),
                 max(0, int(retry_count)),
@@ -674,6 +677,7 @@ def update_monitor(
     monitor_type: str,
     target: str,
     ping_enabled: bool,
+    ping_mode: str,
     ping_target: str,
     http_method: str,
     retry_count: int,
@@ -691,6 +695,7 @@ def update_monitor(
                 type = ?,
                 target = ?,
                 ping_enabled = ?,
+                ping_mode = ?,
                 ping_target = ?,
                 http_method = ?,
                 retry_count = ?,
@@ -706,6 +711,7 @@ def update_monitor(
                 monitor_type,
                 target.strip(),
                 int(ping_enabled),
+                "and" if str(ping_mode).lower() == "and" else "or",
                 ping_target.strip() or None,
                 http_method.strip().upper(),
                 max(0, int(retry_count)),
@@ -1293,8 +1299,8 @@ def import_backup(payload: dict[str, Any]) -> None:
                     id, name, type, target, http_method, retry_count, interval, timeout,
                     enabled, status, last_error, last_error_category, last_response_time,
                     last_checked_at, last_change_at, consecutive_failures, consecutive_successes,
-                    expected_text, forbidden_text, ping_enabled, ping_target, is_flapping, flapping_until, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    expected_text, forbidden_text, ping_enabled, ping_mode, ping_target, is_flapping, flapping_until, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     monitor.get("id"),
@@ -1317,6 +1323,7 @@ def import_backup(payload: dict[str, Any]) -> None:
                     monitor.get("expected_text"),
                     monitor.get("forbidden_text"),
                     int(bool(monitor.get("ping_enabled", False))),
+                    "and" if str(monitor.get("ping_mode", "or")).lower() == "and" else "or",
                     monitor.get("ping_target"),
                     int(bool(monitor.get("is_flapping", False))),
                     monitor.get("flapping_until"),
