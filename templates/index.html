@@ -496,6 +496,9 @@
                     <span class="text-sm text-slate-300">Darf Inhalt nicht enthalten</span>
                     <input name="forbidden_text" class="{{ input_classes() }}" placeholder="z. B. Bad Gateway">
                 </label>
+                <div class="md:col-span-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+                    Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
+                </div>
                 <button type="submit" class="{{ btn_classes('primary') }} md:col-span-2">
                     Monitor speichern
                 </button>
@@ -559,6 +562,9 @@
                     <span class="text-sm text-slate-300">Darf Inhalt nicht enthalten</span>
                     <input id="edit-monitor-forbidden-text" name="forbidden_text" class="{{ input_classes() }}">
                 </label>
+                <div class="md:col-span-2 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+                    Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
+                </div>
                 <button type="submit" class="{{ btn_classes('primary') }} md:col-span-2">
                     Änderungen speichern
                 </button>
