@@ -700,7 +700,6 @@ def build_telegram_notification_payload(
 
     if history:
         lines.append(f"<b>Letzte Checks:</b> {history}")
-        lines.append("<i>Grün = erreichbar · Rot = nicht erreichbar · Gelb = unbekannt</i>")
 
     payload: dict[str, Any] = {
         "chat_id": settings["telegram_chat_id"],
