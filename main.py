@@ -49,6 +49,8 @@ from monitor import (
     execute_monitor_check,
     format_notification_error,
     init_monitor_runtime,
+    remove_monitor_job,
+    reschedule_monitor_job,
     reschedule_monitor_jobs,
     run_all_checks_once,
     send_test_email_notification,
@@ -1368,7 +1370,7 @@ async def create_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
-    reschedule_monitor_jobs(scheduler)
+    reschedule_monitor_job(scheduler, monitor_id)
     asyncio.create_task(execute_monitor_check(monitor_id))
     return flash_redirect("/", "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.")
 
@@ -1412,7 +1414,7 @@ async def edit_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
-    reschedule_monitor_jobs(scheduler)
+    reschedule_monitor_job(scheduler, monitor_id)
     return flash_redirect("/", "Monitor wurde aktualisiert.")
 
 
@@ -1423,7 +1425,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Monitor not found")
     is_enabled = not bool(monitor.get("enabled", 1))
     set_monitor_enabled(monitor_id, is_enabled)
-    reschedule_monitor_jobs(scheduler)
+    reschedule_monitor_job(scheduler, monitor_id)
     message = "Monitor wurde fortgesetzt." if is_enabled else "Monitor wurde pausiert."
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
@@ -1434,7 +1436,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 @app.post("/monitors/{monitor_id}/delete")
 async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
     delete_monitor(monitor_id)
-    reschedule_monitor_jobs(scheduler)
+    remove_monitor_job(scheduler, monitor_id)
     return flash_redirect("/", "Monitor wurde gelöscht.", "warning")
 
 

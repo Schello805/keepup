@@ -377,6 +377,19 @@ def list_monitor_options() -> list[dict[str, Any]]:
         return [dict(row) for row in cursor.fetchall()]
 
 
+def list_monitor_schedule_entries() -> list[dict[str, Any]]:
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, enabled, interval
+            FROM monitors
+            ORDER BY id DESC
+            """
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
 def list_monitor_incident_feed_options() -> list[dict[str, Any]]:
     with closing(get_db()) as conn:
         cursor = conn.cursor()

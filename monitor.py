@@ -18,7 +18,14 @@ import httpx
 import html
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from database import get_monitor, get_recent_logs, get_settings, list_monitors, log_check_result
+from database import (
+    get_monitor,
+    get_recent_logs,
+    get_settings,
+    list_monitor_schedule_entries,
+    list_monitors,
+    log_check_result,
+)
 
 
 HTTP_USER_AGENT = "KeepUp/1.0"
@@ -813,32 +820,60 @@ def send_email_text(settings: dict[str, Any], subject: str, body: str) -> None:
         server.send_message(message)
 
 
+def _remove_monitor_job_if_exists(scheduler: AsyncIOScheduler, monitor_id: int) -> None:
+    job_id = f"monitor-{monitor_id}"
+    if scheduler.get_job(job_id):
+        scheduler.remove_job(job_id)
+
+
+def _schedule_monitor_job(
+    scheduler: AsyncIOScheduler,
+    monitor: dict[str, Any],
+    settings: dict[str, Any],
+) -> None:
+    monitor_id = int(monitor["id"])
+    _remove_monitor_job_if_exists(scheduler, monitor_id)
+    if not monitor.get("enabled", 1):
+        return
+
+    jitter_seconds = max(0, int(settings.get("scheduler_jitter_seconds") or 0))
+    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
+    interval_seconds = max(10, global_interval_override or int(monitor["interval"]))
+    jitter = random.randint(0, jitter_seconds) if jitter_seconds else 0
+    scheduler.add_job(
+        execute_monitor_check,
+        "interval",
+        seconds=interval_seconds,
+        next_run_time=datetime.now(timezone.utc) + timedelta(seconds=jitter),
+        args=[monitor_id],
+        id=f"monitor-{monitor_id}",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=interval_seconds,
+    )
+
+
+def reschedule_monitor_job(scheduler: AsyncIOScheduler, monitor_id: int) -> None:
+    monitor = get_monitor(monitor_id)
+    if not monitor:
+        _remove_monitor_job_if_exists(scheduler, monitor_id)
+        return
+    _schedule_monitor_job(scheduler, monitor, get_settings())
+
+
+def remove_monitor_job(scheduler: AsyncIOScheduler, monitor_id: int) -> None:
+    _remove_monitor_job_if_exists(scheduler, monitor_id)
+
+
 def reschedule_monitor_jobs(scheduler: AsyncIOScheduler) -> None:
     for job in list(scheduler.get_jobs()):
         if job.id.startswith("monitor-"):
             scheduler.remove_job(job.id)
 
     settings = get_settings()
-    jitter_seconds = max(0, int(settings.get("scheduler_jitter_seconds") or 0))
-    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
-    monitors = list_monitors()
-    for monitor in monitors:
-        if not monitor.get("enabled", 1):
-            continue
-        interval_seconds = max(10, global_interval_override or int(monitor["interval"]))
-        jitter = random.randint(0, jitter_seconds) if jitter_seconds else 0
-        scheduler.add_job(
-            execute_monitor_check,
-            "interval",
-            seconds=interval_seconds,
-            next_run_time=datetime.now(timezone.utc) + timedelta(seconds=jitter),
-            args=[monitor["id"]],
-            id=f"monitor-{monitor['id']}",
-            replace_existing=True,
-            max_instances=1,
-            coalesce=True,
-            misfire_grace_time=interval_seconds,
-        )
+    for monitor in list_monitor_schedule_entries():
+        _schedule_monitor_job(scheduler, monitor, settings)
 
 
 async def run_all_checks_once() -> None:
