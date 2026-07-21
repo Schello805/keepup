@@ -1,6 +1,6 @@
 {% from "_shared.html" import render_page_header, render_toast, render_footer %}
 <!DOCTYPE html>
-<html lang="de">
+<html lang="de" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,8 +8,22 @@
     <link rel="icon" href="/static/logo.png">
     <link rel="apple-touch-icon" href="/static/logo.png">
     <link rel="stylesheet" href="/static/keepup.css">
+    <style>
+        :root { color-scheme: dark; }
+        html {
+            overflow-y: scroll;
+            scrollbar-gutter: stable;
+        }
+        body {
+            background:
+                radial-gradient(circle at top left, rgba(56,189,248,0.18), transparent 30%),
+                radial-gradient(circle at top right, rgba(34,197,94,0.12), transparent 26%),
+                linear-gradient(180deg, #07111f 0%, #0b1424 45%, #09111d 100%);
+        }
+        .tap-target { min-width: 44px; min-height: 44px; }
+    </style>
 </head>
-<body class="min-h-screen bg-keepup-bg text-slate-100">
+<body class="min-h-screen text-slate-100">
     <main class="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-12 lg:px-8">
         {{ render_page_header("Changelog", active_page) }}
         {{ render_toast(toast) }}
