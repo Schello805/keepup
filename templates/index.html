@@ -289,7 +289,7 @@
                             {% endif %}
                         </div>
 
-                        <div class="card-front-interactive mt-auto pt-3 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
+                        <div class="card-front-interactive mt-3 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
                             <form action="/monitors/{{ monitor.id }}/toggle" method="post" class="js-monitor-toggle">
                                 <button type="submit" aria-label="{% if monitor.enabled %}Monitor pausieren{% else %}Monitor fortsetzen{% endif %}" title="{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}" class="inline-flex h-10 w-10 items-center justify-center rounded-xl {% if monitor.enabled %}bg-amber-500/15 text-amber-100 hover:bg-amber-500/25{% else %}bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25{% endif %} transition cursor-pointer">
                                     {% if monitor.enabled %}
