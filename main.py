@@ -78,6 +78,7 @@ _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
 _dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None}
 _dashboard_cards_cache_lock = threading.Lock()
 _dashboard_cards_refresh_task: Optional[asyncio.Task] = None
+_changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
 _system_metrics_cache: dict[str, Any] = {
     "timestamp": None,
     "cpu_total": None,
@@ -549,6 +550,7 @@ def build_dashboard_context(request: Request) -> dict:
         "monitors": monitors,
         "settings": settings,
         "app_version": get_app_version_display(),
+        "changelog_preview": get_changelog_items(limit=3),
         "active_page": "dashboard",
         "toast": get_toast(request),
         "summary": {
@@ -628,6 +630,7 @@ def build_dashboard_shell_context(request: Request) -> dict:
         "request": request,
         "settings": settings,
         "app_version": get_app_version_display(),
+        "changelog_preview": get_changelog_items(limit=3),
         "active_page": "dashboard",
         "toast": get_toast(request),
         "summary": summary,
@@ -644,6 +647,7 @@ def build_settings_context(request: Request) -> dict:
         "request": request,
         "settings": settings,
         "app_version": get_app_version_display(),
+        "changelog_preview": get_changelog_items(limit=3),
         "system_metrics": build_system_metrics(),
         "timezone_options": timezone_options,
         "active_page": "settings",
@@ -814,6 +818,7 @@ def build_incidents_context(request: Request) -> dict:
         "request": request,
         "settings": settings,
         "app_version": get_app_version_display(),
+        "changelog_preview": get_changelog_items(limit=3),
         "active_page": "incidents",
         "toast": get_toast(request),
         "monitors": monitors,
@@ -854,6 +859,7 @@ def build_incidents_shell_context(request: Request) -> dict:
         "request": request,
         "settings": settings,
         "app_version": get_app_version_display(),
+        "changelog_preview": get_changelog_items(limit=3),
         "active_page": "incidents",
         "toast": get_toast(request),
         "monitors": monitor_options,
@@ -912,6 +918,78 @@ def _run_git_command(args: list[str]) -> Optional[str]:
         return (result.stdout or "").strip() or None
     except Exception:
         return None
+
+
+def _humanize_commit_subject(subject: str) -> str:
+    normalized = subject.strip().rstrip(".")
+    lower = normalized.lower()
+    translations = (
+        ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
+        ("harden local operations and backup handling", "Lokale Sicherheits- und Backup-Schutzfunktionen wurden verbessert."),
+        ("run manual checks without page reload", "Manuelle Monitor-Prüfungen laufen ohne komplettes Neuladen der Seite."),
+        ("add monitor form field help", "Hilfetexte beim Anlegen und Bearbeiten von Monitoren wurden ergänzt."),
+        ("fix monitor edit cache refresh", "Aktualisierte Monitor-Daten werden nach dem Speichern zuverlässiger angezeigt."),
+        ("add ping http check modes", "Kombinierte Ping-/HTTP-Prüfungen wurden ergänzt."),
+        ("clarify http content rule behavior", "Hinweise zu HTTP-Inhaltsregeln wurden verständlicher gemacht."),
+        ("optimize monitor scheduler updates", "Scheduler-Updates für Monitoränderungen wurden beschleunigt."),
+    )
+    for prefix, text in translations:
+        if lower.startswith(prefix):
+            return text
+    if normalized:
+        return normalized[0].upper() + normalized[1:]
+    return "Technische Änderung im Projekt."
+
+
+def get_changelog_items(limit: int = 8) -> list[dict[str, str]]:
+    fetch_limit = max(20, limit)
+    now = time.time()
+    cached_items = _changelog_cache.get("items")
+    expires_at = float(_changelog_cache.get("expires_at") or 0.0)
+    if cached_items is not None and now < expires_at:
+        return list(cached_items)[:limit]
+
+    output = _run_git_command(
+        [
+            "git",
+            "log",
+            f"-n{fetch_limit}",
+            "--date=format:%d.%m.%Y %H:%M",
+            "--pretty=format:%h%x09%ad%x09%s",
+        ]
+    )
+    items: list[dict[str, str]] = []
+    for line in (output or "").splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        sha, committed_at, subject = (part.strip() for part in parts)
+        items.append(
+            {
+                "sha": sha,
+                "committed_at": committed_at,
+                "subject": subject,
+                "summary": _humanize_commit_subject(subject),
+            }
+        )
+
+    _changelog_cache["items"] = items
+    _changelog_cache["expires_at"] = now + 60
+    return items[:limit]
+
+
+def build_changelog_context(request: Request) -> dict:
+    settings = get_settings()
+    changelog_items = get_changelog_items(limit=20)
+    return {
+        "request": request,
+        "settings": settings,
+        "app_version": get_app_version_display(),
+        "changelog_preview": changelog_items[:3],
+        "changelog_items": changelog_items,
+        "active_page": "changelog",
+        "toast": get_toast(request),
+    }
 
 
 def get_app_version_display() -> str:
@@ -1308,6 +1386,11 @@ async def settings_system_status_partial(request: Request) -> HTMLResponse:
 @app.get("/incidents", response_class=HTMLResponse)
 async def incidents_page(request: Request) -> HTMLResponse:
     return await asyncio.to_thread(render_template, request, "incidents.html", build_incidents_shell_context(request))
+
+
+@app.get("/changelog", response_class=HTMLResponse)
+async def changelog_page(request: Request) -> HTMLResponse:
+    return await asyncio.to_thread(render_template, request, "changelog.html", build_changelog_context(request))
 
 
 @app.get("/api/incidents/feed", response_class=HTMLResponse)

@@ -1,0 +1,59 @@
+{% from "_shared.html" import render_page_header, render_toast, render_footer %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ settings.app_name }} Änderungen</title>
+    <link rel="icon" href="/static/logo.png">
+    <link rel="apple-touch-icon" href="/static/logo.png">
+    <link rel="stylesheet" href="/static/keepup.css">
+</head>
+<body class="min-h-screen bg-keepup-bg text-slate-100">
+    <main class="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-12 lg:px-8">
+        {{ render_page_header("Changelog", active_page) }}
+        {{ render_toast(toast) }}
+
+        <section class="mt-5 rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
+            <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-300/80">Was ist neu?</p>
+                    <h2 class="mt-2 text-2xl font-semibold text-slate-50">Änderungen aus GitHub</h2>
+                    <p class="mt-2 max-w-2xl text-sm text-slate-400">
+                        KeepUp liest die letzten Commits direkt aus dem lokalen Git-Stand. Nach einem Update siehst du hier automatisch, welche Änderungen gerade angekommen sind.
+                    </p>
+                </div>
+                <div class="rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-sm">
+                    <p class="text-xs uppercase tracking-[0.24em] text-sky-200/75">Aktuelle Version</p>
+                    <p class="mt-1 font-semibold text-sky-50">v{{ app_version }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="mt-5 grid grid-cols-1 gap-4">
+            {% if changelog_items %}
+                {% for item in changelog_items %}
+                <article class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 shadow-panel">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="rounded-full border border-sky-400/20 bg-sky-500/10 px-2 py-0.5 font-mono text-xs text-sky-100">{{ item.sha }}</span>
+                                <span class="text-xs text-slate-500">{{ item.committed_at }}</span>
+                            </div>
+                            <h3 class="mt-3 text-lg font-semibold text-slate-50">{{ item.summary }}</h3>
+                            <p class="mt-2 break-words text-sm text-slate-400">Commit: {{ item.subject }}</p>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            {% else %}
+                <div class="rounded-3xl border border-white/10 bg-keepup-panel/90 p-5 text-sm text-slate-400 shadow-panel">
+                    Keine Git-Änderungen gefunden. Das kann passieren, wenn KeepUp ohne `.git`-Verzeichnis installiert wurde.
+                </div>
+            {% endif %}
+        </section>
+    </main>
+
+    {{ render_footer("https://github.com/Schello805/keepup", app_version, active_page, changelog_preview) }}
+</body>
+</html>

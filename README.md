@@ -29,6 +29,7 @@ Die App setzt auf:
 - Testversand für Telegram und SMTP
 - In-App-Update-Prüfung
 - Automatische GitHub-CI für Python-Checks, Unit-Tests, Dependency-Checks und CSS-Build
+- Changelog-Seite aus den letzten GitHub-/Git-Commits mit verständlichen Änderungstexten
 
 ## Intervall-Logik
 
