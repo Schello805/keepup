@@ -1142,6 +1142,17 @@ def _validate_update_run_token(secret: str, provided_token: str) -> bool:
     return any(hmac.compare_digest(provided_token, valid_token) for valid_token in valid_tokens)
 
 
+def _format_commit_change(sha: str, subject: str, committed_at: str = "") -> dict[str, str]:
+    sha = sha.strip()
+    subject = subject.strip()
+    return {
+        "sha": sha[:7],
+        "subject": subject,
+        "summary": _humanize_commit_subject(subject),
+        "committed_at": committed_at,
+    }
+
+
 def _get_update_commit_summaries(previous_sha: Optional[str], current_sha: Optional[str], limit: int = 8) -> list[str]:
     if not previous_sha or not current_sha or previous_sha == current_sha:
         return []
@@ -1165,6 +1176,66 @@ def _get_update_commit_summaries(previous_sha: Optional[str], current_sha: Optio
     except Exception:
         return []
     return [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
+
+
+def _get_update_commit_details(previous_sha: Optional[str], current_sha: Optional[str], limit: int = 8) -> list[dict[str, str]]:
+    if not previous_sha or not current_sha or previous_sha == current_sha:
+        return []
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(BASE_DIR),
+                "log",
+                "--date=format:%d.%m.%Y",
+                "--pretty=format:%h%x09%ad%x09%s",
+                f"{previous_sha}..{current_sha}",
+                f"-n{max(1, limit)}",
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=4,
+        )
+    except Exception:
+        return []
+
+    changes: list[dict[str, str]] = []
+    for line in (result.stdout or "").splitlines():
+        parts = line.split("\t", 2)
+        if len(parts) != 3:
+            continue
+        sha, committed_at, subject = (part.strip() for part in parts)
+        changes.append(_format_commit_change(sha, subject, committed_at))
+    return changes
+
+
+async def _get_pending_update_changes(local_sha: Optional[str], remote_sha: Optional[str], limit: int = 6) -> list[dict[str, str]]:
+    if not local_sha or not remote_sha or local_sha == remote_sha:
+        return []
+    url = f"https://api.github.com/repos/Schello805/keepup/compare/{local_sha}...{remote_sha}"
+    headers = {"User-Agent": "KeepUp"}
+    try:
+        async with httpx.AsyncClient(timeout=6.0, headers=headers) as client:
+            res = await client.get(url)
+        if res.status_code != 200:
+            return []
+        payload = res.json()
+        commits = payload.get("commits") or []
+        changes: list[dict[str, str]] = []
+        for commit in commits[-max(1, limit):]:
+            sha = str(commit.get("sha") or "")
+            commit_payload = commit.get("commit") or {}
+            message = str(commit_payload.get("message") or "").splitlines()[0].strip()
+            author_payload = commit_payload.get("author") or {}
+            committed_at = str(author_payload.get("date") or "")[:10]
+            if sha and message:
+                changes.append(_format_commit_change(sha, message, committed_at))
+        return list(reversed(changes))
+    except Exception:
+        return []
 
 
 async def _get_remote_main_sha() -> Optional[str]:
@@ -1192,6 +1263,7 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
     local_sha = _run_git_command(["git", "rev-parse", "HEAD"])
     remote_sha = await _get_remote_main_sha()
     update_available = bool(local_sha and remote_sha and local_sha != remote_sha)
+    pending_changes = await _get_pending_update_changes(local_sha, remote_sha) if update_available else []
     token = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
     update_enabled = bool(token)
     update_run_token = None
@@ -1207,6 +1279,7 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
         "remote_sha_short": (remote_sha[:7] if remote_sha else None),
         "update_available": update_available,
         "update_enabled": update_enabled,
+        "pending_changes": pending_changes,
         "update_run_token": update_run_token,
         "update_run_token_expires_at": update_run_token_expires_at,
         "overlay_metrics": build_update_overlay_metrics(),
@@ -1342,6 +1415,7 @@ async def run_update(request: Request) -> JSONResponse:
     ok = result.returncode == 0
     current_sha = _run_git_command(["git", "rev-parse", "HEAD"])
     changes = _get_update_commit_summaries(previous_sha, current_sha)
+    change_details = _get_update_commit_details(previous_sha, current_sha)
     restart_scheduled = bool(ok and current_sha and current_sha != previous_sha)
     if restart_scheduled:
         _schedule_self_restart()
@@ -1354,6 +1428,7 @@ async def run_update(request: Request) -> JSONResponse:
             "previous_sha_short": (previous_sha[:7] if previous_sha else None),
             "current_sha_short": (current_sha[:7] if current_sha else None),
             "changes": changes,
+            "change_details": change_details,
             "restart_scheduled": restart_scheduled,
             "service_ready_url": "/ready",
             "stdout": stdout,

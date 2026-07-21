@@ -6,9 +6,6 @@
         <a href="/incidents" class="tap-target inline-flex items-center justify-center rounded-2xl px-4 text-sm font-semibold transition {% if active_page == 'incidents' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
             Incidents
         </a>
-        <a href="/changelog" class="tap-target inline-flex items-center justify-center rounded-2xl px-4 text-sm font-semibold transition {% if active_page == 'changelog' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
-            Änderungen
-        </a>
         <a href="/settings" class="tap-target inline-flex items-center justify-center rounded-2xl px-4 text-sm font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
             Einstellungen
         </a>
@@ -17,7 +14,7 @@
 
 {% macro render_mobile_tabbar(active_page) -%}
     <nav class="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-slate-950/95 px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2 shadow-panel backdrop-blur lg:hidden">
-        <div class="mx-auto grid max-w-7xl grid-cols-4 gap-2">
+        <div class="mx-auto grid max-w-7xl grid-cols-3 gap-2">
             <a href="/" class="tap-target inline-flex min-h-[58px] flex-col items-center justify-center rounded-2xl text-xs font-semibold transition {% if active_page == 'dashboard' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="mb-1 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M3 11.5 12 4l9 7.5M5 10v10h14V10"/>
@@ -29,12 +26,6 @@
                     <path stroke-linecap="round" stroke-linejoin="round" d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>
                 </svg>
                 Incidents
-            </a>
-            <a href="/changelog" class="tap-target inline-flex min-h-[58px] flex-col items-center justify-center rounded-2xl text-xs font-semibold transition {% if active_page == 'changelog' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
-                <svg xmlns="http://www.w3.org/2000/svg" class="mb-1 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 6h8M8 10h8M8 14h5M5 3h14v18l-3-2-3 2-3-2-3 2-2-1.33V3Z"/>
-                </svg>
-                Neu
             </a>
             <a href="/settings" class="tap-target inline-flex min-h-[58px] flex-col items-center justify-center rounded-2xl text-xs font-semibold transition {% if active_page == 'settings' %}bg-sky-500 text-slate-950{% else %}border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10{% endif %}">
                 <svg xmlns="http://www.w3.org/2000/svg" class="mb-1 h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -107,6 +98,10 @@ systemctl restart keepup.service</p>
                             <button id="update-run" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 transition hover:bg-amber-300">Update starten</button>
                         </div>
 
+                        <div id="update-pending-changes-panel" class="hidden mt-4 rounded-2xl border border-sky-400/20 bg-sky-500/10 p-3 text-sm">
+                            <p class="font-semibold text-sky-100">Änderungen in diesem Update</p>
+                            <div id="update-pending-changes" class="mt-2 space-y-2"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -128,7 +123,7 @@ systemctl restart keepup.service</p>
                 </div>
                 <div class="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-sm text-slate-200">
                     <p class="font-semibold text-emerald-100">Änderungen im Update</p>
-                    <ul id="update-result-list" class="mt-2 list-disc space-y-1 pl-5 text-slate-200"></ul>
+                    <div id="update-result-list" class="mt-2 space-y-2 text-slate-200"></div>
                 </div>
                 <div class="mt-4 flex flex-wrap gap-3">
                     <button id="update-download-backup" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl bg-sky-500 px-4 text-sm font-semibold text-slate-950 transition hover:bg-sky-400">Backup herunterladen</button>
@@ -200,6 +195,10 @@ systemctl restart keepup.service</p>
                                 <span class="text-xs uppercase tracking-wide text-slate-500">Status</span>
                                 <p id="update-restart-fact" class="mt-1 text-sm text-slate-200">Initialisiere Neustart-Sequenz…</p>
                             </div>
+                            <div id="update-restart-changes-panel" class="hidden mt-3 rounded-2xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 text-sm">
+                                <span class="text-xs uppercase tracking-wide text-sky-200/75">Änderungen im Update</span>
+                                <div id="update-restart-changes" class="mt-2 space-y-2"></div>
+                            </div>
                             <div class="mt-4 flex flex-wrap items-center gap-3">
                                 <button id="update-restart-reload" type="button" class="tap-target inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
                                     Seite neu laden
@@ -258,6 +257,74 @@ systemctl restart keepup.service</p>
                         codename,
                         facts,
                     };
+                }
+
+                function normalizeChangeEntry(entry) {
+                    if (entry && typeof entry === 'object') {
+                        return {
+                            sha: entry.sha || '',
+                            summary: entry.summary || entry.subject || 'Technische Änderung',
+                            subject: entry.subject || '',
+                            committedAt: entry.committed_at || '',
+                        };
+                    }
+                    const text = String(entry || '').trim();
+                    const match = text.match(/^([a-f0-9]{7,})\s+(.+)$/i);
+                    return {
+                        sha: match ? match[1].slice(0, 7) : '',
+                        summary: match ? match[2] : (text || 'Technische Änderung'),
+                        subject: text,
+                        committedAt: '',
+                    };
+                }
+
+                function renderChangeCards(container, entries, emptyText = 'Keine Detailänderungen verfügbar.') {
+                    if (!container) return;
+                    container.innerHTML = '';
+                    const changes = Array.isArray(entries) ? entries.map(normalizeChangeEntry).filter((entry) => entry.summary) : [];
+                    if (!changes.length) {
+                        const empty = document.createElement('p');
+                        empty.className = 'text-sm text-slate-400';
+                        empty.textContent = emptyText;
+                        container.appendChild(empty);
+                        return;
+                    }
+                    changes.forEach((entry) => {
+                        const card = document.createElement('div');
+                        card.className = 'rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2';
+                        const meta = document.createElement('div');
+                        meta.className = 'flex items-center justify-between gap-2';
+                        const sha = document.createElement('span');
+                        sha.className = 'font-mono text-[11px] text-sky-200';
+                        sha.textContent = entry.sha || 'Git';
+                        const date = document.createElement('span');
+                        date.className = 'text-[11px] text-slate-500';
+                        date.textContent = entry.committedAt || '';
+                        meta.appendChild(sha);
+                        meta.appendChild(date);
+                        const summary = document.createElement('p');
+                        summary.className = 'mt-1 text-sm font-semibold text-slate-100';
+                        summary.textContent = entry.summary;
+                        card.appendChild(meta);
+                        card.appendChild(summary);
+                        container.appendChild(card);
+                    });
+                }
+
+                function showPendingChanges(entries) {
+                    const panel = document.getElementById('update-pending-changes-panel');
+                    const container = document.getElementById('update-pending-changes');
+                    if (!panel || !container || !Array.isArray(entries) || !entries.length) return;
+                    renderChangeCards(container, entries);
+                    panel.classList.remove('hidden');
+                }
+
+                function showRestartChanges(entries) {
+                    const panel = document.getElementById('update-restart-changes-panel');
+                    const container = document.getElementById('update-restart-changes');
+                    if (!panel || !container || !Array.isArray(entries) || !entries.length) return;
+                    renderChangeCards(container, entries);
+                    panel.classList.remove('hidden');
                 }
 
                 async function waitForServiceReady(maxAttempts = 40, delayMs = 900) {
@@ -496,19 +563,10 @@ systemctl restart keepup.service</p>
                     if (!modal || !resultText || !resultList || !downloadBtn || !reloadBtn) return;
 
                     resultText.textContent = 'KeepUp wurde aktualisiert. Das Backup kannst du jetzt herunterladen und danach die Seite neu laden.';
-                    resultList.innerHTML = '';
-                    const changes = Array.isArray(payload.changes) ? payload.changes : [];
-                    if (changes.length) {
-                        changes.forEach((entry) => {
-                            const li = document.createElement('li');
-                            li.textContent = entry;
-                            resultList.appendChild(li);
-                        });
-                    } else {
-                        const li = document.createElement('li');
-                        li.textContent = 'Fehlerbehebung';
-                        resultList.appendChild(li);
-                    }
+                    const changes = Array.isArray(payload.change_details) && payload.change_details.length
+                        ? payload.change_details
+                        : (Array.isArray(payload.changes) ? payload.changes : []);
+                    renderChangeCards(resultList, changes, 'Fehlerbehebung und kleinere Verbesserungen.');
 
                     modal.classList.remove('hidden');
 
@@ -563,6 +621,7 @@ systemctl restart keepup.service</p>
                         const current = data.current_version ? `v${data.current_version}` : 'lokal';
                         const remote = data.remote_sha_short ? data.remote_sha_short : 'GitHub';
                         text.textContent = `Deine Version: ${current}. Neues Update: ${remote}.`;
+                        showPendingChanges(data.pending_changes || []);
 
                         const hidePopover = () => popover.classList.add('hidden');
                         const togglePopover = () => popover.classList.toggle('hidden');
@@ -591,6 +650,7 @@ systemctl restart keepup.service</p>
                                             throw new Error('update_proof_missing');
                                         }
                                         setRestartStage("install");
+                                        showRestartChanges((latestUpdateStatus && latestUpdateStatus.pending_changes) || []);
                                         const runRes = await fetch('/api/update/run', {
                                             method: 'POST',
                                             headers: {

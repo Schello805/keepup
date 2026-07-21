@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from main import _changelog_cache, _humanize_commit_subject, get_changelog_items
+from main import _changelog_cache, _format_commit_change, _humanize_commit_subject, get_changelog_items
 
 
 class ChangelogTests(unittest.TestCase):
@@ -29,6 +29,13 @@ class ChangelogTests(unittest.TestCase):
 
         self.assertEqual(len(footer_items), 3)
         self.assertEqual(len(detail_items), 8)
+
+    def test_commit_change_contains_user_summary(self):
+        change = _format_commit_change("5b3d0a8abcdef", "Add automated CI checks", "21.07.2026")
+
+        self.assertEqual(change["sha"], "5b3d0a8")
+        self.assertEqual(change["summary"], "Automatische Tests auf GitHub wurden ergänzt.")
+        self.assertEqual(change["committed_at"], "21.07.2026")
 
 
 if __name__ == "__main__":
