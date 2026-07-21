@@ -209,10 +209,14 @@
                                     <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase {{ status_pill_classes(status) }}">
                                         {{ status }}
                                     </span>
-                                    <form action="/monitors/{{ monitor.id }}/run" method="post">
+                                    <form action="/monitors/{{ monitor.id }}/run" method="post" class="js-monitor-run">
                                         <button type="submit" aria-label="Monitor jetzt prüfen" title="Jetzt prüfen" class="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-slate-100 transition hover:bg-white/15">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <svg data-run-icon xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                                 <path stroke-linecap="round" stroke-linejoin="round" d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"/>
+                                            </svg>
+                                            <svg data-run-spinner xmlns="http://www.w3.org/2000/svg" class="hidden h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"></path>
                                             </svg>
                                             <span class="sr-only">Jetzt prüfen</span>
                                         </button>
@@ -993,6 +997,56 @@
             });
         }
 
+        function refreshMonitorCards() {
+            const cardsShell = document.getElementById("monitor-cards-shell");
+            if (cardsShell && window.htmx) {
+                window.htmx.ajax("GET", "/api/live/cards", { target: cardsShell, swap: "outerHTML" });
+            }
+        }
+
+        function bindMonitorRunForms(scope = document) {
+            scope.querySelectorAll("form.js-monitor-run").forEach((form) => {
+                if (!(form instanceof HTMLFormElement)) return;
+                if (form.dataset.bound === "1") return;
+                form.dataset.bound = "1";
+                form.addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const button = form.querySelector("button[type='submit']");
+                    const icon = form.querySelector("[data-run-icon]");
+                    const spinner = form.querySelector("[data-run-spinner]");
+                    if (button instanceof HTMLButtonElement) {
+                        button.disabled = true;
+                        button.classList.add("opacity-80");
+                    }
+                    icon?.classList.add("hidden");
+                    spinner?.classList.remove("hidden");
+                    try {
+                        const response = await fetch(form.action, {
+                            method: "POST",
+                            headers: { Accept: "application/json" },
+                            credentials: "same-origin",
+                        });
+                        if (!response.ok) {
+                            showToast("Manueller Check fehlgeschlagen.", "error");
+                            return;
+                        }
+                        const data = await response.json();
+                        showToast((data && data.message) ? data.message : "Monitor wurde geprüft.", "info");
+                        refreshMonitorCards();
+                    } catch (error) {
+                        showToast("Manueller Check fehlgeschlagen.", "error");
+                    } finally {
+                        icon?.classList.remove("hidden");
+                        spinner?.classList.add("hidden");
+                        if (button instanceof HTMLButtonElement) {
+                            button.disabled = false;
+                            button.classList.remove("opacity-80");
+                        }
+                    }
+                });
+            });
+        }
+
         async function ensureApexChartsLoaded() {
             if (typeof ApexCharts !== "undefined") return true;
             if (window.__keepupApexChartsPromise) {
@@ -1089,6 +1143,7 @@
         applyMonitorFilters();
         restoreOpenDetails();
         bindMonitorToggleForms();
+        bindMonitorRunForms();
         window.bindCardFlipHandlers = function bindCardFlipHandlers() {};
         if (!window.__keepupWheelFixInstalled) {
             window.__keepupWheelFixInstalled = true;
@@ -1116,6 +1171,7 @@
             applyMonitorFilters();
             restoreOpenDetails();
             bindMonitorToggleForms();
+            bindMonitorRunForms();
         });
         document.body.addEventListener("htmx:beforeRequest", (event) => {
             const target = event.detail?.elt;

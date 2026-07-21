@@ -1469,10 +1469,20 @@ async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
 
 
 @app.post("/monitors/{monitor_id}/run")
-async def run_monitor_route(monitor_id: int) -> RedirectResponse:
-    await execute_monitor_check(monitor_id)
-    invalidate_dashboard_cards_cache()
-    return flash_redirect("/", "Manueller Check wurde gestartet.", "info")
+async def run_monitor_route(monitor_id: int, request: Request):
+    result = await execute_monitor_check(monitor_id)
+    await asyncio.to_thread(get_dashboard_cards_html, True)
+    accept = (request.headers.get("accept") or "").lower()
+    if "application/json" in accept:
+        return JSONResponse(
+            {
+                "ok": bool(result),
+                "status": result.get("status") if result else None,
+                "message": "Monitor wurde geprüft.",
+            },
+            status_code=200 if result else 404,
+        )
+    return flash_redirect("/", "Monitor wurde geprüft.", "info")
 
 
 @app.post("/settings/notifications")
