@@ -926,6 +926,9 @@ def _humanize_commit_subject(subject: str) -> str:
     translations = (
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
+        ("tighten monitor card height", "Monitor-Karten wurden kompakter gemacht und bleiben gleichmäßiger hoch."),
+        ("make update wait screen more compact", "Der Wartescreen während eines Updates wurde kompakter und besser für Smartphones optimiert."),
+        ("improve update changelog context", "Update-Änderungen werden mit mehr deutschem Kontext angezeigt."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
         ("harden local operations and backup handling", "Lokale Sicherheits- und Backup-Schutzfunktionen wurden verbessert."),
@@ -939,8 +942,26 @@ def _humanize_commit_subject(subject: str) -> str:
     for prefix, text in translations:
         if lower.startswith(prefix):
             return text
+    keyword_summaries = (
+        (("card", "height"), "Die Darstellung der Monitor-Karten wurde verbessert."),
+        (("monitor", "card"), "Die Monitor-Karten wurden im Frontend verbessert."),
+        (("changelog",), "Die Anzeige der Änderungen wurde verbessert."),
+        (("update",), "Der Update-Ablauf wurde verbessert."),
+        (("telegram", "notification"), "Telegram-Benachrichtigungen wurden verbessert."),
+        (("backup",), "Backup-Funktionen wurden verbessert."),
+        (("import",), "Der Import von Backups wurde verbessert."),
+        (("dashboard",), "Das Dashboard wurde verbessert."),
+        (("incident",), "Die Incident-Ansicht wurde verbessert."),
+        (("settings",), "Die Einstellungen wurden verbessert."),
+        (("security",), "Sicherheitsaspekte wurden verbessert."),
+        (("test",), "Automatische Tests wurden verbessert."),
+        (("fix",), "Ein Fehler wurde behoben."),
+    )
+    for keywords, text in keyword_summaries:
+        if all(keyword in lower for keyword in keywords):
+            return text
     if normalized:
-        return normalized[0].upper() + normalized[1:]
+        return "Technische Verbesserung wurde eingespielt."
     return "Technische Änderung im Projekt."
 
 

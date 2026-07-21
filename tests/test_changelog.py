@@ -13,7 +13,12 @@ class ChangelogTests(unittest.TestCase):
     def test_unknown_commit_subject_stays_readable(self):
         summary = _humanize_commit_subject("improve dashboard loading")
 
-        self.assertEqual(summary, "Improve dashboard loading")
+        self.assertEqual(summary, "Das Dashboard wurde verbessert.")
+
+    def test_recent_monitor_card_commit_is_humanized(self):
+        summary = _humanize_commit_subject("Tighten monitor card height")
+
+        self.assertEqual(summary, "Monitor-Karten wurden kompakter gemacht und bleiben gleichmäßiger hoch.")
 
     def test_changelog_cache_keeps_enough_items_for_detail_page(self):
         output = "\n".join(
