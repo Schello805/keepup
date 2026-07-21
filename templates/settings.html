@@ -163,7 +163,8 @@
                     <div class="mt-4 grid grid-cols-1 gap-3">
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Bot Token</span>
-                            <input name="telegram_bot_token" value="{{ settings.telegram_bot_token }}" placeholder="123456:ABC..." autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
+                            <input name="telegram_bot_token" value="" placeholder="{% if settings.telegram_bot_token %}Gespeichert - leer lassen zum Beibehalten{% else %}123456:ABC...{% endif %}" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
+                            <p class="text-xs text-slate-500">Aus Sicherheitsgründen wird der gespeicherte Token nicht angezeigt. Leer lassen, um ihn beizubehalten.</p>
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Chat ID</span>
@@ -199,7 +200,8 @@
                         </label>
                         <label class="space-y-2 sm:col-span-2">
                             <span class="text-sm text-slate-300">Passwort</span>
-                            <input name="smtp_password" type="password" value="{{ settings.smtp_password }}" placeholder="SMTP Passwort" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
+                            <input name="smtp_password" type="password" value="" placeholder="{% if settings.smtp_password %}Gespeichert - leer lassen zum Beibehalten{% else %}SMTP Passwort{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
+                            <p class="text-xs text-slate-500">Das gespeicherte Passwort wird nicht angezeigt. Leer lassen, um es beizubehalten.</p>
                         </label>
                         <label class="space-y-2">
                             <span class="text-sm text-slate-300">Von E-Mail</span>
@@ -239,7 +241,7 @@
                             JSON importieren
                         </button>
                     </div>
-                    <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Monitore und Einstellungen werden vollständig gesichert, Check- und Incident-Historie jedoch nur für die letzten 24 Stunden. Danach startet KeepUp die Checks für aktive Monitore erneut.</p>
+                    <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Monitore und Einstellungen werden gesichert, Check- und Incident-Historie jedoch nur für die letzten 24 Stunden. Telegram-Token und SMTP-Passwort werden aus Sicherheitsgründen nicht exportiert und müssen nach einer Migration neu eingetragen werden. Maximale Importgröße: 25 MB.</p>
                 {% endcall %}
 
                 {% call accordion_section('settings-help', 'Hilfe', 'Wie funktionieren Ping- und HTTP/S-Monitore und wann verwendet man sie?', False) %}

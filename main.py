@@ -72,6 +72,8 @@ UPDATE_STATUS_TTL_SECONDS = 60
 _update_status_cache: dict[str, Any] = {"expires_at": 0.0, "payload": None}
 APP_VERSION_TTL_SECONDS = 60
 DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
+MAX_IMPORT_BYTES = max(1, int(os.environ.get("KEEPUP_MAX_IMPORT_MB", "25"))) * 1024 * 1024
+IMPORT_READ_CHUNK_BYTES = 1024 * 1024
 _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
 _dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None}
 _dashboard_cards_cache_lock = threading.Lock()
@@ -459,6 +461,7 @@ def build_notification_settings_payload(
     smtp_use_tls: Optional[str],
     smtp_use_ssl: Optional[str],
 ) -> dict:
+    existing_settings = get_settings()
     default_monitor_interval = int(default_monitor_interval)
     global_monitor_interval_override = int(global_monitor_interval_override)
     down_failures_threshold = int(down_failures_threshold)
@@ -499,18 +502,30 @@ def build_notification_settings_payload(
         "notification_batch_window_seconds": notification_batch_window_seconds,
         "scheduler_jitter_seconds": scheduler_jitter_seconds,
         "telegram_enabled": telegram_enabled == "on",
-        "telegram_bot_token": telegram_bot_token.strip(),
+        "telegram_bot_token": telegram_bot_token.strip() or str(existing_settings.get("telegram_bot_token") or ""),
         "telegram_chat_id": telegram_chat_id.strip(),
         "smtp_enabled": smtp_enabled == "on",
         "smtp_host": smtp_host.strip(),
         "smtp_port": smtp_port,
         "smtp_username": smtp_username.strip(),
-        "smtp_password": smtp_password,
+        "smtp_password": smtp_password or str(existing_settings.get("smtp_password") or ""),
         "smtp_from_email": smtp_from_email.strip(),
         "smtp_to_email": smtp_to_email.strip(),
         "smtp_use_tls": smtp_use_tls == "on",
         "smtp_use_ssl": smtp_use_ssl == "on",
     }
+
+
+async def read_limited_upload(file: UploadFile, max_bytes: int = MAX_IMPORT_BYTES) -> bytes:
+    content = bytearray()
+    while True:
+        chunk = await file.read(IMPORT_READ_CHUNK_BYTES)
+        if not chunk:
+            break
+        content.extend(chunk)
+        if len(content) > max_bytes:
+            raise ValueError(f"Backup-Datei ist zu groß. Maximal erlaubt sind {max_bytes // 1024 // 1024} MB.")
+    return bytes(content)
 
 
 def build_dashboard_context(request: Request) -> dict:
@@ -1687,15 +1702,29 @@ async def export_configuration() -> JSONResponse:
 
 
 @app.post("/api/import")
-async def import_configuration(file: UploadFile = File(...)) -> RedirectResponse:
+async def import_configuration(request: Request, file: UploadFile = File(...)) -> RedirectResponse:
     if not file.filename or not file.filename.endswith(".json"):
-        raise HTTPException(status_code=400, detail="Please upload a JSON backup file.")
+        return flash_redirect("/settings", "Bitte eine JSON-Backup-Datei auswählen.", "error")
 
-    content = await file.read()
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit():
+        # Multipart overhead is tiny, but allow one chunk of headroom to avoid false positives.
+        if int(content_length) > MAX_IMPORT_BYTES + IMPORT_READ_CHUNK_BYTES:
+            return flash_redirect(
+                "/settings",
+                f"Backup-Datei ist zu groß. Maximal erlaubt sind {MAX_IMPORT_BYTES // 1024 // 1024} MB.",
+                "error",
+            )
+
+    try:
+        content = await read_limited_upload(file)
+    except ValueError as exc:
+        return flash_redirect("/settings", str(exc), "error")
+
     try:
         payload = json.loads(content.decode("utf-8"))
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid JSON file: {exc}") from exc
+        return flash_redirect("/settings", f"Ungültige JSON-Datei: {exc}", "error")
 
     await asyncio.to_thread(import_backup, payload)
     reschedule_monitor_jobs(scheduler)

@@ -12,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = BASE_DIR / "keepup.db"
 HISTORY_LIMIT = 30
 BACKUP_HISTORY_HOURS = 24
+SECRET_SETTING_KEYS = {"telegram_bot_token", "smtp_password"}
 
 DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
@@ -1226,7 +1227,7 @@ def list_incidents(
         return [dict(row) for row in cursor.fetchall()]
 
 
-def export_backup() -> dict[str, Any]:
+def export_backup(include_secrets: bool = False) -> dict[str, Any]:
     cutoff = _backup_history_cutoff()
     with closing(get_db()) as conn:
         cursor = conn.cursor()
@@ -1248,11 +1249,14 @@ def export_backup() -> dict[str, Any]:
         incidents = [dict(row) for row in cursor.fetchall()]
         cursor.execute("SELECT key, value FROM settings ORDER BY key ASC")
         settings = {row["key"]: deserialize_setting(row["value"]) for row in cursor.fetchall()}
+        if not include_secrets:
+            settings = {key: value for key, value in settings.items() if key not in SECRET_SETTING_KEYS}
 
     return {
         "version": 1,
         "exported_at": utc_now(),
         "history_window_hours": BACKUP_HISTORY_HOURS,
+        "secrets_included": include_secrets,
         "monitors": monitors,
         "checks": checks,
         "incidents": incidents,

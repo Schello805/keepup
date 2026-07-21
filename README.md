@@ -133,7 +133,9 @@ Der Export enthält:
 - Checks der letzten 24 Stunden
 - Incidents der letzten 24 Stunden sowie weiterhin offene Incidents
 
-Dadurch bleiben Backups auch bei vielen Monitoren handlich. Beim Import wird dieselbe Begrenzung auf ältere Backups angewandt.
+Telegram Bot Token und SMTP-Passwort werden aus Sicherheitsgründen nicht in den JSON-Export geschrieben. Nach einer Migration musst du diese beiden Felder in den Einstellungen neu eintragen.
+
+Dadurch bleiben Backups auch bei vielen Monitoren handlich. Beim Import wird dieselbe Begrenzung auf ältere Backups angewandt. Zusätzlich akzeptiert KeepUp standardmäßig maximal 25 MB große Importdateien. Bei Bedarf kannst du den Wert über `KEEPUP_MAX_IMPORT_MB` anpassen.
 
 ## Benachrichtigungen
 
@@ -213,6 +215,8 @@ KeepUp ist für lokale Self-Hosted-Umgebungen optimiert. Für gute Reaktionszeit
   Besitzrechte des Projektverzeichnisses und der Datenbank prüfen
 - Import-/Update-Probleme:
   Logs des Services und Browser-Konsole prüfen
+- Backup zu groß:
+  KeepUp exportiert nur 24 Stunden Check-/Incident-Historie. Wenn du ältere Fremd- oder Legacy-Backups importierst, begrenze die Datei oder erhöhe `KEEPUP_MAX_IMPORT_MB` bewusst.
 
 ## Screenshot
 

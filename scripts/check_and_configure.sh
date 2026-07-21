@@ -136,6 +136,15 @@ WorkingDirectory=$ROOT_DIR
 ExecStart=$VENV_DIR/bin/uvicorn main:app --host 0.0.0.0 --port 8000 --log-level info
 Restart=on-failure
 RestartSec=5
+PrivateTmp=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+UMask=0077
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=-$ENV_FILE
 
