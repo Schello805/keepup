@@ -913,8 +913,26 @@ def get_app_version_display() -> str:
     return value
 
 
+def is_combo_monitor_type(monitor_type: str) -> bool:
+    return monitor_type in {"ping_http", "ping_http_or", "ping_http_and"}
+
+
+def combo_ping_mode(monitor_type: str) -> str:
+    return "and" if monitor_type == "ping_http_and" else "or"
+
+
+def normalize_monitor_target(monitor_type: str, target: str) -> str:
+    normalized = target.strip()
+    if monitor_type in {"http", "ping_http", "ping_http_or", "ping_http_and"} and normalized:
+        parsed = urlparse(normalized)
+        if not parsed.scheme:
+            normalized = f"https://{normalized}"
+    return normalized
+
+
 def invalidate_dashboard_cards_cache() -> None:
     with _dashboard_cards_cache_lock:
+        _dashboard_cards_cache["html"] = None
         _dashboard_cards_cache["expires_at"] = 0.0
 
 
@@ -1354,8 +1372,9 @@ async def create_monitor_route(
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
         raise HTTPException(status_code=400, detail="Unsupported HTTP method")
-    is_combo = monitor_type in {"ping_http", "ping_http_or", "ping_http_and"}
-    ping_mode = "and" if monitor_type == "ping_http_and" else "or"
+    target = normalize_monitor_target(monitor_type, target)
+    is_combo = is_combo_monitor_type(monitor_type)
+    ping_mode = combo_ping_mode(monitor_type)
     if is_combo and not ping_target.strip() and not urlparse(target).hostname:
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
     monitor_id = create_monitor(
@@ -1372,6 +1391,7 @@ async def create_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
+    invalidate_dashboard_cards_cache()
     reschedule_monitor_job(scheduler, monitor_id)
     asyncio.create_task(execute_monitor_check(monitor_id))
     return flash_redirect("/", "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.")
@@ -1398,8 +1418,9 @@ async def edit_monitor_route(
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
         raise HTTPException(status_code=400, detail="Unsupported HTTP method")
-    is_combo = monitor_type in {"ping_http", "ping_http_or", "ping_http_and"}
-    ping_mode = "and" if monitor_type == "ping_http_and" else "or"
+    target = normalize_monitor_target(monitor_type, target)
+    is_combo = is_combo_monitor_type(monitor_type)
+    ping_mode = combo_ping_mode(monitor_type)
     if is_combo and not ping_target.strip() and not urlparse(target).hostname:
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
 
@@ -1418,6 +1439,7 @@ async def edit_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
+    invalidate_dashboard_cards_cache()
     reschedule_monitor_job(scheduler, monitor_id)
     return flash_redirect("/", "Monitor wurde aktualisiert.")
 
@@ -1429,6 +1451,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Monitor not found")
     is_enabled = not bool(monitor.get("enabled", 1))
     set_monitor_enabled(monitor_id, is_enabled)
+    invalidate_dashboard_cards_cache()
     reschedule_monitor_job(scheduler, monitor_id)
     message = "Monitor wurde fortgesetzt." if is_enabled else "Monitor wurde pausiert."
     accept = (request.headers.get("accept") or "").lower()
@@ -1440,6 +1463,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 @app.post("/monitors/{monitor_id}/delete")
 async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
     delete_monitor(monitor_id)
+    invalidate_dashboard_cards_cache()
     remove_monitor_job(scheduler, monitor_id)
     return flash_redirect("/", "Monitor wurde gelöscht.", "warning")
 
@@ -1447,6 +1471,7 @@ async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
 @app.post("/monitors/{monitor_id}/run")
 async def run_monitor_route(monitor_id: int) -> RedirectResponse:
     await execute_monitor_check(monitor_id)
+    invalidate_dashboard_cards_cache()
     return flash_redirect("/", "Manueller Check wurde gestartet.", "info")
 
 
