@@ -924,6 +924,9 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
+        ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
+        ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
         ("harden local operations and backup handling", "Lokale Sicherheits- und Backup-Schutzfunktionen wurden verbessert."),
         ("run manual checks without page reload", "Manuelle Monitor-Prüfungen laufen ohne komplettes Neuladen der Seite."),
@@ -939,6 +942,22 @@ def _humanize_commit_subject(subject: str) -> str:
     if normalized:
         return normalized[0].upper() + normalized[1:]
     return "Technische Änderung im Projekt."
+
+
+def _format_german_date(date_value: str) -> str:
+    value = date_value.strip()
+    if not value:
+        return ""
+    try:
+        if "T" in value:
+            dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            return dt.strftime("%d.%m.%Y")
+        if len(value) == 10 and value[4] == "-" and value[7] == "-":
+            dt = datetime.strptime(value, "%Y-%m-%d")
+            return dt.strftime("%d.%m.%Y")
+    except ValueError:
+        return value
+    return value
 
 
 def get_changelog_items(limit: int = 8) -> list[dict[str, str]]:
@@ -1149,7 +1168,7 @@ def _format_commit_change(sha: str, subject: str, committed_at: str = "") -> dic
         "sha": sha[:7],
         "subject": subject,
         "summary": _humanize_commit_subject(subject),
-        "committed_at": committed_at,
+        "committed_at": _format_german_date(committed_at),
     }
 
 
@@ -1230,7 +1249,7 @@ async def _get_pending_update_changes(local_sha: Optional[str], remote_sha: Opti
             commit_payload = commit.get("commit") or {}
             message = str(commit_payload.get("message") or "").splitlines()[0].strip()
             author_payload = commit_payload.get("author") or {}
-            committed_at = str(author_payload.get("date") or "")[:10]
+            committed_at = str(author_payload.get("date") or "")
             if sha and message:
                 changes.append(_format_commit_change(sha, message, committed_at))
         return list(reversed(changes))

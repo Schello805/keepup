@@ -294,19 +294,25 @@ systemctl restart keepup.service</p>
                         card.className = 'rounded-xl border border-white/10 bg-slate-950/35 px-3 py-2';
                         const meta = document.createElement('div');
                         meta.className = 'flex items-center justify-between gap-2';
-                        const sha = document.createElement('span');
-                        sha.className = 'font-mono text-[11px] text-sky-200';
-                        sha.textContent = entry.sha || 'Git';
+                        const label = document.createElement('span');
+                        label.className = 'text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-200/80';
+                        label.textContent = 'Update';
                         const date = document.createElement('span');
                         date.className = 'text-[11px] text-slate-500';
                         date.textContent = entry.committedAt || '';
-                        meta.appendChild(sha);
-                        meta.appendChild(date);
+                        meta.appendChild(label);
+                        if (entry.committedAt) meta.appendChild(date);
                         const summary = document.createElement('p');
                         summary.className = 'mt-1 text-sm font-semibold text-slate-100';
                         summary.textContent = entry.summary;
+                        const context = document.createElement('p');
+                        context.className = 'mt-1 text-xs leading-5 text-slate-400';
+                        const technical = entry.subject && entry.subject !== entry.summary ? `Technisch: ${entry.subject}` : '';
+                        const reference = entry.sha ? `Commit ${entry.sha}` : '';
+                        context.textContent = [technical, reference].filter(Boolean).join(' · ');
                         card.appendChild(meta);
                         card.appendChild(summary);
+                        if (context.textContent) card.appendChild(context);
                         container.appendChild(card);
                     });
                 }
@@ -618,9 +624,11 @@ systemctl restart keepup.service</p>
                         }
                         pill.classList.remove('hidden');
                         if (mobilePill) mobilePill.classList.remove('hidden');
-                        const current = data.current_version ? `v${data.current_version}` : 'lokal';
-                        const remote = data.remote_sha_short ? data.remote_sha_short : 'GitHub';
-                        text.textContent = `Deine Version: ${current}. Neues Update: ${remote}.`;
+                        const current = data.current_version ? `v${data.current_version}` : 'deine lokale Version';
+                        const changeCount = Array.isArray(data.pending_changes) ? data.pending_changes.length : 0;
+                        text.textContent = changeCount
+                            ? `Installiert ist ${current}. Dieses Update bringt ${changeCount} Änderung${changeCount === 1 ? '' : 'en'} mit.`
+                            : `Installiert ist ${current}. Auf GitHub ist eine neuere Version verfügbar.`;
                         showPendingChanges(data.pending_changes || []);
 
                         const hidePopover = () => popover.classList.add('hidden');
