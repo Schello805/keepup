@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from monitor import check_ping_http_target_raw
+from monitor import _ntfy_target_url, check_ping_http_target_raw
 
 
 class PingHttpModeTests(unittest.IsolatedAsyncioTestCase):
@@ -61,6 +61,18 @@ class PingHttpModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response_time, 120.0)
         self.assertIsNone(error)
         self.assertIsNone(category)
+
+
+class NtfyNotificationTests(unittest.TestCase):
+    def test_ntfy_target_url_joins_server_and_topic(self):
+        url = _ntfy_target_url(
+            {
+                "ntfy_server_url": "https://ntfy.example.test/",
+                "ntfy_topic": "/keepup-alerts/",
+            }
+        )
+
+        self.assertEqual(url, "https://ntfy.example.test/keepup-alerts")
 
 
 if __name__ == "__main__":

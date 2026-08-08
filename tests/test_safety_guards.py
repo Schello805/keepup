@@ -20,6 +20,8 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
             "main.get_settings",
             return_value={
                 "telegram_bot_token": "existing-telegram-token",
+                "ntfy_token": "existing-ntfy-token",
+                "ntfy_password": "existing-ntfy-password",
                 "smtp_password": "existing-smtp-password",
             },
         ):
@@ -38,6 +40,13 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
                 telegram_enabled="on",
                 telegram_bot_token="",
                 telegram_chat_id="123",
+                ntfy_enabled="on",
+                ntfy_server_url="https://ntfy.example.test",
+                ntfy_topic="keepup",
+                ntfy_token="",
+                ntfy_username="keepup",
+                ntfy_password="",
+                ntfy_priority=3,
                 smtp_enabled="on",
                 smtp_host="smtp.example.test",
                 smtp_port=587,
@@ -50,6 +59,8 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(payload["telegram_bot_token"], "existing-telegram-token")
+        self.assertEqual(payload["ntfy_token"], "existing-ntfy-token")
+        self.assertEqual(payload["ntfy_password"], "existing-ntfy-password")
         self.assertEqual(payload["smtp_password"], "existing-smtp-password")
 
     async def test_limited_upload_rejects_oversized_content(self):

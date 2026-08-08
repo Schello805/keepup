@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Schello805/keepup/actions/workflows/ci.yml/badge.svg)](https://github.com/Schello805/keepup/actions/workflows/ci.yml)
 
-KeepUp ist eine leichtgewichtige, mobile-optimierte Self-Hosted-Monitoring-App für den lokalen Betrieb. Sie überwacht HTTP(S)-Ziele sowie Hostnamen/IPs per Ping und verschickt bei Statusänderungen Benachrichtigungen über Telegram oder SMTP.
+KeepUp ist eine leichtgewichtige, mobile-optimierte Self-Hosted-Monitoring-App für den lokalen Betrieb. Sie überwacht HTTP(S)-Ziele sowie Hostnamen/IPs per Ping und verschickt bei Statusänderungen Benachrichtigungen über Telegram, ntfy oder SMTP.
 Das gesamte Projekt wurde mittels VibeCoding erstellt und gepflegt. Ich freue mich über Feedback von Usern und / oder professionellen Entwicklern. 
 
 Die App setzt auf:
@@ -19,14 +19,14 @@ Die App setzt auf:
 - Kombinierte PING-/HTTP/S-Monitore mit getrenntem Ping-Ziel
 - Modus `PING oder HTTP`: DOWN wird erst gemeldet, wenn beide Prüfwege fehlschlagen
 - Modus `PING + HTTP`: DOWN wird gemeldet, sobald einer der beiden Prüfwege fehlschlägt
-- Benachrichtigungen bei Statusänderungen per Telegram und SMTP
+- Benachrichtigungen bei Statusänderungen per Telegram, ntfy und SMTP
 - Bestätigte DOWN-/UP-Logik mit Schwellwerten
 - Flapping-Erkennung
 - Incident-Timeline
 - Kompakter JSON-Export und -Import für Konfiguration und aktuelle Historie
 - Mobile-First-Dashboard mit Live-Updates
 - Separate Einstellungsseite
-- Testversand für Telegram und SMTP
+- Testversand für Telegram, ntfy und SMTP
 - In-App-Update-Prüfung
 - Automatische GitHub-CI für Python-Checks, Unit-Tests, Dependency-Checks und CSS-Build
 - Changelog-Seite aus den letzten GitHub-/Git-Commits mit verständlichen Änderungstexten
@@ -137,17 +137,18 @@ Der Export enthält:
 - Checks der letzten 24 Stunden
 - Incidents der letzten 24 Stunden sowie weiterhin offene Incidents
 
-Telegram Bot Token und SMTP-Passwort werden aus Sicherheitsgründen nicht in den JSON-Export geschrieben. Nach einer Migration musst du diese beiden Felder in den Einstellungen neu eintragen.
+Telegram Bot Token, ntfy Token, ntfy Passwort und SMTP-Passwort werden aus Sicherheitsgründen nicht in den JSON-Export geschrieben. Nach einer Migration musst du diese Felder in den Einstellungen neu eintragen.
 
 Dadurch bleiben Backups auch bei vielen Monitoren handlich. Beim Import wird dieselbe Begrenzung auf ältere Backups angewandt. Zusätzlich akzeptiert KeepUp standardmäßig maximal 25 MB große Importdateien. Bei Bedarf kannst du den Wert über `KEEPUP_MAX_IMPORT_MB` anpassen.
 
 ## Benachrichtigungen
 
-Telegram und SMTP werden nur bei echten Statuswechseln ausgelöst, nicht bei jedem einzelnen Check.
+Telegram, ntfy und SMTP werden nur bei echten Statuswechseln ausgelöst, nicht bei jedem einzelnen Check.
 
 Zusätzlich gibt es:
 
 - Testversand für Telegram
+- Testversand für ntfy
 - Testversand für SMTP
 - Sammelmeldungs-Fenster für mehrere Statusänderungen
 

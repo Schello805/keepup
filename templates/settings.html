@@ -74,7 +74,7 @@
         <section class="mt-5 grid grid-cols-1 gap-5">
             <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
                 <h2 class="text-lg font-semibold">Benachrichtigungen & Konfiguration</h2>
-                <p class="mt-1 text-sm text-slate-400">Hier konfigurierst du Zeitzone und Benachrichtigungskanäle (Telegram / SMTP). Die Seite lädt nicht live neu, damit Eingaben nicht unterbrochen werden.</p>
+                <p class="mt-1 text-sm text-slate-400">Hier konfigurierst du Zeitzone und Benachrichtigungskanäle (Telegram, ntfy und SMTP). Die Seite lädt nicht live neu, damit Eingaben nicht unterbrochen werden.</p>
                 <p class="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">Benachrichtigungen werden nur versendet, wenn sich der Status eines Monitors ändert, zum Beispiel von <span class="font-semibold text-rose-200">down</span> auf <span class="font-semibold text-emerald-200">up</span> oder umgekehrt.</p>
             </div>
 
@@ -96,7 +96,7 @@
                             </select>
                         </label>
                     </div>
-                    <p class="mt-3 text-xs text-slate-500">Die KeepUp URL wird in Telegram- und E-Mail-Benachrichtigungen als direkter Link zur Weboberfläche verwendet.</p>
+                    <p class="mt-3 text-xs text-slate-500">Die KeepUp URL wird in Telegram-, ntfy- und E-Mail-Benachrichtigungen als direkter Link zur Weboberfläche verwendet.</p>
                     <p class="mt-2 text-xs text-slate-500">Die Zeitzone steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
                 {% endcall %}
 
@@ -144,91 +144,148 @@
                     <p class="mt-2 text-xs text-slate-500">Die Aufbewahrungszeit legt fest, wie lange alte Check-Einträge in der Datenbank bleiben, bevor KeepUp sie automatisch bereinigt.</p>
                 {% endcall %}
 
-                {% call accordion_section('settings-telegram', 'Telegram', 'Bot-Token und Chat-ID für Statusmeldungen.', False) %}
-                    <div class="flex items-center justify-between gap-3">
-                        <p class="text-sm text-slate-400">Aktiviere Telegram und hinterlege Token/Chat-ID.</p>
-                        <input type="checkbox" name="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
-                    </div>
-                    <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
-                        <p class="text-sm font-semibold text-slate-200">BotFather-Anleitung</p>
-                        <p class="mt-1 text-sm text-slate-400">Wenn du Telegram zum ersten Mal einrichtest, geh diese Schritte einmal in Ruhe durch.</p>
-                        <ol class="mt-3 space-y-2 text-sm text-slate-300 list-decimal pl-5">
-                            <li>In Telegram <span class="font-semibold">@BotFather</span> öffnen.</li>
-                            <li>Mit <span class="font-semibold">/newbot</span> einen Bot erstellen und den Token kopieren.</li>
-                            <li>Dem Bot einmal schreiben (damit Telegram Updates erzeugt).</li>
-                            <li>Im Browser <span class="font-mono text-slate-200">https://api.telegram.org/botTOKEN/getUpdates</span> aufrufen und die <span class="font-semibold">chat.id</span> auslesen.</li>
-                            <li>Token und Chat ID oben speichern und anschließend mit <span class="font-semibold">Telegram testen</span> prüfen.</li>
-                        </ol>
-                    </div>
-                    <div class="mt-4 grid grid-cols-1 gap-3">
-                        <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Bot Token</span>
-                            <input name="telegram_bot_token" value="" placeholder="{% if settings.telegram_bot_token %}Gespeichert - leer lassen zum Beibehalten{% else %}123456:ABC...{% endif %}" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
-                            <p class="text-xs text-slate-500">Aus Sicherheitsgründen wird der gespeicherte Token nicht angezeigt. Leer lassen, um ihn beizubehalten.</p>
-                        </label>
-                        <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Chat ID</span>
-                            <input name="telegram_chat_id" value="{{ settings.telegram_chat_id }}" placeholder="-1001234567890" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
-                        </label>
-                    </div>
-                    <div class="mt-4 flex flex-col gap-3 sm:flex-row">
-                        <button type="submit" formaction="/settings/test/telegram" formmethod="post" class="{{ btn_classes('soft') }}">
-                            Telegram testen
-                        </button>
-                        <p class="text-sm text-slate-500">Verwendet die aktuell eingetragenen Werte und speichert sie vor dem Test.</p>
-                    </div>
-                {% endcall %}
-
-                {% call accordion_section('settings-smtp', 'SMTP / E-Mail', 'Versand bei Down und Recovery über deinen Mailserver.', False) %}
-                    <div class="flex items-center justify-between gap-3">
-                        <p class="text-sm text-slate-400">Aktiviere SMTP und hinterlege Host/Empfänger.</p>
-                        <input type="checkbox" name="smtp_enabled" {% if settings.smtp_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
-                    </div>
-
-                    <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <label class="space-y-2 sm:col-span-2">
-                            <span class="text-sm text-slate-300">SMTP Host</span>
-                            <input name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.example.com" autocomplete="url" data-lpignore="true" class="{{ input_classes() }}">
-                        </label>
-                        <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Port</span>
-                            <input type="number" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="587" inputmode="numeric" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
-                        </label>
-                        <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Benutzername</span>
-                            <input name="smtp_username" value="{{ settings.smtp_username }}" placeholder="monitor@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
-                        </label>
-                        <label class="space-y-2 sm:col-span-2">
-                            <span class="text-sm text-slate-300">Passwort</span>
-                            <input name="smtp_password" type="password" value="" placeholder="{% if settings.smtp_password %}Gespeichert - leer lassen zum Beibehalten{% else %}SMTP Passwort{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
-                            <p class="text-xs text-slate-500">Das gespeicherte Passwort wird nicht angezeigt. Leer lassen, um es beizubehalten.</p>
-                        </label>
-                        <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Von E-Mail</span>
-                            <input name="smtp_from_email" value="{{ settings.smtp_from_email }}" placeholder="keepup@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
-                        </label>
-                        <label class="space-y-2">
-                            <span class="text-sm text-slate-300">An E-Mail</span>
-                            <input name="smtp_to_email" value="{{ settings.smtp_to_email }}" placeholder="admin@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
-                        </label>
+                {% call accordion_section('settings-notifications', 'Benachrichtigungen', 'Statusmeldungen per Telegram, ntfy oder E-Mail versenden.', False) %}
+                    <div class="space-y-4">
+                    <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-base font-semibold text-slate-100">Telegram</h3>
+                                <p class="mt-1 text-sm text-slate-400">Bot-Token und Chat-ID für Statusmeldungen.</p>
+                            </div>
+                            <input type="checkbox" name="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
+                        </div>
+                        <p class="mt-3 text-sm text-slate-400">Aktiviere Telegram und hinterlege Token/Chat-ID.</p>
+                        <div class="mt-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                            <p class="text-sm font-semibold text-slate-200">BotFather-Anleitung</p>
+                            <p class="mt-1 text-sm text-slate-400">Wenn du Telegram zum ersten Mal einrichtest, geh diese Schritte einmal in Ruhe durch.</p>
+                            <ol class="mt-3 space-y-2 text-sm text-slate-300 list-decimal pl-5">
+                                <li>In Telegram <span class="font-semibold">@BotFather</span> öffnen.</li>
+                                <li>Mit <span class="font-semibold">/newbot</span> einen Bot erstellen und den Token kopieren.</li>
+                                <li>Dem Bot einmal schreiben (damit Telegram Updates erzeugt).</li>
+                                <li>Im Browser <span class="font-mono text-slate-200">https://api.telegram.org/botTOKEN/getUpdates</span> aufrufen und die <span class="font-semibold">chat.id</span> auslesen.</li>
+                                <li>Token und Chat ID speichern und anschließend mit <span class="font-semibold">Telegram testen</span> prüfen.</li>
+                            </ol>
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 gap-3">
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Bot Token</span>
+                                <input name="telegram_bot_token" value="" placeholder="{% if settings.telegram_bot_token %}Gespeichert - leer lassen zum Beibehalten{% else %}123456:ABC...{% endif %}" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
+                                <p class="text-xs text-slate-500">Aus Sicherheitsgründen wird der gespeicherte Token nicht angezeigt. Leer lassen, um ihn beizubehalten.</p>
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Chat ID</span>
+                                <input name="telegram_chat_id" value="{{ settings.telegram_chat_id }}" placeholder="-1001234567890" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                        </div>
+                        <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+                            <button type="submit" formaction="/settings/test/telegram" formmethod="post" class="{{ btn_classes('soft') }}">
+                                Telegram testen
+                            </button>
+                            <p class="text-sm text-slate-500">Verwendet die aktuell eingetragenen Werte und speichert sie vor dem Test.</p>
+                        </div>
                     </div>
 
-                    <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
-                        <label class="flex items-center gap-2">
-                            <input type="checkbox" name="smtp_use_tls" {% if settings.smtp_use_tls %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
-                            STARTTLS
-                        </label>
-                        <label class="flex items-center gap-2">
-                            <input type="checkbox" name="smtp_use_ssl" {% if settings.smtp_use_ssl %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
-                            SSL
-                        </label>
+                    <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-base font-semibold text-slate-100">ntfy</h3>
+                                <p class="mt-1 text-sm text-slate-400">Push-Nachrichten über deine selbst gehostete ntfy-Instanz.</p>
+                            </div>
+                            <input type="checkbox" name="ntfy_enabled" {% if settings.ntfy_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
+                        </div>
+                        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label class="space-y-2 sm:col-span-2">
+                                <span class="text-sm text-slate-300">Server-URL</span>
+                                <input name="ntfy_server_url" value="{{ settings.ntfy_server_url }}" placeholder="https://ntfy.example.com" autocomplete="url" data-lpignore="true" class="{{ input_classes() }}">
+                                <p class="text-xs text-slate-500">Basis-URL deiner ntfy-Instanz, ohne Topic am Ende.</p>
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Topic</span>
+                                <input name="ntfy_topic" value="{{ settings.ntfy_topic }}" placeholder="keepup-alerts" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Priorität</span>
+                                <select name="ntfy_priority" class="{{ select_classes() }}">
+                                    {% for priority, label in [(1, '1 - Minimum'), (2, '2 - Niedrig'), (3, '3 - Normal'), (4, '4 - Hoch'), (5, '5 - Maximal')] %}
+                                    <option value="{{ priority }}" {% if settings.ntfy_priority == priority %}selected{% endif %}>{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </label>
+                            <label class="space-y-2 sm:col-span-2">
+                                <span class="text-sm text-slate-300">Access Token</span>
+                                <input name="ntfy_token" type="password" value="" placeholder="{% if settings.ntfy_token %}Gespeichert - leer lassen zum Beibehalten{% else %}Optionaler ntfy Token{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
+                                <p class="text-xs text-slate-500">Für geschützte Topics. Wenn Token gesetzt ist, wird er bevorzugt vor Benutzer/Passwort verwendet.</p>
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Benutzername</span>
+                                <input name="ntfy_username" value="{{ settings.ntfy_username }}" placeholder="Optional" autocomplete="username" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Passwort</span>
+                                <input name="ntfy_password" type="password" value="" placeholder="{% if settings.ntfy_password %}Gespeichert - leer lassen zum Beibehalten{% else %}Optional{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                        </div>
+                        <div class="mt-4 flex flex-col gap-3 sm:flex-row">
+                            <button type="submit" formaction="/settings/test/ntfy" formmethod="post" class="{{ btn_classes('soft') }}">
+                                ntfy testen
+                            </button>
+                            <p class="text-sm text-slate-500">Sendet eine Test-Pushnachricht an das eingetragene Topic.</p>
+                        </div>
                     </div>
 
-                    <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-                        <button type="submit" formaction="/settings/test/smtp" formmethod="post" class="{{ btn_classes('soft') }}">
-                            SMTP testen
-                        </button>
-                        <p class="text-sm text-slate-500">Sendet eine Testmail an die eingetragene Empfängeradresse.</p>
+                    <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 class="text-base font-semibold text-slate-100">SMTP / E-Mail</h3>
+                                <p class="mt-1 text-sm text-slate-400">Versand bei Down und Recovery über deinen Mailserver.</p>
+                            </div>
+                            <input type="checkbox" name="smtp_enabled" {% if settings.smtp_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
+                        </div>
+                        <p class="mt-3 text-sm text-slate-400">Aktiviere SMTP und hinterlege Host/Empfänger.</p>
+                        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <label class="space-y-2 sm:col-span-2">
+                                <span class="text-sm text-slate-300">SMTP Host</span>
+                                <input name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.example.com" autocomplete="url" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Port</span>
+                                <input type="number" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="587" inputmode="numeric" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Benutzername</span>
+                                <input name="smtp_username" value="{{ settings.smtp_username }}" placeholder="monitor@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                            <label class="space-y-2 sm:col-span-2">
+                                <span class="text-sm text-slate-300">Passwort</span>
+                                <input name="smtp_password" type="password" value="" placeholder="{% if settings.smtp_password %}Gespeichert - leer lassen zum Beibehalten{% else %}SMTP Passwort{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
+                                <p class="text-xs text-slate-500">Das gespeicherte Passwort wird nicht angezeigt. Leer lassen, um es beizubehalten.</p>
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">Von E-Mail</span>
+                                <input name="smtp_from_email" value="{{ settings.smtp_from_email }}" placeholder="keepup@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                            <label class="space-y-2">
+                                <span class="text-sm text-slate-300">An E-Mail</span>
+                                <input name="smtp_to_email" value="{{ settings.smtp_to_email }}" placeholder="admin@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
+                            </label>
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="smtp_use_tls" {% if settings.smtp_use_tls %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
+                                STARTTLS
+                            </label>
+                            <label class="flex items-center gap-2">
+                                <input type="checkbox" name="smtp_use_ssl" {% if settings.smtp_use_ssl %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
+                                SSL
+                            </label>
+                        </div>
+                        <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <button type="submit" formaction="/settings/test/smtp" formmethod="post" class="{{ btn_classes('soft') }}">
+                                SMTP testen
+                            </button>
+                            <p class="text-sm text-slate-500">Sendet eine Testmail an die eingetragene Empfängeradresse.</p>
+                        </div>
+                    </div>
                     </div>
                 {% endcall %}
 
@@ -241,7 +298,7 @@
                             JSON importieren
                         </button>
                     </div>
-                    <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Monitore und Einstellungen werden gesichert, Check- und Incident-Historie jedoch nur für die letzten 24 Stunden. Telegram-Token und SMTP-Passwort werden aus Sicherheitsgründen nicht exportiert und müssen nach einer Migration neu eingetragen werden. Maximale Importgröße: 25 MB.</p>
+                    <p class="mt-3 text-xs text-slate-500">Beim Import wird der aktuelle Stand ersetzt. Monitore und Einstellungen werden gesichert, Check- und Incident-Historie jedoch nur für die letzten 24 Stunden. Telegram-Token, ntfy-Token, ntfy-Passwort und SMTP-Passwort werden aus Sicherheitsgründen nicht exportiert und müssen nach einer Migration neu eingetragen werden. Maximale Importgröße: 25 MB.</p>
                 {% endcall %}
 
                 {% call accordion_section('settings-help', 'Hilfe', 'Wie funktionieren Ping- und HTTP/S-Monitore und wann verwendet man sie?', False) %}

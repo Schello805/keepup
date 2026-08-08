@@ -146,6 +146,19 @@ def format_notification_error(channel: str, exc: Exception) -> str:
             return "Telegram API konnte nicht erreicht werden."
         return message or "Unbekannter Telegram-Fehler."
 
+    if channel == "ntfy":
+        if isinstance(exc, httpx.HTTPStatusError):
+            status = exc.response.status_code
+            detail = (exc.response.text or "").strip()
+            if detail:
+                return f"ntfy meldet Fehler {status}: {detail}"
+            return f"ntfy meldet Fehler {status}."
+        if isinstance(exc, (httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout)):
+            return "Zeitüberschreitung beim Kontaktieren des ntfy-Servers."
+        if isinstance(exc, httpx.ConnectError):
+            return "ntfy-Server konnte nicht erreicht werden."
+        return message or "Unbekannter ntfy-Fehler."
+
     if channel == "smtp":
         if isinstance(exc, smtplib.SMTPAuthenticationError):
             return "SMTP-Login fehlgeschlagen. Bitte Benutzername und Passwort prüfen."
@@ -407,6 +420,9 @@ async def send_batched_status_change_notifications(
     if settings.get("telegram_enabled") and settings.get("telegram_bot_token") and settings.get("telegram_chat_id"):
         tasks.append(send_telegram_batch_notification(settings, items))
 
+    if settings.get("ntfy_enabled") and settings.get("ntfy_server_url") and settings.get("ntfy_topic"):
+        tasks.append(send_ntfy_batch_notification(settings, items))
+
     if settings.get("smtp_enabled") and settings.get("smtp_host") and settings.get("smtp_to_email"):
         tasks.append(asyncio.to_thread(send_email_batch_notification, settings, items))
 
@@ -498,12 +514,23 @@ def send_email_batch_notification(
     subject, body = build_batch_notification_message(settings, items)
     send_email_text(settings, subject, body)
 
+
+async def send_ntfy_batch_notification(
+    settings: dict[str, Any],
+    items: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> None:
+    subject, body = build_batch_notification_message(settings, items)
+    await send_ntfy_text(settings, subject, body, tags="loudspeaker")
+
 async def send_status_change_notifications(monitor: dict[str, Any], result: dict[str, Any]) -> None:
     settings = await asyncio.to_thread(get_settings)
     tasks = []
 
     if settings.get("telegram_enabled") and settings.get("telegram_bot_token") and settings.get("telegram_chat_id"):
         tasks.append(send_telegram_notification(settings, monitor, result))
+
+    if settings.get("ntfy_enabled") and settings.get("ntfy_server_url") and settings.get("ntfy_topic"):
+        tasks.append(send_ntfy_notification(settings, monitor, result))
 
     if settings.get("smtp_enabled") and settings.get("smtp_host") and settings.get("smtp_to_email"):
         tasks.append(asyncio.to_thread(send_email_notification, settings, monitor, result))
@@ -763,6 +790,11 @@ def send_test_email_notification(settings: dict[str, Any]) -> None:
     send_email_notification(settings, monitor, result)
 
 
+async def send_test_ntfy_notification(settings: dict[str, Any]) -> None:
+    monitor, result = build_test_notification_payload("ntfy")
+    await send_ntfy_notification(settings, monitor, result)
+
+
 async def send_telegram_notification(
     settings: dict[str, Any],
     monitor: dict[str, Any],
@@ -792,6 +824,58 @@ def send_email_notification(
 ) -> None:
     subject, body = build_notification_message(settings, monitor, result)
     send_email_text(settings, subject, body)
+
+
+async def send_ntfy_notification(
+    settings: dict[str, Any],
+    monitor: dict[str, Any],
+    result: dict[str, Any],
+) -> None:
+    subject, body = build_notification_message(settings, monitor, result)
+    tags = "white_check_mark" if result.get("status") == "up" else "rotating_light"
+    await send_ntfy_text(settings, subject, body, tags=tags)
+
+
+def _ntfy_target_url(settings: dict[str, Any]) -> str:
+    server_url = str(settings.get("ntfy_server_url") or "").strip().rstrip("/")
+    topic = str(settings.get("ntfy_topic") or "").strip().strip("/")
+    if not server_url or not topic:
+        raise ValueError("ntfy Server-URL und Topic müssen gesetzt sein.")
+    return f"{server_url}/{topic}"
+
+
+async def send_ntfy_text(
+    settings: dict[str, Any],
+    title: str,
+    body: str,
+    tags: str = "bell",
+) -> None:
+    headers = {
+        "Title": title,
+        "Tags": tags,
+        "Priority": str(int(settings.get("ntfy_priority") or 3)),
+    }
+    app_url = _notification_app_url(settings)
+    if app_url:
+        headers["Click"] = app_url
+        headers["Actions"] = f"view, KeepUp öffnen, {app_url}, clear=true"
+    token = str(settings.get("ntfy_token") or "").strip()
+    username = str(settings.get("ntfy_username") or "").strip()
+    password = str(settings.get("ntfy_password") or "")
+    auth = None
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    elif username and password:
+        auth = httpx.BasicAuth(username, password)
+
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        response = await client.post(
+            _ntfy_target_url(settings),
+            content=body.encode("utf-8"),
+            headers=headers,
+            auth=auth,
+        )
+        response.raise_for_status()
 
 
 def send_email_text(settings: dict[str, Any], subject: str, body: str) -> None:

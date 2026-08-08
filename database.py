@@ -12,7 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = BASE_DIR / "keepup.db"
 HISTORY_LIMIT = 30
 BACKUP_HISTORY_HOURS = 24
-SECRET_SETTING_KEYS = {"telegram_bot_token", "smtp_password"}
+SECRET_SETTING_KEYS = {"telegram_bot_token", "smtp_password", "ntfy_token", "ntfy_password"}
 
 DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
@@ -31,6 +31,13 @@ DEFAULT_SETTINGS = {
     "telegram_enabled": False,
     "telegram_bot_token": "",
     "telegram_chat_id": "",
+    "ntfy_enabled": False,
+    "ntfy_server_url": "",
+    "ntfy_topic": "",
+    "ntfy_token": "",
+    "ntfy_username": "",
+    "ntfy_password": "",
+    "ntfy_priority": 3,
     "smtp_enabled": False,
     "smtp_host": "",
     "smtp_port": 587,

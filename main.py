@@ -54,6 +54,7 @@ from monitor import (
     reschedule_monitor_jobs,
     run_all_checks_once,
     send_test_email_notification,
+    send_test_ntfy_notification,
     send_test_telegram_notification,
     shutdown_monitor_runtime,
 )
@@ -428,12 +429,12 @@ def normalize_timezone(timezone_name: str) -> str:
     return timezone_name
 
 
-def normalize_base_url(base_url: str) -> str:
+def normalize_base_url(base_url: str, label: str = "KeepUp URL") -> str:
     base_url = base_url.strip()
     if not base_url:
         return ""
     if not (base_url.startswith("http://") or base_url.startswith("https://")):
-        raise ValueError("KeepUp URL muss mit http:// oder https:// beginnen.")
+        raise ValueError(f"{label} muss mit http:// oder https:// beginnen.")
     return base_url.rstrip("/")
 
 
@@ -452,6 +453,13 @@ def build_notification_settings_payload(
     telegram_enabled: Optional[str],
     telegram_bot_token: str,
     telegram_chat_id: str,
+    ntfy_enabled: Optional[str],
+    ntfy_server_url: str,
+    ntfy_topic: str,
+    ntfy_token: str,
+    ntfy_username: str,
+    ntfy_password: str,
+    ntfy_priority: int,
     smtp_enabled: Optional[str],
     smtp_host: str,
     smtp_port: int,
@@ -490,6 +498,9 @@ def build_notification_settings_payload(
         raise ValueError("Sammelmeldungs-Fenster darf nicht negativ sein.")
     if scheduler_jitter_seconds < 0:
         raise ValueError("Scheduler-Jitter darf nicht negativ sein.")
+    ntfy_priority = int(ntfy_priority)
+    if ntfy_priority < 1 or ntfy_priority > 5:
+        raise ValueError("ntfy Priorität muss zwischen 1 und 5 liegen.")
     return {
         "keepup_base_url": normalize_base_url(keepup_base_url),
         "app_timezone": normalize_timezone(app_timezone),
@@ -505,6 +516,13 @@ def build_notification_settings_payload(
         "telegram_enabled": telegram_enabled == "on",
         "telegram_bot_token": telegram_bot_token.strip() or str(existing_settings.get("telegram_bot_token") or ""),
         "telegram_chat_id": telegram_chat_id.strip(),
+        "ntfy_enabled": ntfy_enabled == "on",
+        "ntfy_server_url": normalize_base_url(ntfy_server_url, "ntfy Server-URL"),
+        "ntfy_topic": ntfy_topic.strip().strip("/"),
+        "ntfy_token": ntfy_token.strip() or str(existing_settings.get("ntfy_token") or ""),
+        "ntfy_username": ntfy_username.strip(),
+        "ntfy_password": ntfy_password or str(existing_settings.get("ntfy_password") or ""),
+        "ntfy_priority": ntfy_priority,
         "smtp_enabled": smtp_enabled == "on",
         "smtp_host": smtp_host.strip(),
         "smtp_port": smtp_port,
@@ -929,6 +947,8 @@ def _humanize_commit_subject(subject: str) -> str:
         ("tighten monitor card height", "Monitor-Karten wurden kompakter gemacht und bleiben gleichmäßiger hoch."),
         ("make update wait screen more compact", "Der Wartescreen während eines Updates wurde kompakter und besser für Smartphones optimiert."),
         ("improve update changelog context", "Update-Änderungen werden mit mehr deutschem Kontext angezeigt."),
+        ("add ntfy notification channel", "ntfy wurde als zusätzlicher Benachrichtigungskanal ergänzt."),
+        ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
         ("harden local operations and backup handling", "Lokale Sicherheits- und Backup-Schutzfunktionen wurden verbessert."),
@@ -1714,6 +1734,13 @@ async def update_notification_settings(
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
+    ntfy_enabled: Optional[str] = Form(None),
+    ntfy_server_url: str = Form(""),
+    ntfy_topic: str = Form(""),
+    ntfy_token: str = Form(""),
+    ntfy_username: str = Form(""),
+    ntfy_password: str = Form(""),
+    ntfy_priority: int = Form(3),
     smtp_enabled: Optional[str] = Form(None),
     smtp_host: str = Form(""),
     smtp_port: int = Form(587),
@@ -1740,6 +1767,13 @@ async def update_notification_settings(
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
+            ntfy_enabled,
+            ntfy_server_url,
+            ntfy_topic,
+            ntfy_token,
+            ntfy_username,
+            ntfy_password,
+            ntfy_priority,
             smtp_enabled,
             smtp_host,
             smtp_port,
@@ -1773,6 +1807,13 @@ async def test_telegram_settings(
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
+    ntfy_enabled: Optional[str] = Form(None),
+    ntfy_server_url: str = Form(""),
+    ntfy_topic: str = Form(""),
+    ntfy_token: str = Form(""),
+    ntfy_username: str = Form(""),
+    ntfy_password: str = Form(""),
+    ntfy_priority: int = Form(3),
     smtp_enabled: Optional[str] = Form(None),
     smtp_host: str = Form(""),
     smtp_port: int = Form(587),
@@ -1799,6 +1840,13 @@ async def test_telegram_settings(
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
+            ntfy_enabled,
+            ntfy_server_url,
+            ntfy_topic,
+            ntfy_token,
+            ntfy_username,
+            ntfy_password,
+            ntfy_priority,
             smtp_enabled,
             smtp_host,
             smtp_port,
@@ -1824,8 +1872,8 @@ async def test_telegram_settings(
     return flash_redirect("/settings", "Telegram-Test wurde erfolgreich versendet.")
 
 
-@app.post("/settings/test/smtp")
-async def test_smtp_settings(
+@app.post("/settings/test/ntfy")
+async def test_ntfy_settings(
     keepup_base_url: str = Form(""),
     app_timezone: str = Form("UTC"),
     default_monitor_interval: int = Form(60),
@@ -1840,6 +1888,13 @@ async def test_smtp_settings(
     telegram_enabled: Optional[str] = Form(None),
     telegram_bot_token: str = Form(""),
     telegram_chat_id: str = Form(""),
+    ntfy_enabled: Optional[str] = Form(None),
+    ntfy_server_url: str = Form(""),
+    ntfy_topic: str = Form(""),
+    ntfy_token: str = Form(""),
+    ntfy_username: str = Form(""),
+    ntfy_password: str = Form(""),
+    ntfy_priority: int = Form(3),
     smtp_enabled: Optional[str] = Form(None),
     smtp_host: str = Form(""),
     smtp_port: int = Form(587),
@@ -1866,6 +1921,94 @@ async def test_smtp_settings(
             telegram_enabled,
             telegram_bot_token,
             telegram_chat_id,
+            ntfy_enabled,
+            ntfy_server_url,
+            ntfy_topic,
+            ntfy_token,
+            ntfy_username,
+            ntfy_password,
+            ntfy_priority,
+            smtp_enabled,
+            smtp_host,
+            smtp_port,
+            smtp_username,
+            smtp_password,
+            smtp_from_email,
+            smtp_to_email,
+            smtp_use_tls,
+            smtp_use_ssl,
+        )
+    except ValueError as exc:
+        return flash_redirect("/settings", str(exc), "error")
+    update_settings(payload)
+
+    if not payload["ntfy_server_url"] or not payload["ntfy_topic"]:
+        return flash_redirect("/settings", "Bitte ntfy Server-URL und Topic für den Test ausfüllen.", "error")
+
+    try:
+        await send_test_ntfy_notification(payload)
+    except Exception as exc:
+        return flash_redirect("/settings", f"ntfy-Test fehlgeschlagen: {format_notification_error('ntfy', exc)}", "error")
+
+    return flash_redirect("/settings", "ntfy-Test wurde erfolgreich versendet.")
+
+
+@app.post("/settings/test/smtp")
+async def test_smtp_settings(
+    keepup_base_url: str = Form(""),
+    app_timezone: str = Form("UTC"),
+    default_monitor_interval: int = Form(60),
+    global_monitor_interval_override: int = Form(0),
+    down_failures_threshold: int = Form(3),
+    up_successes_threshold: int = Form(1),
+    retention_days: int = Form(7),
+    flapping_window_minutes: int = Form(15),
+    flapping_transition_threshold: int = Form(3),
+    notification_batch_window_seconds: int = Form(30),
+    scheduler_jitter_seconds: int = Form(10),
+    telegram_enabled: Optional[str] = Form(None),
+    telegram_bot_token: str = Form(""),
+    telegram_chat_id: str = Form(""),
+    ntfy_enabled: Optional[str] = Form(None),
+    ntfy_server_url: str = Form(""),
+    ntfy_topic: str = Form(""),
+    ntfy_token: str = Form(""),
+    ntfy_username: str = Form(""),
+    ntfy_password: str = Form(""),
+    ntfy_priority: int = Form(3),
+    smtp_enabled: Optional[str] = Form(None),
+    smtp_host: str = Form(""),
+    smtp_port: int = Form(587),
+    smtp_username: str = Form(""),
+    smtp_password: str = Form(""),
+    smtp_from_email: str = Form(""),
+    smtp_to_email: str = Form(""),
+    smtp_use_tls: Optional[str] = Form(None),
+    smtp_use_ssl: Optional[str] = Form(None),
+) -> RedirectResponse:
+    try:
+        payload = build_notification_settings_payload(
+            keepup_base_url,
+            app_timezone,
+            default_monitor_interval,
+            global_monitor_interval_override,
+            down_failures_threshold,
+            up_successes_threshold,
+            retention_days,
+            flapping_window_minutes,
+            flapping_transition_threshold,
+            notification_batch_window_seconds,
+            scheduler_jitter_seconds,
+            telegram_enabled,
+            telegram_bot_token,
+            telegram_chat_id,
+            ntfy_enabled,
+            ntfy_server_url,
+            ntfy_topic,
+            ntfy_token,
+            ntfy_username,
+            ntfy_password,
+            ntfy_priority,
             smtp_enabled,
             smtp_host,
             smtp_port,
