@@ -790,11 +790,6 @@ def send_test_email_notification(settings: dict[str, Any]) -> None:
     send_email_notification(settings, monitor, result)
 
 
-async def send_test_ntfy_notification(settings: dict[str, Any]) -> None:
-    monitor, result = build_test_notification_payload("ntfy")
-    await send_ntfy_notification(settings, monitor, result)
-
-
 async def send_test_ntfy_rich_notification(settings: dict[str, Any]) -> None:
     checked_at = format_timestamp_without_tz(
         datetime.now(timezone.utc).replace(microsecond=0).isoformat(),

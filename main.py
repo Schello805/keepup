@@ -54,7 +54,6 @@ from monitor import (
     reschedule_monitor_jobs,
     run_all_checks_once,
     send_test_email_notification,
-    send_test_ntfy_notification,
     send_test_ntfy_rich_notification,
     send_test_telegram_notification,
     shutdown_monitor_runtime,
@@ -950,6 +949,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("improve update changelog context", "Update-Änderungen werden mit mehr deutschem Kontext angezeigt."),
         ("add ntfy notification channel", "ntfy wurde als zusätzlicher Benachrichtigungskanal ergänzt."),
         ("add rich ntfy test notification", "Ein zusätzlicher ntfy-Layout-Test wurde ergänzt."),
+        ("remove duplicate ntfy test button", "Der doppelte ntfy-Testbutton wurde entfernt."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
@@ -1872,87 +1872,6 @@ async def test_telegram_settings(
         return flash_redirect("/settings", f"Telegram-Test fehlgeschlagen: {format_notification_error('telegram', exc)}", "error")
 
     return flash_redirect("/settings", "Telegram-Test wurde erfolgreich versendet.")
-
-
-@app.post("/settings/test/ntfy")
-async def test_ntfy_settings(
-    keepup_base_url: str = Form(""),
-    app_timezone: str = Form("UTC"),
-    default_monitor_interval: int = Form(60),
-    global_monitor_interval_override: int = Form(0),
-    down_failures_threshold: int = Form(3),
-    up_successes_threshold: int = Form(1),
-    retention_days: int = Form(7),
-    flapping_window_minutes: int = Form(15),
-    flapping_transition_threshold: int = Form(3),
-    notification_batch_window_seconds: int = Form(30),
-    scheduler_jitter_seconds: int = Form(10),
-    telegram_enabled: Optional[str] = Form(None),
-    telegram_bot_token: str = Form(""),
-    telegram_chat_id: str = Form(""),
-    ntfy_enabled: Optional[str] = Form(None),
-    ntfy_server_url: str = Form(""),
-    ntfy_topic: str = Form(""),
-    ntfy_token: str = Form(""),
-    ntfy_username: str = Form(""),
-    ntfy_password: str = Form(""),
-    ntfy_priority: int = Form(3),
-    smtp_enabled: Optional[str] = Form(None),
-    smtp_host: str = Form(""),
-    smtp_port: int = Form(587),
-    smtp_username: str = Form(""),
-    smtp_password: str = Form(""),
-    smtp_from_email: str = Form(""),
-    smtp_to_email: str = Form(""),
-    smtp_use_tls: Optional[str] = Form(None),
-    smtp_use_ssl: Optional[str] = Form(None),
-) -> RedirectResponse:
-    try:
-        payload = build_notification_settings_payload(
-            keepup_base_url,
-            app_timezone,
-            default_monitor_interval,
-            global_monitor_interval_override,
-            down_failures_threshold,
-            up_successes_threshold,
-            retention_days,
-            flapping_window_minutes,
-            flapping_transition_threshold,
-            notification_batch_window_seconds,
-            scheduler_jitter_seconds,
-            telegram_enabled,
-            telegram_bot_token,
-            telegram_chat_id,
-            ntfy_enabled,
-            ntfy_server_url,
-            ntfy_topic,
-            ntfy_token,
-            ntfy_username,
-            ntfy_password,
-            ntfy_priority,
-            smtp_enabled,
-            smtp_host,
-            smtp_port,
-            smtp_username,
-            smtp_password,
-            smtp_from_email,
-            smtp_to_email,
-            smtp_use_tls,
-            smtp_use_ssl,
-        )
-    except ValueError as exc:
-        return flash_redirect("/settings", str(exc), "error")
-    update_settings(payload)
-
-    if not payload["ntfy_server_url"] or not payload["ntfy_topic"]:
-        return flash_redirect("/settings", "Bitte ntfy Server-URL und Topic für den Test ausfüllen.", "error")
-
-    try:
-        await send_test_ntfy_notification(payload)
-    except Exception as exc:
-        return flash_redirect("/settings", f"ntfy-Test fehlgeschlagen: {format_notification_error('ntfy', exc)}", "error")
-
-    return flash_redirect("/settings", "ntfy-Test wurde erfolgreich versendet.")
 
 
 @app.post("/settings/test/ntfy-rich")
