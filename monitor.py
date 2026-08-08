@@ -884,7 +884,8 @@ async def send_ntfy_text(
     app_url = _notification_app_url(settings)
     if app_url:
         headers["Click"] = app_url
-        headers["Actions"] = f"view, KeepUp öffnen, {app_url}, clear=true"
+        # ntfy action labels are sent as HTTP headers; keep them ASCII-safe for all clients.
+        headers["Actions"] = f"view, KeepUp oeffnen, {app_url}, clear=true"
     token = str(settings.get("ntfy_token") or "").strip()
     username = str(settings.get("ntfy_username") or "").strip()
     password = str(settings.get("ntfy_password") or "")

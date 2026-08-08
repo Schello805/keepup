@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from monitor import _ntfy_target_url, check_ping_http_target_raw, send_test_ntfy_rich_notification
+from monitor import _ntfy_target_url, check_ping_http_target_raw, send_ntfy_text, send_test_ntfy_rich_notification
 
 
 class PingHttpModeTests(unittest.IsolatedAsyncioTestCase):
@@ -90,6 +90,41 @@ class NtfyNotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(args[1], "KeepUp ntfy Layout-Test")
         self.assertIn("strukturierte ntfy-Nachricht", args[2])
         self.assertEqual(kwargs["tags"], "test_tube,sparkles,white_check_mark")
+
+    async def test_ntfy_headers_are_ascii_safe_when_app_link_is_set(self):
+        settings = {
+            "ntfy_server_url": "https://ntfy.example.test",
+            "ntfy_topic": "keepup",
+            "ntfy_priority": 3,
+            "keepup_base_url": "https://keepup.example.test",
+        }
+
+        class FakeResponse:
+            def raise_for_status(self):
+                return None
+
+        class FakeClient:
+            last_headers = {}
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, *args):
+                return None
+
+            async def post(self, *args, **kwargs):
+                FakeClient.last_headers = kwargs["headers"]
+                return FakeResponse()
+
+        with patch("monitor.httpx.AsyncClient", FakeClient):
+            await send_ntfy_text(settings, "KeepUp ntfy Test", "Öffnen bleibt im Body erlaubt.")
+
+        for value in FakeClient.last_headers.values():
+            value.encode("ascii")
+        self.assertIn("KeepUp oeffnen", FakeClient.last_headers["Actions"])
 
 
 if __name__ == "__main__":
