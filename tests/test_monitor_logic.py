@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from monitor import _ntfy_target_url, check_ping_http_target_raw
+from monitor import _ntfy_target_url, check_ping_http_target_raw, send_test_ntfy_rich_notification
 
 
 class PingHttpModeTests(unittest.IsolatedAsyncioTestCase):
@@ -63,7 +63,7 @@ class PingHttpModeTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(category)
 
 
-class NtfyNotificationTests(unittest.TestCase):
+class NtfyNotificationTests(unittest.IsolatedAsyncioTestCase):
     def test_ntfy_target_url_joins_server_and_topic(self):
         url = _ntfy_target_url(
             {
@@ -73,6 +73,23 @@ class NtfyNotificationTests(unittest.TestCase):
         )
 
         self.assertEqual(url, "https://ntfy.example.test/keepup-alerts")
+
+    async def test_rich_ntfy_test_uses_layout_headers(self):
+        settings = {
+            "ntfy_server_url": "https://ntfy.example.test",
+            "ntfy_topic": "keepup",
+            "ntfy_priority": 4,
+            "keepup_base_url": "https://keepup.example.test",
+            "app_timezone": "UTC",
+        }
+
+        with patch("monitor.send_ntfy_text", AsyncMock()) as send_mock:
+            await send_test_ntfy_rich_notification(settings)
+
+        args, kwargs = send_mock.call_args
+        self.assertEqual(args[1], "KeepUp ntfy Layout-Test")
+        self.assertIn("strukturierte ntfy-Nachricht", args[2])
+        self.assertEqual(kwargs["tags"], "test_tube,sparkles,white_check_mark")
 
 
 if __name__ == "__main__":

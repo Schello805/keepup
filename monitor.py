@@ -795,6 +795,32 @@ async def send_test_ntfy_notification(settings: dict[str, Any]) -> None:
     await send_ntfy_notification(settings, monitor, result)
 
 
+async def send_test_ntfy_rich_notification(settings: dict[str, Any]) -> None:
+    checked_at = format_timestamp_without_tz(
+        datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
+        settings.get("app_timezone", "UTC"),
+    )
+    body = "\n".join(
+        [
+            "KeepUp Testnachricht",
+            "",
+            "Status: Wieder erreichbar",
+            "Monitor: Beispiel-Webserver",
+            "Check: PING oder HTTP",
+            f"Zeit: {checked_at}",
+            "Antwortzeit: 42 ms",
+            "",
+            "Diese strukturierte ntfy-Nachricht testet Titel, Tags, Priorität, Inhalt und den KeepUp-Öffnen-Link.",
+        ]
+    )
+    await send_ntfy_text(
+        settings,
+        "KeepUp ntfy Layout-Test",
+        body,
+        tags="test_tube,sparkles,white_check_mark",
+    )
+
+
 async def send_telegram_notification(
     settings: dict[str, Any],
     monitor: dict[str, Any],
