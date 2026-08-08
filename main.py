@@ -950,6 +950,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add ntfy notification channel", "ntfy wurde als zusätzlicher Benachrichtigungskanal ergänzt."),
         ("add rich ntfy test notification", "Ein zusätzlicher ntfy-Layout-Test wurde ergänzt."),
         ("remove duplicate ntfy test button", "Der doppelte ntfy-Testbutton wurde entfernt."),
+        ("collapse botfather guide", "Die BotFather-Anleitung ist jetzt platzsparend einklappbar."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
