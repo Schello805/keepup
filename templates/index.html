@@ -189,6 +189,7 @@
             {% set status = monitor.display_status %}
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
             {% set monitor_type_label = ('PING + HTTP' if monitor.ping_mode == 'and' else 'PING oder HTTP') if monitor.ping_enabled else monitor.type|upper %}
+            {% set first_check_running = status == 'unknown' and monitor.enabled and not monitor.last_checked_at %}
             <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative flex min-w-0 w-full flex-1 transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-3 shadow-panel card-sheen">
@@ -222,6 +223,11 @@
                                 </div>
                                 {% if status == 'down' %}
                                 <span class="text-[10px] whitespace-nowrap text-rose-300 opacity-80" title="Offline seit">seit {{ monitor.last_change_at or "-" }}</span>
+                                {% elif first_check_running %}
+                                <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
+                                    <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
+                                    Erster Check läuft
+                                </span>
                                 {% endif %}
                             </div>
                         </div>
@@ -266,6 +272,11 @@
                                     {% for item in monitor.history %}
                                         <span class="uptime-bar {% if item == 'up' %}bg-emerald-400{% elif item == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}" title="{{ item }}"></span>
                                     {% endfor %}
+                                {% elif first_check_running %}
+                                    <div class="flex items-center gap-2 text-sm text-amber-100/85">
+                                        <span class="h-4 w-4 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
+                                        <span>Warte auf erste Rückmeldung...</span>
+                                    </div>
                                 {% else %}
                                     <p class="text-sm text-slate-500">Noch keine Historie vorhanden.</p>
                                 {% endif %}

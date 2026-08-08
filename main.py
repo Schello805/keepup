@@ -951,6 +951,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add rich ntfy test notification", "Ein zusätzlicher ntfy-Layout-Test wurde ergänzt."),
         ("remove duplicate ntfy test button", "Der doppelte ntfy-Testbutton wurde entfernt."),
         ("collapse botfather guide", "Die BotFather-Anleitung ist jetzt platzsparend einklappbar."),
+        ("keep dashboard visible while monitors change", "Das Dashboard bleibt beim Anlegen und Ändern von Monitoren sichtbar."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
@@ -1092,6 +1093,11 @@ def invalidate_dashboard_cards_cache() -> None:
         _dashboard_cards_cache["expires_at"] = 0.0
 
 
+def mark_dashboard_cards_cache_stale() -> None:
+    with _dashboard_cards_cache_lock:
+        _dashboard_cards_cache["expires_at"] = 0.0
+
+
 def peek_dashboard_cards_html() -> Optional[str]:
     with _dashboard_cards_cache_lock:
         cached_html = _dashboard_cards_cache.get("html")
@@ -1147,6 +1153,11 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
             logger.exception("dashboard_cards_refresh_failed")
 
     _dashboard_cards_refresh_task = asyncio.create_task(_refresh())
+
+
+async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
+    await execute_monitor_check(monitor_id)
+    await asyncio.to_thread(get_dashboard_cards_html, True)
 
 
 def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
@@ -1627,9 +1638,10 @@ async def create_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
-    invalidate_dashboard_cards_cache()
     reschedule_monitor_job(scheduler, monitor_id)
-    asyncio.create_task(execute_monitor_check(monitor_id))
+    mark_dashboard_cards_cache_stale()
+    await asyncio.to_thread(get_dashboard_cards_html, True)
+    asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
     return flash_redirect("/", "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.")
 
 
@@ -1675,8 +1687,9 @@ async def edit_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
-    invalidate_dashboard_cards_cache()
     reschedule_monitor_job(scheduler, monitor_id)
+    mark_dashboard_cards_cache_stale()
+    await asyncio.to_thread(get_dashboard_cards_html, True)
     return flash_redirect("/", "Monitor wurde aktualisiert.")
 
 
@@ -1687,8 +1700,9 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Monitor not found")
     is_enabled = not bool(monitor.get("enabled", 1))
     set_monitor_enabled(monitor_id, is_enabled)
-    invalidate_dashboard_cards_cache()
     reschedule_monitor_job(scheduler, monitor_id)
+    mark_dashboard_cards_cache_stale()
+    await asyncio.to_thread(get_dashboard_cards_html, True)
     message = "Monitor wurde fortgesetzt." if is_enabled else "Monitor wurde pausiert."
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
@@ -1699,8 +1713,9 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 @app.post("/monitors/{monitor_id}/delete")
 async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
     delete_monitor(monitor_id)
-    invalidate_dashboard_cards_cache()
     remove_monitor_job(scheduler, monitor_id)
+    mark_dashboard_cards_cache_stale()
+    await asyncio.to_thread(get_dashboard_cards_html, True)
     return flash_redirect("/", "Monitor wurde gelöscht.", "warning")
 
 
@@ -2072,6 +2087,8 @@ async def import_configuration(request: Request, file: UploadFile = File(...)) -
 
     await asyncio.to_thread(import_backup, payload)
     reschedule_monitor_jobs(scheduler)
+    mark_dashboard_cards_cache_stale()
+    await asyncio.to_thread(get_dashboard_cards_html, True)
     asyncio.create_task(run_all_checks_once())
     return flash_redirect("/", "Backup wurde importiert. Checks laufen jetzt neu an.")
 
