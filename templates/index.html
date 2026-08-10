@@ -966,8 +966,17 @@
             panel.scrollIntoView({ behavior: "smooth", block: "start" });
         }
 
+        function isEditPanelOpen() {
+            const panel = document.getElementById("edit-monitor-panel");
+            return panel instanceof HTMLElement && !panel.classList.contains("hidden");
+        }
+
         function closeEditPanel() {
             document.getElementById("edit-monitor-panel")?.classList.add("hidden");
+            if (window.__keepupCardsRefreshSkippedWhileEditing) {
+                window.__keepupCardsRefreshSkippedWhileEditing = false;
+                scheduleMonitorCardRefreshes([250, 1200]);
+            }
         }
 
         function togglePingTargetField(mode) {
@@ -1170,7 +1179,7 @@
             bindMonitorRunForms();
         }
 
-        async function replaceShellFromUrl(url, shellId) {
+        async function replaceShellFromUrl(url, shellId, options = {}) {
             const shell = document.getElementById(shellId);
             if (!shell) return false;
             const response = await fetch(url, {
@@ -1186,6 +1195,13 @@
             template.innerHTML = html;
             const replacement = template.content.firstElementChild;
             if (!(replacement instanceof HTMLElement)) return false;
+            if (shellId === "monitor-cards-shell") {
+                if (options.sequence && options.sequence !== window.__keepupCardsRefreshSequence) return false;
+                if (!options.force && isEditPanelOpen()) {
+                    window.__keepupCardsRefreshSkippedWhileEditing = true;
+                    return false;
+                }
+            }
             shell.replaceWith(replacement);
             if (window.htmx && typeof window.htmx.process === "function") {
                 window.htmx.process(replacement);
@@ -1196,9 +1212,15 @@
             return true;
         }
 
-        async function refreshMonitorCards() {
+        async function refreshMonitorCards(options = {}) {
+            if (!options.force && isEditPanelOpen()) {
+                window.__keepupCardsRefreshSkippedWhileEditing = true;
+                return false;
+            }
+            window.__keepupCardsRefreshSequence = (window.__keepupCardsRefreshSequence || 0) + 1;
+            const sequence = window.__keepupCardsRefreshSequence;
             try {
-                return await replaceShellFromUrl("/api/live/cards", "monitor-cards-shell");
+                return await replaceShellFromUrl("/api/live/cards", "monitor-cards-shell", { ...options, sequence });
             } catch (error) {
                 console.warn("Monitor cards refresh failed", error);
                 return false;
@@ -1215,8 +1237,10 @@
         }
 
         function scheduleMonitorCardRefreshes(delays = [800, 2000, 5000, 10000, 20000]) {
-            delays.forEach((delay) => {
-                window.setTimeout(refreshMonitorCards, delay);
+            window.__keepupCardsRefreshTimers = window.__keepupCardsRefreshTimers || [];
+            window.__keepupCardsRefreshTimers.forEach((timer) => window.clearTimeout(timer));
+            window.__keepupCardsRefreshTimers = delays.map((delay) => {
+                return window.setTimeout(() => refreshMonitorCards(), delay);
             });
         }
 
@@ -1579,6 +1603,11 @@
         document.body.addEventListener("htmx:beforeRequest", (event) => {
             const target = event.detail?.elt;
             if (target && target.id === "monitor-cards-shell") {
+                if (isEditPanelOpen()) {
+                    window.__keepupCardsRefreshSkippedWhileEditing = true;
+                    event.preventDefault();
+                    return;
+                }
                 dismissColdStartHint();
             }
         });

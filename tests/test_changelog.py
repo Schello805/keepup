@@ -72,6 +72,10 @@ class ChangelogTests(unittest.TestCase):
             "Kategorie-Auswahl und Speichern bleiben auch bei wartenden Monitoren bedienbar.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Stabilize editing while monitors refresh"),
+            "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )
