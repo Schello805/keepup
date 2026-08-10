@@ -170,7 +170,9 @@ systemctl restart keepup.service</p>
                                     </div>
                                 </div>
                             </div>
-                            <p id="update-restart-fact" class="mt-3 rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-2 text-sm leading-relaxed text-slate-200">Initialisiere Neustart-Sequenz…</p>
+                            <p id="update-restart-fact" class="mt-3 flex min-h-[3.75rem] items-center rounded-2xl border border-white/10 bg-slate-950/45 px-3 py-2 text-sm leading-relaxed text-slate-200 sm:min-h-[3.5rem]">
+                                <span id="update-restart-fact-text" class="line-clamp-2">Initialisiere Neustart-Sequenz…</span>
+                            </p>
                             <div id="update-restart-changes-panel" class="hidden mt-3 rounded-2xl border border-sky-400/20 bg-sky-500/10 px-3 py-2.5 text-sm">
                                 <span class="text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-200/75">Änderungen</span>
                                 <div id="update-restart-changes" class="mt-2 max-h-32 space-y-2 overflow-y-auto pr-1 sm:max-h-40"></div>
@@ -378,7 +380,7 @@ systemctl restart keepup.service</p>
                     const overlay = document.getElementById('update-restart-overlay');
                     const text = document.getElementById('update-restart-text');
                     const instance = document.getElementById('update-restart-instance');
-                    const fact = document.getElementById('update-restart-fact');
+                    const fact = document.getElementById('update-restart-fact-text');
                     const reloadBtn = document.getElementById('update-restart-reload');
                     const countdown = document.getElementById('update-restart-countdown');
                     if (!overlay) return;

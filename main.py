@@ -957,6 +957,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("show warmup monitor cards instead of skeletons", "Nach Neustart oder Update werden sofort Monitor-Karten mit Ladeanzeige gezeigt."),
         ("make monitor create and delete instant in frontend", "Monitore erscheinen oder verschwinden im Frontend sofort, während der Cache im Hintergrund aktualisiert wird."),
         ("speed up browser update checks", "Update-Prüfung und Browser-Updates wurden beschleunigt."),
+        ("stabilize update modal height", "Die Höhe des Update-Wartebildschirms bleibt bei wechselnden Statusmeldungen stabil."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
