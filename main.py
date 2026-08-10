@@ -973,6 +973,7 @@ def _humanize_commit_subject(subject: str) -> str:
     translations = (
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
+        ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
         ("translate update changelog summaries", "Update-Änderungen werden konsequenter auf Deutsch zusammengefasst."),

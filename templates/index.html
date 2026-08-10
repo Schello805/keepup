@@ -91,13 +91,6 @@
             </div>
         </div>
         {% endif %}
-        <datalist id="monitor-category-options">
-            {% for category in summary.categories or [] %}
-                {% if category.key != "__none__" %}
-                <option value="{{ category.label }}"></option>
-                {% endif %}
-            {% endfor %}
-        </datalist>
     </div>
 {%- endmacro %}
 
@@ -513,8 +506,18 @@
                 </label>
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
-                    <input name="category" list="monitor-category-options" class="{{ input_classes() }}" placeholder="z. B. Websites, Server, Smart Home" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
-                    <p class="text-xs text-slate-500">Optional. Nutze gleiche Begriffe, um Monitore im Dashboard als Gruppe zu filtern.</p>
+                    <select id="new-monitor-category-select" class="{{ select_classes() }}" onchange="toggleCategoryCustomField('new')" title="Vorhandene Kategorie auswählen oder eine neue Kategorie anlegen.">
+                        <option value="">Ohne Kategorie</option>
+                        {% for category in summary.categories or [] %}
+                            {% if category.key != "__none__" %}
+                            <option value="{{ category.label }}">{{ category.label }}</option>
+                            {% endif %}
+                        {% endfor %}
+                        <option value="__custom__">Neue Kategorie...</option>
+                    </select>
+                    <input id="new-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen.">
+                    <input id="new-monitor-category" type="hidden" name="category" value="">
+                    <p class="text-xs text-slate-500">Optional. Wähle eine vorhandene Gruppe oder lege über “Neue Kategorie...” eine neue an.</p>
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
@@ -602,7 +605,17 @@
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
-                    <input id="edit-monitor-category" name="category" list="monitor-category-options" class="{{ input_classes() }}" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
+                    <select id="edit-monitor-category-select" class="{{ select_classes() }}" onchange="toggleCategoryCustomField('edit')" title="Vorhandene Kategorie auswählen oder eine neue Kategorie anlegen.">
+                        <option value="">Ohne Kategorie</option>
+                        {% for category in summary.categories or [] %}
+                            {% if category.key != "__none__" %}
+                            <option value="{{ category.label }}">{{ category.label }}</option>
+                            {% endif %}
+                        {% endfor %}
+                        <option value="__custom__">Neue Kategorie...</option>
+                    </select>
+                    <input id="edit-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen.">
+                    <input id="edit-monitor-category" type="hidden" name="category" value="">
                     <p class="text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
                 </label>
                 <label class="space-y-2">
@@ -932,7 +945,7 @@
 
             form.action = `/monitors/${button.dataset.monitorId}/edit`;
             document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
-            document.getElementById("edit-monitor-category").value = button.dataset.monitorCategory || "";
+            setCategoryFormValue("edit", button.dataset.monitorCategory || "");
             document.getElementById("edit-monitor-type").value = button.dataset.monitorType || "http";
             document.getElementById("edit-monitor-target").value = button.dataset.monitorTarget || "";
             document.getElementById("edit-monitor-ping-target").value = button.dataset.monitorPingTarget || "";
@@ -957,6 +970,55 @@
             const field = document.getElementById(`${mode}-ping-target-field`);
             if (!select || !field) return;
             field.classList.toggle("hidden", !select.value.startsWith("ping_http"));
+        }
+
+        function setCategoryFormValue(mode, value) {
+            const select = document.getElementById(`${mode}-monitor-category-select`);
+            const custom = document.getElementById(`${mode}-monitor-category-custom`);
+            const hidden = document.getElementById(`${mode}-monitor-category`);
+            if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement) || !(hidden instanceof HTMLInputElement)) return;
+            const normalized = String(value || "").trim();
+            const hasOption = [...select.options].some((option) => option.value === normalized);
+            select.value = !normalized || hasOption ? normalized : "__custom__";
+            custom.value = hasOption ? "" : normalized;
+            hidden.value = normalized;
+            toggleCategoryCustomField(mode);
+        }
+
+        function syncCategoryFormValue(mode) {
+            const select = document.getElementById(`${mode}-monitor-category-select`);
+            const custom = document.getElementById(`${mode}-monitor-category-custom`);
+            const hidden = document.getElementById(`${mode}-monitor-category`);
+            if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement) || !(hidden instanceof HTMLInputElement)) return "";
+            hidden.value = select.value === "__custom__" ? custom.value.trim() : select.value;
+            return hidden.value;
+        }
+
+        function rememberCategoryOption(value) {
+            const label = String(value || "").trim();
+            if (!label) return;
+            ["new", "edit"].forEach((mode) => {
+                const select = document.getElementById(`${mode}-monitor-category-select`);
+                if (!(select instanceof HTMLSelectElement)) return;
+                const exists = [...select.options].some((option) => option.value.toLowerCase() === label.toLowerCase());
+                if (exists) return;
+                const option = document.createElement("option");
+                option.value = label;
+                option.textContent = label;
+                const customOption = [...select.options].find((item) => item.value === "__custom__");
+                select.insertBefore(option, customOption || null);
+            });
+        }
+
+        function toggleCategoryCustomField(mode) {
+            const select = document.getElementById(`${mode}-monitor-category-select`);
+            const custom = document.getElementById(`${mode}-monitor-category-custom`);
+            if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement)) return;
+            const isCustom = select.value === "__custom__";
+            custom.classList.toggle("hidden", !isCustom);
+            custom.toggleAttribute("required", isCustom);
+            syncCategoryFormValue(mode);
+            if (isCustom) custom.focus();
         }
 
         function dismissToast() {
@@ -1254,6 +1316,7 @@
                     spinner?.classList.remove("hidden");
                     spinner?.classList.add("inline-flex");
                     try {
+                        syncCategoryFormValue("new");
                         const response = await fetch(form.action, {
                             method: "POST",
                             body: new FormData(form),
@@ -1266,8 +1329,10 @@
                             return;
                         }
                         document.getElementById("add-monitor-panel")?.classList.add("hidden");
+                        rememberCategoryOption(data.category);
                         form.reset();
                         togglePingTargetField("new");
+                        setCategoryFormValue("new", "");
                         showToast(data.message || "Monitor wurde angelegt.", "success");
                         addPendingMonitorCard(data);
                         refreshDashboardTop();
@@ -1294,6 +1359,7 @@
                 const button = form.querySelector("button[type='submit']");
                 if (button instanceof HTMLButtonElement) button.disabled = true;
                 try {
+                    syncCategoryFormValue("edit");
                     const response = await fetch(form.action, {
                         method: "POST",
                         body: new FormData(form),
@@ -1307,6 +1373,7 @@
                     }
                     closeEditPanel();
                     resetDashboardViewToAll();
+                    rememberCategoryOption(data.category);
                     showToast(data.message || "Monitor wurde aktualisiert.", "success");
                     addPendingMonitorCard(data, {
                         keepPosition: true,
@@ -1457,6 +1524,7 @@
 
         window.setTimeout(dismissToast, 4200);
         togglePingTargetField("new");
+        setCategoryFormValue("new", "");
         clearOpenDetails();
         dismissColdStartHint();
         applyMonitorFilters();

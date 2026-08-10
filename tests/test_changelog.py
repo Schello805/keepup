@@ -60,6 +60,10 @@ class ChangelogTests(unittest.TestCase):
             "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Use real category dropdowns"),
+            "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )
