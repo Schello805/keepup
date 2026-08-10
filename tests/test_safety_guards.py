@@ -118,6 +118,52 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(imported_settings["ntfy_token"], "")
                 self.assertEqual(imported_settings["ntfy_password"], "")
 
+    def test_monitor_categories_are_exported_imported_and_grouped(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "keepup-test.db"
+            with patch.object(database, "DATABASE_URL", db_path):
+                database.init_db()
+                database.update_settings({"down_failures_threshold": 1})
+                monitor_id = database.create_monitor(
+                    name="Nextcloud",
+                    category="Websites",
+                    monitor_type="http",
+                    target="https://cloud.example.test",
+                    ping_enabled=False,
+                    ping_mode="or",
+                    ping_target="",
+                    http_method="GET",
+                    retry_count=2,
+                    interval=60,
+                    timeout=10,
+                )
+                database.log_check_result(monitor_id, "down", 120.0, "HTTP-Status 502", "http_status")
+                database.create_monitor(
+                    name="Blog",
+                    category="websites",
+                    monitor_type="http",
+                    target="https://blog.example.test",
+                    ping_enabled=False,
+                    ping_mode="or",
+                    ping_target="",
+                    http_method="GET",
+                    retry_count=2,
+                    interval=60,
+                    timeout=10,
+                )
+
+                payload = database.export_backup()
+                self.assertEqual(payload["monitors"][0]["category"], "Websites")
+
+                database.import_backup(payload)
+                imported_monitor = database.get_monitor(monitor_id)
+                self.assertEqual(imported_monitor["category"], "Websites")
+
+                groups = database.get_monitor_group_summary()
+                self.assertEqual(groups[0]["label"], "Websites")
+                self.assertEqual(groups[0]["total"], 2)
+                self.assertEqual(groups[0]["down"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

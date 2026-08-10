@@ -24,7 +24,7 @@
                     <input
                         id="monitor-search-input"
                         type="search"
-                        placeholder="Nach Name, IP oder Hostname suchen"
+                        placeholder="Nach Name, Kategorie, IP oder Hostname suchen"
                         oninput="setSearchQuery(this.value)"
                         class="min-w-0 flex-1 bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
                     >
@@ -69,6 +69,28 @@
             <p class="mt-1 text-2xl font-semibold text-slate-200">{{ summary.paused }}</p>
         </button>
         </div>
+        {% if summary.categories %}
+        <div class="rounded-2xl border border-white/10 bg-slate-950/25 p-3">
+            <div class="mb-2 flex items-center justify-between gap-3">
+                <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Gruppen</p>
+                <button type="button" data-category-filter="all" onclick="setCategoryFilter('all')" class="category-filter-card rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:bg-white/10">
+                    Alle Gruppen
+                </button>
+            </div>
+            <div class="flex gap-2 overflow-x-auto pb-1">
+                {% for category in summary.categories %}
+                <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:border-sky-300/30 hover:bg-white/10">
+                    <span class="block max-w-[11rem] truncate text-sm font-semibold text-slate-100">{{ category.label }}</span>
+                    <span class="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+                        <span>{{ category.total }} gesamt</span>
+                        {% if category.down %}<span class="font-semibold text-rose-300">{{ category.down }} down</span>{% endif %}
+                        {% if category.unknown %}<span class="font-semibold text-amber-200">{{ category.unknown }} offen</span>{% endif %}
+                    </span>
+                </button>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 {%- endmacro %}
 
@@ -191,7 +213,9 @@
             {% set monitor_type_label = ('PING + HTTP' if monitor.ping_mode == 'and' else 'PING oder HTTP') if monitor.ping_enabled else monitor.type|upper %}
             {% set first_check_running = status == 'unknown' and monitor.enabled and not monitor.last_checked_at %}
             {% set cache_refresh_running = monitor.cache_refresh_running %}
-            <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
+            {% set category_label = monitor.category|trim if monitor.category else '' %}
+            {% set category_key = category_label|lower if category_label else '__none__' %}
+            <article data-monitor-status="{{ status }}" data-monitor-category="{{ category_key }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ category_label ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative flex min-w-0 w-full flex-1 transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-3 shadow-panel card-sheen">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
@@ -202,7 +226,9 @@
                                 </div>
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
                                 <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
-                                <p class="truncate text-xs text-slate-500 {% if not monitor.ping_enabled %}invisible{% endif %}">Ping: {{ monitor.ping_target or 'Hostname der URL' }}</p>
+                                <p class="truncate text-xs text-slate-500 {% if not monitor.ping_enabled and not category_label %}invisible{% endif %}">
+                                    {% if category_label %}Gruppe: {{ category_label }}{% endif %}{% if category_label and monitor.ping_enabled %} · {% endif %}{% if monitor.ping_enabled %}Ping: {{ monitor.ping_target or 'Hostname der URL' }}{% endif %}
+                                </p>
                             </div>
                             <div class="card-front-interactive flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
                                 <div class="flex items-center gap-2">
@@ -322,7 +348,7 @@
                                     <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
                                 </button>
                             </form>
-                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-type="{{ 'ping_http_and' if monitor.ping_enabled and monitor.ping_mode == 'and' else 'ping_http_or' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-category="{{ category_label }}" data-monitor-type="{{ 'ping_http_and' if monitor.ping_enabled and monitor.ping_mode == 'and' else 'ping_http_or' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
                                 <span class="sr-only">Bearbeiten</span>
                             </button>
@@ -402,6 +428,11 @@
             box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 18px 40px rgba(7, 17, 31, 0.28);
             transform: translateY(-1px);
         }
+        .category-filter-card.is-active {
+            border-color: rgba(56, 189, 248, 0.45);
+            background: rgba(14, 165, 233, 0.16);
+            box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.14);
+        }
         .card-sheen::after {
             content: "";
             position: absolute;
@@ -472,6 +503,11 @@
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input name="name" required class="{{ input_classes() }}" placeholder="Produktionsseite" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
                     <p class="text-xs text-slate-500">Wird auf der Karte und in Benachrichtigungen angezeigt.</p>
+                </label>
+                <label class="space-y-2 md:col-span-2">
+                    <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
+                    <input name="category" class="{{ input_classes() }}" placeholder="z. B. Websites, Server, Smart Home" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
+                    <p class="text-xs text-slate-500">Optional. Nutze gleiche Begriffe, um Monitore im Dashboard als Gruppe zu filtern.</p>
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
@@ -556,6 +592,11 @@
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input id="edit-monitor-name" name="name" required class="{{ input_classes() }}" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
                     <p class="text-xs text-slate-500">Wird auf der Karte und in Benachrichtigungen angezeigt.</p>
+                </label>
+                <label class="space-y-2">
+                    <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
+                    <input id="edit-monitor-category" name="category" class="{{ input_classes() }}" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
+                    <p class="text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
@@ -660,6 +701,10 @@
             return (window.localStorage.getItem("keepup-monitor-search") || "").trim().toLowerCase();
         }
 
+        function getCategoryFilter() {
+            return (window.localStorage.getItem("keepup-monitor-category-filter") || "all").trim().toLowerCase() || "all";
+        }
+
         function getOpenDetails() {
             return [];
         }
@@ -721,7 +766,8 @@
             if (getSortOrder() !== "all") return;
             const query = getSearchQuery();
             const filter = getStatusFilter();
-            if (query || filter !== "all") return;
+            const category = getCategoryFilter();
+            if (query || filter !== "all" || category !== "all") return;
 
             clearOpenDetails();
             document.querySelectorAll(".monitor-card").forEach((card) => {
@@ -747,6 +793,11 @@
 
         function setSearchQuery(query) {
             window.localStorage.setItem("keepup-monitor-search", (query || "").trim());
+            applyMonitorFilters();
+        }
+
+        function setCategoryFilter(category) {
+            window.localStorage.setItem("keepup-monitor-category-filter", (category || "all").trim().toLowerCase() || "all");
             applyMonitorFilters();
         }
 
@@ -833,16 +884,21 @@
         function applyMonitorFilters() {
             const filter = getStatusFilter();
             const query = getSearchQuery();
+            const category = getCategoryFilter();
             syncSearchInput();
             syncSortInput();
             document.querySelectorAll(".status-filter-card").forEach((card) => {
                 card.classList.toggle("is-active", card.dataset.filter === filter);
             });
+            document.querySelectorAll(".category-filter-card").forEach((card) => {
+                card.classList.toggle("is-active", card.dataset.categoryFilter === category);
+            });
             document.querySelectorAll(".monitor-card").forEach((card) => {
                 const matchesStatus = filter === "all" || card.dataset.monitorStatus === filter;
+                const matchesCategory = category === "all" || card.dataset.monitorCategory === category;
                 const haystack = (card.dataset.monitorSearch || "").toLowerCase();
                 const matchesSearch = !query || haystack.includes(query);
-                card.classList.toggle("is-hidden", !(matchesStatus && matchesSearch));
+                card.classList.toggle("is-hidden", !(matchesStatus && matchesCategory && matchesSearch));
             });
             sortMonitorCards();
             normalizeAllCardsView();
@@ -869,6 +925,7 @@
 
             form.action = `/monitors/${button.dataset.monitorId}/edit`;
             document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
+            document.getElementById("edit-monitor-category").value = button.dataset.monitorCategory || "";
             document.getElementById("edit-monitor-type").value = button.dataset.monitorType || "http";
             document.getElementById("edit-monitor-target").value = button.dataset.monitorTarget || "";
             document.getElementById("edit-monitor-ping-target").value = button.dataset.monitorPingTarget || "";
@@ -1102,9 +1159,13 @@
             const existing = document.querySelector(`[data-monitor-id="${monitor.id}"]`);
             if (existing) existing.remove();
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
+            const categoryLabel = String(monitor.category || "").trim();
+            const categoryKey = categoryLabel ? categoryLabel.toLowerCase() : "__none__";
+            const metaLine = [categoryLabel ? `Gruppe: ${escapeHtml(categoryLabel)}` : "", pingLine].filter(Boolean).join(" · ");
             const card = document.createElement("article");
             card.dataset.monitorStatus = "unknown";
-            card.dataset.monitorSearch = `${monitor.name || ""} ${monitor.target || ""} ${monitor.ping_target || ""}`.toLowerCase();
+            card.dataset.monitorCategory = categoryKey;
+            card.dataset.monitorSearch = `${monitor.name || ""} ${categoryLabel} ${monitor.target || ""} ${monitor.ping_target || ""}`.toLowerCase();
             card.dataset.monitorName = String(monitor.name || "").toLowerCase();
             card.dataset.monitorResponseTime = "-1";
             card.dataset.monitorUptime = "-1";
@@ -1123,7 +1184,7 @@
                                 </div>
                                 <h3 class="truncate text-xl font-semibold">${escapeHtml(monitor.name || "Neuer Monitor")}</h3>
                                 <p class="truncate text-sm text-slate-400">${escapeHtml(monitor.target || "-")}</p>
-                                <p class="truncate text-xs text-slate-500">${pingLine}</p>
+                                <p class="truncate text-xs text-slate-500">${metaLine}</p>
                             </div>
                             <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
                                 <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>

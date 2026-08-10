@@ -168,6 +168,7 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS monitors (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT '',
                 type TEXT NOT NULL CHECK(type IN ('http', 'ping')),
                 target TEXT NOT NULL,
                 http_method TEXT NOT NULL DEFAULT 'GET',
@@ -254,6 +255,7 @@ def _ensure_monitor_columns(cursor: sqlite3.Cursor) -> None:
     existing_columns = {row["name"] for row in cursor.fetchall()}
     required_columns = {
         "http_method": "TEXT NOT NULL DEFAULT 'GET'",
+        "category": "TEXT NOT NULL DEFAULT ''",
         "retry_count": "INTEGER NOT NULL DEFAULT 2",
         "timeout": "INTEGER NOT NULL DEFAULT 10",
         "enabled": "INTEGER NOT NULL DEFAULT 1",
@@ -434,6 +436,46 @@ def get_monitor_summary() -> dict[str, int]:
             "unknown": int((row["unknown_count"] if row and row["unknown_count"] is not None else 0) or 0),
             "paused": int((row["paused_count"] if row and row["paused_count"] is not None else 0) or 0),
         }
+
+
+def get_monitor_group_summary() -> list[dict[str, Any]]:
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            WITH normalized AS (
+                SELECT
+                    TRIM(category) AS raw_label,
+                    LOWER(COALESCE(NULLIF(TRIM(category), ''), '__none__')) AS key,
+                    enabled,
+                    status
+                FROM monitors
+            )
+            SELECT
+                CASE WHEN key = '__none__' THEN 'Ohne Kategorie' ELSE MIN(raw_label) END AS label,
+                key,
+                COUNT(*) AS total,
+                SUM(CASE WHEN enabled = 1 AND status = 'up' THEN 1 ELSE 0 END) AS up_count,
+                SUM(CASE WHEN enabled = 1 AND status = 'down' THEN 1 ELSE 0 END) AS down_count,
+                SUM(CASE WHEN enabled = 1 AND status = 'unknown' THEN 1 ELSE 0 END) AS unknown_count,
+                SUM(CASE WHEN enabled = 0 THEN 1 ELSE 0 END) AS paused_count
+            FROM normalized
+            GROUP BY key
+            ORDER BY down_count DESC, unknown_count DESC, label COLLATE NOCASE ASC
+            """
+        )
+        return [
+            {
+                "label": row["label"],
+                "key": row["key"],
+                "total": int(row["total"] or 0),
+                "up": int(row["up_count"] or 0),
+                "down": int(row["down_count"] or 0),
+                "unknown": int(row["unknown_count"] or 0),
+                "paused": int(row["paused_count"] or 0),
+            }
+            for row in cursor.fetchall()
+        ]
 
 
 def list_monitors(
@@ -633,6 +675,7 @@ def _compute_sla_window_from_rows(
 
 def create_monitor(
     name: str,
+    category: str,
     monitor_type: str,
     target: str,
     ping_enabled: bool,
@@ -652,12 +695,13 @@ def create_monitor(
         cursor.execute(
             """
             INSERT INTO monitors (
-                name, type, target, ping_enabled, ping_mode, ping_target, http_method, retry_count, interval, timeout,
+                name, category, type, target, ping_enabled, ping_mode, ping_target, http_method, retry_count, interval, timeout,
                 expected_text, forbidden_text, enabled, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unknown', ?, ?)
             """,
             (
                 name.strip(),
+                category.strip(),
                 monitor_type,
                 target.strip(),
                 int(ping_enabled),
@@ -682,6 +726,7 @@ def create_monitor(
 def update_monitor(
     monitor_id: int,
     name: str,
+    category: str,
     monitor_type: str,
     target: str,
     ping_enabled: bool,
@@ -700,6 +745,7 @@ def update_monitor(
             """
             UPDATE monitors
             SET name = ?,
+                category = ?,
                 type = ?,
                 target = ?,
                 ping_enabled = ?,
@@ -716,6 +762,7 @@ def update_monitor(
             """,
             (
                 name.strip(),
+                category.strip(),
                 monitor_type,
                 target.strip(),
                 int(ping_enabled),
@@ -1307,15 +1354,16 @@ def import_backup(payload: dict[str, Any]) -> None:
             cursor.execute(
                 """
                 INSERT INTO monitors (
-                    id, name, type, target, http_method, retry_count, interval, timeout,
+                    id, name, category, type, target, http_method, retry_count, interval, timeout,
                     enabled, status, last_error, last_error_category, last_response_time,
                     last_checked_at, last_change_at, consecutive_failures, consecutive_successes,
                     expected_text, forbidden_text, ping_enabled, ping_mode, ping_target, is_flapping, flapping_until, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     monitor.get("id"),
                     monitor["name"],
+                    str(monitor.get("category") or "").strip(),
                     monitor["type"],
                     monitor["target"],
                     str(monitor.get("http_method", "GET")).upper(),

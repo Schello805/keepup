@@ -51,6 +51,14 @@ class ChangelogTests(unittest.TestCase):
             _humanize_commit_subject("Show changelog during updates"),
             "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt.",
         )
+        self.assertEqual(
+            _humanize_commit_subject("Add monitor groups and category filters"),
+            "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden.",
+        )
+        self.assertEqual(
+            _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
+            "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
+        )
 
     def test_iso_date_is_formatted_for_german_ui(self):
         self.assertEqual(_format_german_date("2026-07-21"), "21.07.2026")

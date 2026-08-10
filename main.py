@@ -32,6 +32,7 @@ from database import (
     export_backup,
     get_db,
     get_monitor,
+    get_monitor_group_summary,
     get_monitor_summary,
     get_recent_logs_for_monitors,
     list_incidents,
@@ -557,6 +558,7 @@ def build_dashboard_context(request: Request) -> dict:
     up_count = sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "up")
     unknown_count = sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "unknown")
     paused_count = sum(1 for monitor in monitors if not monitor.get("enabled", 1))
+    categories = build_monitor_category_summary(monitors)
     overall_status = "All systems operational" if down_count == 0 else f"{down_count} issue(s) detected"
     overall_tone = "ok" if down_count == 0 else "problem"
     last_updated_at = format_timestamp(
@@ -578,6 +580,7 @@ def build_dashboard_context(request: Request) -> dict:
             "down": down_count,
             "unknown": unknown_count,
             "paused": paused_count,
+            "categories": categories,
             "overall_status": overall_status,
             "overall_tone": overall_tone,
             "last_updated_at": last_updated_at,
@@ -605,6 +608,30 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
         "monitors": monitors,
         "settings": settings,
     }
+
+
+def build_monitor_category_summary(monitors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    categories: dict[str, dict[str, Any]] = {}
+    for monitor in monitors:
+        raw_label = str(monitor.get("category") or "").strip()
+        key = raw_label.lower() if raw_label else "__none__"
+        label = raw_label or "Ohne Kategorie"
+        item = categories.setdefault(
+            key,
+            {"key": key, "label": label, "total": 0, "up": 0, "down": 0, "unknown": 0, "paused": 0},
+        )
+        item["total"] += 1
+        if not monitor.get("enabled", 1):
+            item["paused"] += 1
+        else:
+            status = str(monitor.get("status") or "unknown")
+            if status in {"up", "down", "unknown"}:
+                item[status] += 1
+
+    return sorted(
+        categories.values(),
+        key=lambda item: (-int(item["down"]), -int(item["unknown"]), str(item["label"]).casefold()),
+    )
 
 
 def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[dict[str, Any]]:
@@ -644,6 +671,7 @@ def build_dashboard_shell_context(request: Request) -> dict:
     summary["overall_status"] = overall_status
     summary["overall_tone"] = overall_tone
     summary["last_updated_at"] = format_timestamp(datetime.now(timezone.utc).replace(microsecond=0).isoformat(), app_timezone)
+    summary["categories"] = get_monitor_group_summary()
 
     return {
         "request": request,
@@ -943,12 +971,19 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
+        ("translate update changelog summaries", "Update-Änderungen werden konsequenter auf Deutsch zusammengefasst."),
         ("tighten monitor card height", "Monitor-Karten wurden kompakter gemacht und bleiben gleichmäßiger hoch."),
+        ("constrain monitor card width", "Monitor-Karten halten ihre Breite stabiler und überlappen weniger."),
+        ("use natural monitor card height", "Monitor-Karten nutzen eine natürlichere Höhe ohne unnötige Leerflächen."),
+        ("compact monitor card controls", "Die Bedienelemente der Monitor-Karten wurden kompakter angeordnet."),
+        ("move monitor card actions upward", "Die Aktionsbuttons auf Monitor-Karten sitzen jetzt näher am Inhalt."),
         ("make update wait screen more compact", "Der Wartescreen während eines Updates wurde kompakter und besser für Smartphones optimiert."),
         ("improve update changelog context", "Update-Änderungen werden mit mehr deutschem Kontext angezeigt."),
         ("add ntfy notification channel", "ntfy wurde als zusätzlicher Benachrichtigungskanal ergänzt."),
+        ("fix ntfy action header encoding", "ntfy-Aktionslinks funktionieren jetzt auch mit Umlauten im Titel zuverlässig."),
         ("add rich ntfy test notification", "Ein zusätzlicher ntfy-Layout-Test wurde ergänzt."),
         ("remove duplicate ntfy test button", "Der doppelte ntfy-Testbutton wurde entfernt."),
         ("collapse botfather guide", "Die BotFather-Anleitung ist jetzt platzsparend einklappbar."),
@@ -967,8 +1002,29 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add monitor form field help", "Hilfetexte beim Anlegen und Bearbeiten von Monitoren wurden ergänzt."),
         ("fix monitor edit cache refresh", "Aktualisierte Monitor-Daten werden nach dem Speichern zuverlässiger angezeigt."),
         ("add ping http check modes", "Kombinierte Ping-/HTTP-Prüfungen wurden ergänzt."),
+        ("trim telegram status history legend", "Telegram-Meldungen wurden gekürzt und verzichten auf unnötige Farblegenden."),
+        ("fix ping http redundancy status", "Die Logik für redundante PING-oder-HTTP-Prüfungen wurde korrigiert."),
+        ("link telegram monitor names to their source urls", "Monitor-Namen in Telegram verlinken direkt auf die überwachte Quelle."),
+        ("treat protected http endpoints as reachable", "Geschützte HTTP-Endpunkte werden als erreichbar erkannt, wenn sie erwartbar antworten."),
+        ("normalize url values used as combo ping targets", "Ping-Ziele kombinierter Checks werden aus URLs zuverlässiger normalisiert."),
+        ("add combined ping and http monitor checks", "Monitore können Ping und HTTP gemeinsam prüfen."),
+        ("simplify telegram notification icons", "Telegram-Benachrichtigungen nutzen weniger und ruhigere Icons."),
+        ("improve backups, card details, and dashboard responsiveness", "Backups, Kartendetails und Dashboard-Reaktionszeit wurden verbessert."),
+        ("repair corrupted system python caches during setup", "Das Setup kann beschädigte Python-Cache-Dateien besser bereinigen."),
+        ("recover damaged python environments during updates", "Updates können beschädigte Python-Umgebungen besser wiederherstellen."),
+        ("keep monitor details visible when chart rendering fails", "Kartendetails bleiben sichtbar, auch wenn ein Diagramm nicht geladen werden kann."),
+        ("enhance telegram notifications with links and check history", "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie."),
+        ("center uptime mini-card content on dashboard cards", "Uptime-Kennzahlen auf Karten sind optisch sauberer zentriert."),
+        ("refine outage duration display and compact dashboard card metrics", "Ausfallzeiten und Karten-Kennzahlen wurden kompakter dargestellt."),
+        ("add outage-hours display and remove timezone suffix from ui timestamps", "Karten zeigen Ausfallzeiten an und verzichten im UI auf Zeitzonen-Suffixe."),
+        ("add card uptime trio and persist down filter state", "Monitor-Karten zeigen mehrere Uptime-Werte und behalten den Down-Filter bei."),
+        ("persist dashboard status filter and show last down timestamp", "Dashboard-Filter bleiben erhalten und Karten zeigen das letzte Nicht-Erreichen."),
         ("clarify http content rule behavior", "Hinweise zu HTTP-Inhaltsregeln wurden verständlicher gemacht."),
         ("optimize monitor scheduler updates", "Scheduler-Updates für Monitoränderungen wurden beschleunigt."),
+        ("improve mobile restart overlay and fix migrated downtime metrics", "Der Neustart-Wartebildschirm wurde mobil verbessert und migrierte Downtime-Werte korrigiert."),
+        ("build local tailwind pipeline and enhance dashboard update ux", "Tailwind läuft lokal und der Update-Ablauf im Dashboard wurde verbessert."),
+        ("show system resource snapshot in settings", "Die Einstellungen zeigen CPU-, RAM- und Netzwerk-Auslastung des Hosts."),
+        ("document raspberry pi sizing recommendations", "Die README enthält Empfehlungen für Raspberry-Pi-Betrieb und sinnvolle Intervalle."),
     )
     for prefix, text in translations:
         if lower.startswith(prefix):
@@ -1623,6 +1679,7 @@ async def monitor_snapshot() -> JSONResponse:
         "down": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "down"),
         "unknown": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "unknown"),
         "paused": sum(1 for monitor in monitors if not monitor.get("enabled", 1)),
+        "categories": build_monitor_category_summary(monitors),
     }
     return JSONResponse({"summary": summary, "monitors": monitors})
 
@@ -1631,6 +1688,7 @@ async def monitor_snapshot() -> JSONResponse:
 async def create_monitor_route(
     request: Request,
     name: str = Form(...),
+    category: str = Form(""),
     monitor_type: str = Form(...),
     target: str = Form(...),
     ping_target: str = Form(""),
@@ -1658,6 +1716,7 @@ async def create_monitor_route(
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
     monitor_id = create_monitor(
         name=name,
+        category=category,
         monitor_type="http" if is_combo else monitor_type,
         target=target,
         ping_enabled=is_combo,
@@ -1679,6 +1738,7 @@ async def create_monitor_route(
                 "ok": True,
                 "id": monitor_id,
                 "name": name.strip(),
+                "category": category.strip(),
                 "target": target,
                 "ping_target": ping_target.strip(),
                 "monitor_type": "http" if is_combo else monitor_type,
@@ -1694,6 +1754,7 @@ async def create_monitor_route(
 async def edit_monitor_route(
     monitor_id: int,
     name: str = Form(...),
+    category: str = Form(""),
     monitor_type: str = Form(...),
     target: str = Form(...),
     ping_target: str = Form(""),
@@ -1720,6 +1781,7 @@ async def edit_monitor_route(
     update_monitor(
         monitor_id=monitor_id,
         name=name,
+        category=category,
         monitor_type="http" if is_combo else monitor_type,
         target=target,
         ping_enabled=is_combo,
