@@ -954,6 +954,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("keep dashboard visible while monitors change", "Das Dashboard bleibt beim Anlegen und Ändern von Monitoren sichtbar."),
         ("show new monitor immediately while first check runs", "Neue Monitore erscheinen sofort mit Ladeanzeige auf dem Dashboard."),
         ("show warmup monitor cards instead of skeletons", "Nach Neustart oder Update werden sofort Monitor-Karten mit Ladeanzeige gezeigt."),
+        ("make monitor create and delete instant in frontend", "Monitore erscheinen oder verschwinden im Frontend sofort, während der Cache im Hintergrund aktualisiert wird."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
@@ -1141,6 +1142,11 @@ def dashboard_cards_cache_is_stale() -> bool:
         return time.time() >= expires_at
 
 
+def dashboard_cards_cache_needs_immediate_rebuild() -> bool:
+    with _dashboard_cards_cache_lock:
+        return float(_dashboard_cards_cache.get("expires_at") or 0.0) == 0.0
+
+
 async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
     global _dashboard_cards_refresh_task
     if not force and not dashboard_cards_cache_is_stale():
@@ -1160,6 +1166,10 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
     await asyncio.to_thread(get_dashboard_cards_html, True)
     await execute_monitor_check(monitor_id)
+    await asyncio.to_thread(get_dashboard_cards_html, True)
+
+
+async def refresh_dashboard_cards_cache() -> None:
     await asyncio.to_thread(get_dashboard_cards_html, True)
 
 
@@ -1572,7 +1582,7 @@ async def live_top_partial(request: Request) -> HTMLResponse:
 @app.get("/api/live/cards", response_class=HTMLResponse)
 async def live_cards_partial(request: Request) -> HTMLResponse:
     html = peek_dashboard_cards_html()
-    if html is None:
+    if html is None or dashboard_cards_cache_needs_immediate_rebuild():
         await ensure_dashboard_cards_cache_refresh(force=False)
         context = await asyncio.to_thread(build_dashboard_cards_payload)
         for monitor in context["monitors"]:
@@ -1742,11 +1752,14 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 
 
 @app.post("/monitors/{monitor_id}/delete")
-async def delete_monitor_route(monitor_id: int) -> RedirectResponse:
+async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
     delete_monitor(monitor_id)
     remove_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
-    await asyncio.to_thread(get_dashboard_cards_html, True)
+    asyncio.create_task(refresh_dashboard_cards_cache())
+    accept = (request.headers.get("accept") or "").lower()
+    if "application/json" in accept:
+        return JSONResponse({"ok": True, "id": monitor_id, "message": "Monitor wurde gelöscht."})
     return flash_redirect("/", "Monitor wurde gelöscht.", "warning")
 
 
