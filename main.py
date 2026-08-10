@@ -953,6 +953,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("collapse botfather guide", "Die BotFather-Anleitung ist jetzt platzsparend einklappbar."),
         ("keep dashboard visible while monitors change", "Das Dashboard bleibt beim Anlegen und Ändern von Monitoren sichtbar."),
         ("show new monitor immediately while first check runs", "Neue Monitore erscheinen sofort mit Ladeanzeige auf dem Dashboard."),
+        ("show warmup monitor cards instead of skeletons", "Nach Neustart oder Update werden sofort Monitor-Karten mit Ladeanzeige gezeigt."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
@@ -1519,6 +1520,12 @@ async def dashboard(request: Request) -> HTMLResponse:
     context = build_dashboard_shell_context(request)
     context["initial_cards_html"] = peek_dashboard_cards_html()
     context["cold_start_loading"] = context["initial_cards_html"] is None
+    if context["cold_start_loading"]:
+        cold_start_payload = await asyncio.to_thread(build_dashboard_cards_payload)
+        for monitor in cold_start_payload["monitors"]:
+            if monitor.get("enabled", 1):
+                monitor["cache_refresh_running"] = True
+        context["cold_start_monitors"] = cold_start_payload["monitors"]
     await ensure_dashboard_cards_cache_refresh(force=False)
     return await asyncio.to_thread(render_template, request, "index.html", context)
 
@@ -1566,12 +1573,14 @@ async def live_top_partial(request: Request) -> HTMLResponse:
 async def live_cards_partial(request: Request) -> HTMLResponse:
     html = peek_dashboard_cards_html()
     if html is None:
-        html = await asyncio.to_thread(get_dashboard_cards_html, True)
+        await ensure_dashboard_cards_cache_refresh(force=False)
+        context = await asyncio.to_thread(build_dashboard_cards_payload)
+        for monitor in context["monitors"]:
+            if monitor.get("enabled", 1):
+                monitor["cache_refresh_running"] = True
+        return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "cards"})
     else:
         await ensure_dashboard_cards_cache_refresh(force=False)
-    if html is None:
-        context = await asyncio.to_thread(build_dashboard_context, request)
-        return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "cards"})
     settings = get_settings()
     return await asyncio.to_thread(
         render_template,

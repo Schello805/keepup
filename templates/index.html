@@ -190,6 +190,7 @@
             {% set card_classes = 'border-slate-400/20 bg-slate-400/10' if status == 'paused' else 'border-emerald-300/35 bg-emerald-500/20' if status == 'up' else 'border-rose-300/35 bg-rose-500/20' if status == 'down' else 'border-amber-300/35 bg-amber-500/20' %}
             {% set monitor_type_label = ('PING + HTTP' if monitor.ping_mode == 'and' else 'PING oder HTTP') if monitor.ping_enabled else monitor.type|upper %}
             {% set first_check_running = status == 'unknown' and monitor.enabled and not monitor.last_checked_at %}
+            {% set cache_refresh_running = monitor.cache_refresh_running %}
             <article data-monitor-status="{{ status }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative flex min-w-0 w-full flex-1 transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-3 shadow-panel card-sheen">
@@ -221,7 +222,12 @@
                                         </button>
                                     </form>
                                 </div>
-                                {% if status == 'down' %}
+                                {% if cache_refresh_running %}
+                                <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-sky-100/90">
+                                    <span class="h-3 w-3 rounded-full border-2 border-sky-200/30 border-t-sky-200 animate-spin"></span>
+                                    Wird aktualisiert
+                                </span>
+                                {% elif status == 'down' %}
                                 <span class="text-[10px] whitespace-nowrap text-rose-300 opacity-80" title="Offline seit">seit {{ monitor.last_change_at or "-" }}</span>
                                 {% elif first_check_running %}
                                 <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
@@ -272,6 +278,11 @@
                                     {% for item in monitor.history %}
                                         <span class="uptime-bar {% if item == 'up' %}bg-emerald-400{% elif item == 'down' %}bg-rose-400{% else %}bg-amber-400{% endif %}" title="{{ item }}"></span>
                                     {% endfor %}
+                                {% elif cache_refresh_running %}
+                                    <div class="flex items-center gap-2 text-sm text-sky-100/85">
+                                        <span class="h-4 w-4 rounded-full border-2 border-sky-200/30 border-t-sky-200 animate-spin"></span>
+                                        <span>Karte wird aktualisiert...</span>
+                                    </div>
                                 {% elif first_check_running %}
                                     <div class="flex items-center gap-2 text-sm text-amber-100/85">
                                         <span class="h-4 w-4 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
@@ -613,51 +624,17 @@
             {% else %}
                 <section id="dashboard-cold-start-shell" class="space-y-4">
                     {% if cold_start_loading %}
-                    <div id="dashboard-cold-start-hint" class="rounded-3xl border border-sky-400/20 bg-sky-500/10 p-5 shadow-panel">
-                        <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                            <div class="flex items-center gap-4">
-                                <div class="relative flex h-14 w-14 items-center justify-center">
-                                    <span class="cold-start-orbit absolute inset-0 rounded-full border border-sky-300/25 border-t-sky-300/80"></span>
-                                    <span class="cold-start-orbit absolute inset-[8px] rounded-full border border-emerald-300/15 border-b-emerald-300/70" style="animation-direction: reverse; animation-duration: 2.4s;"></span>
-                                    <div class="flex h-6 items-end gap-1">
-                                        <span class="cold-start-bar h-3 w-1.5 rounded-full bg-sky-300"></span>
-                                        <span class="cold-start-bar h-5 w-1.5 rounded-full bg-sky-200"></span>
-                                        <span class="cold-start-bar h-4 w-1.5 rounded-full bg-emerald-300"></span>
-                                        <span class="cold-start-bar h-6 w-1.5 rounded-full bg-sky-100"></span>
-                                    </div>
-                                </div>
-                                <div>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.28em] text-sky-200/80">Warmup</p>
-                                    <h3 class="mt-1 text-lg font-semibold text-slate-50">Dashboard wird für den ersten Abruf vorbereitet</h3>
-                                    <p class="mt-1 max-w-2xl text-sm text-slate-300">
-                                        Nach einem Neustart oder Update baut KeepUp den ersten Karten-Cache neu auf.
-                                        {% if summary.total %}
-                                        Aktuell sind {{ summary.total }} Monitor{{ "" if summary.total == 1 else "e" }} konfiguriert, daher kann das kurz dauern.
-                                        {% endif %}
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="rounded-2xl border border-white/10 bg-slate-950/35 px-4 py-3 text-sm text-slate-300">
-                                <span class="block text-xs uppercase tracking-wide text-slate-500">Hinweis</span>
-                                <span class="mt-1 block">Die Seite ist gleich da und lädt danach wieder sofort.</span>
+                    <div id="dashboard-cold-start-hint" class="rounded-3xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 shadow-panel">
+                        <div class="flex items-center gap-3 text-sm text-slate-200">
+                            <span class="h-4 w-4 rounded-full border-2 border-sky-200/30 border-t-sky-200 animate-spin"></span>
+                            <div>
+                                <span class="font-semibold text-sky-100">Dashboard wird aktualisiert.</span>
+                                <span class="text-slate-300">Die Karten sind schon sichtbar; einzelne Werte werden gleich live nachgeladen.</span>
                             </div>
                         </div>
                     </div>
                     {% endif %}
-                    <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {% for _ in range(6) %}
-                        <div class="rounded-3xl border border-white/10 bg-white/5 p-4 shadow-panel animate-pulse">
-                            <div class="h-5 w-20 rounded-lg bg-white/10"></div>
-                            <div class="mt-4 h-7 w-40 rounded-xl bg-white/10"></div>
-                            <div class="mt-2 h-4 w-32 rounded-lg bg-white/5"></div>
-                            <div class="mt-6 grid grid-cols-2 gap-3">
-                                <div class="h-20 rounded-2xl bg-slate-950/40"></div>
-                                <div class="h-20 rounded-2xl bg-slate-950/40"></div>
-                            </div>
-                            <div class="mt-6 h-8 rounded-xl bg-white/5"></div>
-                        </div>
-                        {% endfor %}
-                    </section>
+                    {{ render_monitor_cards(cold_start_monitors or []) }}
                 </section>
             {% endif %}
         </section>
