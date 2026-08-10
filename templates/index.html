@@ -224,10 +224,15 @@
                                     <span class="inline-flex h-3 w-3 rounded-full {{ status_dot_classes(status) }}"></span>
                                     <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor_type_label }}</p>
                                 </div>
+                                {% if category_label %}
+                                <div class="mb-1.5 inline-flex max-w-full items-center rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
+                                    <span class="truncate">Gruppe: {{ category_label }}</span>
+                                </div>
+                                {% endif %}
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
                                 <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
-                                <p class="truncate text-xs text-slate-500 {% if not monitor.ping_enabled and not category_label %}invisible{% endif %}">
-                                    {% if category_label %}Gruppe: {{ category_label }}{% endif %}{% if category_label and monitor.ping_enabled %} · {% endif %}{% if monitor.ping_enabled %}Ping: {{ monitor.ping_target or 'Hostname der URL' }}{% endif %}
+                                <p class="truncate text-xs text-slate-500 {% if not monitor.ping_enabled %}invisible{% endif %}">
+                                    {% if monitor.ping_enabled %}Ping: {{ monitor.ping_target or 'Hostname der URL' }}{% endif %}
                                 </p>
                             </div>
                             <div class="card-front-interactive flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
@@ -1240,7 +1245,9 @@
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
             const categoryLabel = String(monitor.category || "").trim();
             const categoryKey = categoryLabel ? categoryLabel.toLowerCase() : "__none__";
-            const metaLine = [categoryLabel ? `Gruppe: ${escapeHtml(categoryLabel)}` : "", pingLine].filter(Boolean).join(" · ");
+            const categoryBadge = categoryLabel
+                ? `<div class="mb-1.5 inline-flex max-w-full items-center rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[11px] font-semibold text-sky-100"><span class="truncate">Gruppe: ${escapeHtml(categoryLabel)}</span></div>`
+                : "";
             const spinnerTitle = options.spinnerTitle || "Erster Check läuft";
             const spinnerMessage = options.spinnerMessage || "Warte auf erste Rückmeldung...";
             const card = document.createElement("article");
@@ -1263,9 +1270,10 @@
                                     <span class="inline-flex h-3 w-3 rounded-full bg-amber-400"></span>
                                     <p class="text-xs uppercase tracking-[0.25em] text-slate-400">${escapeHtml(monitor.type_label || "UNKNOWN")}</p>
                                 </div>
+                                ${categoryBadge}
                                 <h3 class="truncate text-xl font-semibold">${escapeHtml(monitor.name || "Neuer Monitor")}</h3>
                                 <p class="truncate text-sm text-slate-400">${escapeHtml(monitor.target || "-")}</p>
-                                <p class="truncate text-xs text-slate-500">${metaLine}</p>
+                                <p class="truncate text-xs text-slate-500">${pingLine}</p>
                             </div>
                             <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
                                 <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>

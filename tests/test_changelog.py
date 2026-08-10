@@ -64,6 +64,10 @@ class ChangelogTests(unittest.TestCase):
             "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Show monitor group badges"),
+            "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )
