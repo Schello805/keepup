@@ -520,7 +520,7 @@
                         {% endfor %}
                         <option value="__custom__">Neue Kategorie...</option>
                     </select>
-                    <input id="new-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen.">
+                    <input id="new-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen." disabled>
                     <input id="new-monitor-category" type="hidden" name="category" value="">
                     <p class="text-xs text-slate-500">Optional. Wähle eine vorhandene Gruppe oder lege über “Neue Kategorie...” eine neue an.</p>
                 </label>
@@ -619,7 +619,7 @@
                         {% endfor %}
                         <option value="__custom__">Neue Kategorie...</option>
                     </select>
-                    <input id="edit-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen.">
+                    <input id="edit-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen." disabled>
                     <input id="edit-monitor-category" type="hidden" name="category" value="">
                     <p class="text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
                 </label>
@@ -1021,6 +1021,7 @@
             if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement)) return;
             const isCustom = select.value === "__custom__";
             custom.classList.toggle("hidden", !isCustom);
+            custom.disabled = !isCustom;
             custom.toggleAttribute("required", isCustom);
             syncCategoryFormValue(mode);
             if (isCustom) custom.focus();
@@ -1325,6 +1326,10 @@
                     spinner?.classList.add("inline-flex");
                     try {
                         syncCategoryFormValue("new");
+                        if (!form.checkValidity()) {
+                            form.reportValidity();
+                            return;
+                        }
                         const response = await fetch(form.action, {
                             method: "POST",
                             body: new FormData(form),
@@ -1368,6 +1373,10 @@
                 if (button instanceof HTMLButtonElement) button.disabled = true;
                 try {
                     syncCategoryFormValue("edit");
+                    if (!form.checkValidity()) {
+                        form.reportValidity();
+                        return;
+                    }
                     const response = await fetch(form.action, {
                         method: "POST",
                         body: new FormData(form),

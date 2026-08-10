@@ -68,6 +68,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Fix category validation while monitors wait"),
+            "Kategorie-Auswahl und Speichern bleiben auch bei wartenden Monitoren bedienbar.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )
