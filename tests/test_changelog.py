@@ -56,6 +56,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Make monitor edits update inline"),
+            "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )

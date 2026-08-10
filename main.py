@@ -972,6 +972,7 @@ def _humanize_commit_subject(subject: str) -> str:
     lower = normalized.lower()
     translations = (
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
+        ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
         ("translate update changelog summaries", "Update-Änderungen werden konsequenter auf Deutsch zusammengefasst."),
@@ -1752,6 +1753,7 @@ async def create_monitor_route(
 
 @app.post("/monitors/{monitor_id}/edit")
 async def edit_monitor_route(
+    request: Request,
     monitor_id: int,
     name: str = Form(...),
     category: str = Form(""),
@@ -1764,7 +1766,7 @@ async def edit_monitor_route(
     timeout: int = Form(...),
     expected_text: str = Form(""),
     forbidden_text: str = Form(""),
-) -> RedirectResponse:
+) -> Response:
     monitor = get_monitor(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
@@ -1775,7 +1777,13 @@ async def edit_monitor_route(
     target = normalize_monitor_target(monitor_type, target)
     is_combo = is_combo_monitor_type(monitor_type)
     ping_mode = combo_ping_mode(monitor_type)
+    accept = (request.headers.get("accept") or "").lower()
     if is_combo and not ping_target.strip() and not urlparse(target).hostname:
+        if "application/json" in accept:
+            return JSONResponse(
+                {"ok": False, "message": "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben."},
+                status_code=400,
+            )
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
 
     update_monitor(
@@ -1796,6 +1804,22 @@ async def edit_monitor_route(
     )
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
+    asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
+    if "application/json" in accept:
+        return JSONResponse(
+            {
+                "ok": True,
+                "id": monitor_id,
+                "name": name.strip(),
+                "category": category.strip(),
+                "target": target,
+                "ping_target": ping_target.strip(),
+                "monitor_type": "http" if is_combo else monitor_type,
+                "type_label": ("PING + HTTP" if ping_mode == "and" else "PING oder HTTP") if is_combo else monitor_type.upper(),
+                "interval": max(10, interval),
+                "message": "Monitor wurde aktualisiert. Der Check läuft im Hintergrund.",
+            }
+        )
     await asyncio.to_thread(get_dashboard_cards_html, True)
     return flash_redirect("/", "Monitor wurde aktualisiert.")
 

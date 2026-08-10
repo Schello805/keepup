@@ -91,6 +91,13 @@
             </div>
         </div>
         {% endif %}
+        <datalist id="monitor-category-options">
+            {% for category in summary.categories or [] %}
+                {% if category.key != "__none__" %}
+                <option value="{{ category.label }}"></option>
+                {% endif %}
+            {% endfor %}
+        </datalist>
     </div>
 {%- endmacro %}
 
@@ -506,7 +513,7 @@
                 </label>
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
-                    <input name="category" class="{{ input_classes() }}" placeholder="z. B. Websites, Server, Smart Home" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
+                    <input name="category" list="monitor-category-options" class="{{ input_classes() }}" placeholder="z. B. Websites, Server, Smart Home" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
                     <p class="text-xs text-slate-500">Optional. Nutze gleiche Begriffe, um Monitore im Dashboard als Gruppe zu filtern.</p>
                 </label>
                 <label class="space-y-2">
@@ -595,7 +602,7 @@
                 </label>
                 <label class="space-y-2">
                     <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
-                    <input id="edit-monitor-category" name="category" class="{{ input_classes() }}" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
+                    <input id="edit-monitor-category" name="category" list="monitor-category-options" class="{{ input_classes() }}" title="Optional: Monitore mit derselben Kategorie erscheinen im Gruppenfilter zusammen.">
                     <p class="text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
                 </label>
                 <label class="space-y-2">
@@ -1089,6 +1096,7 @@
             applyMonitorFilters();
             restoreOpenDetails();
             bindMonitorCreateForms();
+            bindMonitorEditForms();
             bindMonitorToggleForms();
             bindMonitorDeleteForms();
             bindMonitorRunForms();
@@ -1150,18 +1158,29 @@
             return div.innerHTML;
         }
 
-        function addPendingMonitorCard(monitor) {
+        function resetDashboardViewToAll() {
+            window.localStorage.setItem("keepup-monitor-status-filter", "all");
+            window.localStorage.setItem("keepup-monitor-category-filter", "all");
+            window.localStorage.setItem("keepup-monitor-search", "");
+            window.localStorage.setItem("keepup-monitor-sort", "all");
+            applyMonitorFilters();
+        }
+
+        function addPendingMonitorCard(monitor, options = {}) {
             const grid = document.querySelector("#monitor-cards-shell .monitor-card-grid");
             if (!grid) {
                 refreshMonitorCards();
                 return;
             }
             const existing = document.querySelector(`[data-monitor-id="${monitor.id}"]`);
+            const nextSibling = existing?.nextElementSibling || null;
             if (existing) existing.remove();
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
             const categoryLabel = String(monitor.category || "").trim();
             const categoryKey = categoryLabel ? categoryLabel.toLowerCase() : "__none__";
             const metaLine = [categoryLabel ? `Gruppe: ${escapeHtml(categoryLabel)}` : "", pingLine].filter(Boolean).join(" · ");
+            const spinnerTitle = options.spinnerTitle || "Erster Check läuft";
+            const spinnerMessage = options.spinnerMessage || "Warte auf erste Rückmeldung...";
             const card = document.createElement("article");
             card.dataset.monitorStatus = "unknown";
             card.dataset.monitorCategory = categoryKey;
@@ -1188,7 +1207,7 @@
                             </div>
                             <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
                                 <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
-                                Erster Check läuft
+                                ${escapeHtml(spinnerTitle)}
                             </span>
                         </div>
                         <div class="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/25 px-3 py-1.5 text-xs">
@@ -1202,14 +1221,22 @@
                         </div>
                         <div class="mt-2 flex items-center gap-2 text-sm text-amber-100/85">
                             <span class="h-4 w-4 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
-                            <span>Warte auf erste Rückmeldung...</span>
+                            <span>${escapeHtml(spinnerMessage)}</span>
                         </div>
                     </div>
                 </div>
             `;
-            grid.prepend(card);
+            if (options.keepPosition && nextSibling) {
+                grid.insertBefore(card, nextSibling);
+            } else if (options.keepPosition) {
+                grid.appendChild(card);
+            } else {
+                grid.prepend(card);
+            }
             applyMonitorFilters();
-            card.scrollIntoView({ behavior: "smooth", block: "center" });
+            if (options.scroll !== false) {
+                card.scrollIntoView({ behavior: "smooth", block: "center" });
+            }
         }
 
         function bindMonitorCreateForms(scope = document) {
@@ -1254,6 +1281,45 @@
                         if (button instanceof HTMLButtonElement) button.disabled = false;
                     }
                 });
+            });
+        }
+
+        function bindMonitorEditForms(scope = document) {
+            const form = scope.getElementById ? scope.getElementById("edit-monitor-form") : document.getElementById("edit-monitor-form");
+            if (!(form instanceof HTMLFormElement)) return;
+            if (form.dataset.bound === "1") return;
+            form.dataset.bound = "1";
+            form.addEventListener("submit", async (event) => {
+                event.preventDefault();
+                const button = form.querySelector("button[type='submit']");
+                if (button instanceof HTMLButtonElement) button.disabled = true;
+                try {
+                    const response = await fetch(form.action, {
+                        method: "POST",
+                        body: new FormData(form),
+                        headers: { Accept: "application/json" },
+                        credentials: "same-origin",
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok || !data.ok) {
+                        showToast(data.message || "Monitor konnte nicht gespeichert werden.", "error");
+                        return;
+                    }
+                    closeEditPanel();
+                    resetDashboardViewToAll();
+                    showToast(data.message || "Monitor wurde aktualisiert.", "success");
+                    addPendingMonitorCard(data, {
+                        keepPosition: true,
+                        spinnerTitle: "Wird aktualisiert",
+                        spinnerMessage: "Änderung wird geprüft...",
+                    });
+                    refreshDashboardTop();
+                    scheduleMonitorCardRefreshes([700, 1500, 3000, 6000, 12000]);
+                } catch (error) {
+                    showToast("Monitor konnte nicht gespeichert werden.", "error");
+                } finally {
+                    if (button instanceof HTMLButtonElement) button.disabled = false;
+                }
             });
         }
 
@@ -1396,6 +1462,7 @@
         applyMonitorFilters();
         restoreOpenDetails();
         bindMonitorCreateForms();
+        bindMonitorEditForms();
         bindMonitorToggleForms();
         bindMonitorDeleteForms();
         bindMonitorRunForms();
