@@ -456,7 +456,7 @@
 
         <section id="add-monitor-panel" class="mt-5 hidden {{ panel_classes() }}">
             <h2 class="text-lg font-semibold">Neuen Monitor anlegen</h2>
-            <form action="/monitors" method="post" class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2" autocomplete="off" data-lpignore="true">
+            <form action="/monitors" method="post" class="js-monitor-create mt-4 grid grid-cols-1 gap-3 md:grid-cols-2" autocomplete="off" data-lpignore="true">
                 <label class="space-y-2 md:col-span-2">
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input name="name" required class="{{ input_classes() }}" placeholder="Produktionsseite" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
@@ -522,7 +522,11 @@
                     Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
                 </div>
                 <button type="submit" class="{{ btn_classes('primary') }} md:col-span-2">
-                    Monitor speichern
+                    <span data-create-label>Monitor speichern</span>
+                    <span data-create-spinner class="hidden items-center justify-center gap-2">
+                        <span class="h-4 w-4 rounded-full border-2 border-slate-950/30 border-t-slate-950 animate-spin"></span>
+                        Wird angelegt...
+                    </span>
                 </button>
             </form>
         </section>
@@ -1011,6 +1015,123 @@
             }
         }
 
+        function refreshDashboardTop() {
+            const topShell = document.getElementById("dashboard-top-shell");
+            if (topShell && window.htmx) {
+                window.htmx.ajax("GET", "/api/live/top", { target: topShell, swap: "outerHTML" });
+            }
+        }
+
+        function escapeHtml(value) {
+            const div = document.createElement("div");
+            div.textContent = value == null ? "" : String(value);
+            return div.innerHTML;
+        }
+
+        function addPendingMonitorCard(monitor) {
+            const grid = document.querySelector("#monitor-cards-shell .monitor-card-grid");
+            if (!grid) {
+                refreshMonitorCards();
+                return;
+            }
+            const existing = document.querySelector(`[data-monitor-id="${monitor.id}"]`);
+            if (existing) existing.remove();
+            const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
+            const card = document.createElement("article");
+            card.dataset.monitorStatus = "unknown";
+            card.dataset.monitorSearch = `${monitor.name || ""} ${monitor.target || ""} ${monitor.ping_target || ""}`.toLowerCase();
+            card.dataset.monitorName = String(monitor.name || "").toLowerCase();
+            card.dataset.monitorResponseTime = "-1";
+            card.dataset.monitorUptime = "-1";
+            card.dataset.monitorStatusRank = "1";
+            card.dataset.monitorOrder = "-1";
+            card.dataset.monitorId = monitor.id;
+            card.className = "monitor-card perspective-1000 flex min-w-0 cursor-wait";
+            card.innerHTML = `
+                <div class="relative flex min-w-0 w-full flex-1">
+                    <div class="card-front w-full h-full flex flex-col rounded-3xl border border-amber-300/35 bg-amber-500/20 p-3 shadow-panel card-sheen">
+                        <div class="flex items-start justify-between gap-3">
+                            <div class="min-w-0">
+                                <div class="mb-1.5 flex items-center gap-2">
+                                    <span class="inline-flex h-3 w-3 rounded-full bg-amber-400"></span>
+                                    <p class="text-xs uppercase tracking-[0.25em] text-slate-400">${escapeHtml(monitor.type_label || "UNKNOWN")}</p>
+                                </div>
+                                <h3 class="truncate text-xl font-semibold">${escapeHtml(monitor.name || "Neuer Monitor")}</h3>
+                                <p class="truncate text-sm text-slate-400">${escapeHtml(monitor.target || "-")}</p>
+                                <p class="truncate text-xs text-slate-500">${pingLine}</p>
+                            </div>
+                            <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
+                                <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
+                                Erster Check läuft
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/25 px-3 py-1.5 text-xs">
+                            <span class="uppercase tracking-wide text-slate-400">Antwortzeit</span>
+                            <span class="font-medium text-slate-300">-</span>
+                        </div>
+                        <div class="mt-2 grid grid-cols-3 gap-2 text-xs">
+                            <div class="rounded-xl bg-slate-950/45 p-2 text-center"><p class="text-[10px] uppercase tracking-wide text-slate-400">Seit - T</p><p class="mt-0.5 text-sm font-semibold text-slate-100">-%</p></div>
+                            <div class="rounded-xl bg-slate-950/45 p-2 text-center"><p class="text-[10px] uppercase tracking-wide text-slate-400">30 Tage</p><p class="mt-0.5 text-sm font-semibold text-slate-100">-%</p></div>
+                            <div class="rounded-xl bg-slate-950/45 p-2 text-center"><p class="text-[10px] uppercase tracking-wide text-slate-400">Aktuell</p><p class="mt-0.5 text-sm font-semibold text-slate-100">-%</p></div>
+                        </div>
+                        <div class="mt-2 flex items-center gap-2 text-sm text-amber-100/85">
+                            <span class="h-4 w-4 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
+                            <span>Warte auf erste Rückmeldung...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            grid.prepend(card);
+            applyMonitorFilters();
+            card.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+
+        function bindMonitorCreateForms(scope = document) {
+            scope.querySelectorAll("form.js-monitor-create").forEach((form) => {
+                if (!(form instanceof HTMLFormElement)) return;
+                if (form.dataset.bound === "1") return;
+                form.dataset.bound = "1";
+                form.addEventListener("submit", async (event) => {
+                    event.preventDefault();
+                    const button = form.querySelector("button[type='submit']");
+                    const label = form.querySelector("[data-create-label]");
+                    const spinner = form.querySelector("[data-create-spinner]");
+                    if (button instanceof HTMLButtonElement) button.disabled = true;
+                    label?.classList.add("hidden");
+                    spinner?.classList.remove("hidden");
+                    spinner?.classList.add("inline-flex");
+                    try {
+                        const response = await fetch(form.action, {
+                            method: "POST",
+                            body: new FormData(form),
+                            headers: { Accept: "application/json" },
+                            credentials: "same-origin",
+                        });
+                        const data = await response.json().catch(() => ({}));
+                        if (!response.ok || !data.ok) {
+                            showToast(data.message || "Monitor konnte nicht angelegt werden.", "error");
+                            return;
+                        }
+                        document.getElementById("add-monitor-panel")?.classList.add("hidden");
+                        form.reset();
+                        togglePingTargetField("new");
+                        showToast(data.message || "Monitor wurde angelegt.", "success");
+                        addPendingMonitorCard(data);
+                        refreshDashboardTop();
+                        window.setTimeout(refreshMonitorCards, 1200);
+                        window.setTimeout(refreshMonitorCards, 5000);
+                    } catch (error) {
+                        showToast("Monitor konnte nicht angelegt werden.", "error");
+                    } finally {
+                        label?.classList.remove("hidden");
+                        spinner?.classList.add("hidden");
+                        spinner?.classList.remove("inline-flex");
+                        if (button instanceof HTMLButtonElement) button.disabled = false;
+                    }
+                });
+            });
+        }
+
         function bindMonitorRunForms(scope = document) {
             scope.querySelectorAll("form.js-monitor-run").forEach((form) => {
                 if (!(form instanceof HTMLFormElement)) return;
@@ -1149,6 +1270,7 @@
         dismissColdStartHint();
         applyMonitorFilters();
         restoreOpenDetails();
+        bindMonitorCreateForms();
         bindMonitorToggleForms();
         bindMonitorRunForms();
         window.bindCardFlipHandlers = function bindCardFlipHandlers() {};
@@ -1177,6 +1299,7 @@
             dismissColdStartHint();
             applyMonitorFilters();
             restoreOpenDetails();
+            bindMonitorCreateForms();
             bindMonitorToggleForms();
             bindMonitorRunForms();
         });

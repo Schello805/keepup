@@ -20,7 +20,7 @@ import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
@@ -952,6 +952,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("remove duplicate ntfy test button", "Der doppelte ntfy-Testbutton wurde entfernt."),
         ("collapse botfather guide", "Die BotFather-Anleitung ist jetzt platzsparend einklappbar."),
         ("keep dashboard visible while monitors change", "Das Dashboard bleibt beim Anlegen und Ändern von Monitoren sichtbar."),
+        ("show new monitor immediately while first check runs", "Neue Monitore erscheinen sofort mit Ladeanzeige auf dem Dashboard."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
@@ -1156,6 +1157,7 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
 
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
+    await asyncio.to_thread(get_dashboard_cards_html, True)
     await execute_monitor_check(monitor_id)
     await asyncio.to_thread(get_dashboard_cards_html, True)
 
@@ -1604,6 +1606,7 @@ async def monitor_snapshot() -> JSONResponse:
 
 @app.post("/monitors")
 async def create_monitor_route(
+    request: Request,
     name: str = Form(...),
     monitor_type: str = Form(...),
     target: str = Form(...),
@@ -1614,7 +1617,7 @@ async def create_monitor_route(
     timeout: int = Form(...),
     expected_text: str = Form(""),
     forbidden_text: str = Form(""),
-) -> RedirectResponse:
+) -> Response:
     if monitor_type not in {"http", "ping", "ping_http", "ping_http_or", "ping_http_and"}:
         raise HTTPException(status_code=400, detail="Unsupported monitor type")
     if http_method not in {"GET", "HEAD"}:
@@ -1622,7 +1625,13 @@ async def create_monitor_route(
     target = normalize_monitor_target(monitor_type, target)
     is_combo = is_combo_monitor_type(monitor_type)
     ping_mode = combo_ping_mode(monitor_type)
+    accept = (request.headers.get("accept") or "").lower()
     if is_combo and not ping_target.strip() and not urlparse(target).hostname:
+        if "application/json" in accept:
+            return JSONResponse(
+                {"ok": False, "message": "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben."},
+                status_code=400,
+            )
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
     monitor_id = create_monitor(
         name=name,
@@ -1640,8 +1649,21 @@ async def create_monitor_route(
     )
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
-    await asyncio.to_thread(get_dashboard_cards_html, True)
     asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
+    if "application/json" in accept:
+        return JSONResponse(
+            {
+                "ok": True,
+                "id": monitor_id,
+                "name": name.strip(),
+                "target": target,
+                "ping_target": ping_target.strip(),
+                "monitor_type": "http" if is_combo else monitor_type,
+                "type_label": ("PING + HTTP" if ping_mode == "and" else "PING oder HTTP") if is_combo else monitor_type.upper(),
+                "interval": max(10, interval),
+                "message": "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.",
+            }
+        )
     return flash_redirect("/", "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.")
 
 
