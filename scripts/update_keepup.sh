@@ -80,6 +80,7 @@ TIMESTAMP="$(date +%F-%H%M%S)"
 
 ENABLE_BACKUPS="${KEEPUP_ENABLE_BACKUPS:-0}"
 FRONTEND_UPDATE_MODE="${KEEPUP_FRONTEND_UPDATE:-0}"
+FRONTEND_CONFIGURE_MODE="${KEEPUP_FRONTEND_CONFIGURE:-0}"
 
 run_with_timeout() {
   local seconds="$1"; shift
@@ -195,15 +196,23 @@ if [ -d "$ROOT_DIR/.git" ]; then
   run_as_project_owner git -C "$ROOT_DIR" -c safe.directory="$ROOT_DIR" pull --ff-only
 fi
 
-run_as_project_owner "$VENV_DIR/bin/python" -m pip install --upgrade pip
-run_as_project_owner "$VENV_DIR/bin/pip" install -r "$ROOT_DIR/requirements.txt"
+if [ "$FRONTEND_UPDATE_MODE" = "1" ]; then
+  echo "[update] Frontend update mode active, keeping existing pip version."
+else
+  run_as_project_owner "$VENV_DIR/bin/python" -m pip install --upgrade pip
+fi
+run_as_project_owner "$VENV_DIR/bin/pip" install --disable-pip-version-check -r "$ROOT_DIR/requirements.txt"
 
 run_as_project_owner "$VENV_DIR/bin/python" -m py_compile "$ROOT_DIR/main.py" "$ROOT_DIR/database.py" "$ROOT_DIR/monitor.py"
 
-echo "[update] Running configuration checks and ensuring service is configured"
-if [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ] && can_run_as_root; then
+if [ "$FRONTEND_UPDATE_MODE" = "1" ] && [ "$FRONTEND_CONFIGURE_MODE" != "1" ]; then
+  echo "[update] Frontend update mode active, skipping full configuration checks."
+  echo "[update] Set KEEPUP_FRONTEND_CONFIGURE=1 to force service/user/capability checks."
+elif [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ] && can_run_as_root; then
+  echo "[update] Running configuration checks and ensuring service is configured"
   run_as_root "$ROOT_DIR/scripts/check_and_configure.sh"
 elif [ -x "$ROOT_DIR/scripts/check_and_configure.sh" ]; then
+  echo "[update] Running configuration checks and ensuring service is configured"
   echo "[update] Skipping root-only configuration checks (no passwordless sudo available)."
 else
   echo "[update] Warning: check_and_configure.sh not found or not executable"

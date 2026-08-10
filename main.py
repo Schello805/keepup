@@ -70,6 +70,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("keepup")
 UPDATE_STATUS_TTL_SECONDS = 60
+UPDATE_REMOTE_TIMEOUT_SECONDS = 2.5
 _update_status_cache: dict[str, Any] = {"expires_at": 0.0, "payload": None}
 APP_VERSION_TTL_SECONDS = 60
 DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
@@ -955,6 +956,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("show new monitor immediately while first check runs", "Neue Monitore erscheinen sofort mit Ladeanzeige auf dem Dashboard."),
         ("show warmup monitor cards instead of skeletons", "Nach Neustart oder Update werden sofort Monitor-Karten mit Ladeanzeige gezeigt."),
         ("make monitor create and delete instant in frontend", "Monitore erscheinen oder verschwinden im Frontend sofort, während der Cache im Hintergrund aktualisiert wird."),
+        ("speed up browser update checks", "Update-Prüfung und Browser-Updates wurden beschleunigt."),
         ("group notification settings", "Telegram, ntfy und E-Mail wurden in den Einstellungen gemeinsam gruppiert."),
         ("add frontend changelog from commits", "Eine Änderungsseite zeigt die letzten Updates verständlich im Frontend."),
         ("add automated ci checks", "Automatische Tests auf GitHub wurden ergänzt."),
@@ -1305,7 +1307,7 @@ async def _get_pending_update_changes(local_sha: Optional[str], remote_sha: Opti
     url = f"https://api.github.com/repos/Schello805/keepup/compare/{local_sha}...{remote_sha}"
     headers = {"User-Agent": "KeepUp"}
     try:
-        async with httpx.AsyncClient(timeout=6.0, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=UPDATE_REMOTE_TIMEOUT_SECONDS, headers=headers) as client:
             res = await client.get(url)
         if res.status_code != 200:
             return []
@@ -1329,7 +1331,7 @@ async def _get_remote_main_sha() -> Optional[str]:
     url = "https://api.github.com/repos/Schello805/keepup/commits/main"
     headers = {"User-Agent": "KeepUp"}
     try:
-        async with httpx.AsyncClient(timeout=6.0, headers=headers) as client:
+        async with httpx.AsyncClient(timeout=UPDATE_REMOTE_TIMEOUT_SECONDS, headers=headers) as client:
             res = await client.get(url)
         if res.status_code != 200:
             return None
