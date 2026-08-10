@@ -966,10 +966,8 @@
                         }
                         const data = await res.json();
                         showToast((data && data.message) ? data.message : "Status aktualisiert.", "info");
-                        const cardsShell = document.getElementById("monitor-cards-shell");
-                        if (cardsShell && window.htmx) {
-                            window.htmx.ajax("GET", "/api/live/cards", { target: cardsShell, swap: "outerHTML" });
-                        } else {
+                        const refreshed = await refreshMonitorCards();
+                        if (!refreshed) {
                             window.location.reload();
                         }
                     } catch (err) {
@@ -1016,7 +1014,7 @@
                         if (card instanceof HTMLElement) card.remove();
                         showToast(data.message || "Monitor wurde gelöscht.", "warning");
                         refreshDashboardTop();
-                        window.setTimeout(refreshMonitorCards, 1200);
+                        scheduleMonitorCardRefreshes([800, 2000]);
                     } catch (error) {
                         if (card instanceof HTMLElement) {
                             card.classList.remove("opacity-40", "scale-[0.98]", "pointer-events-none");
@@ -1029,18 +1027,64 @@
             });
         }
 
-        function refreshMonitorCards() {
-            const cardsShell = document.getElementById("monitor-cards-shell");
-            if (cardsShell && window.htmx) {
-                window.htmx.ajax("GET", "/api/live/cards", { target: cardsShell, swap: "outerHTML" });
+        function afterMonitorCardsUpdated() {
+            dismissColdStartHint();
+            applyMonitorFilters();
+            restoreOpenDetails();
+            bindMonitorCreateForms();
+            bindMonitorToggleForms();
+            bindMonitorDeleteForms();
+            bindMonitorRunForms();
+        }
+
+        async function replaceShellFromUrl(url, shellId) {
+            const shell = document.getElementById(shellId);
+            if (!shell) return false;
+            const response = await fetch(url, {
+                method: "GET",
+                cache: "no-store",
+                headers: { "HX-Request": "true" },
+                credentials: "same-origin",
+            });
+            if (!response.ok) return false;
+            const html = (await response.text()).trim();
+            if (!html) return false;
+            const template = document.createElement("template");
+            template.innerHTML = html;
+            const replacement = template.content.firstElementChild;
+            if (!(replacement instanceof HTMLElement)) return false;
+            shell.replaceWith(replacement);
+            if (window.htmx && typeof window.htmx.process === "function") {
+                window.htmx.process(replacement);
+            }
+            if (shellId === "monitor-cards-shell") {
+                afterMonitorCardsUpdated();
+            }
+            return true;
+        }
+
+        async function refreshMonitorCards() {
+            try {
+                return await replaceShellFromUrl("/api/live/cards", "monitor-cards-shell");
+            } catch (error) {
+                console.warn("Monitor cards refresh failed", error);
+                return false;
             }
         }
 
-        function refreshDashboardTop() {
-            const topShell = document.getElementById("dashboard-top-shell");
-            if (topShell && window.htmx) {
-                window.htmx.ajax("GET", "/api/live/top", { target: topShell, swap: "outerHTML" });
+        async function refreshDashboardTop() {
+            try {
+                return await replaceShellFromUrl("/api/live/top", "dashboard-top-shell");
+            } catch (error) {
+                console.warn("Dashboard top refresh failed", error);
+                return false;
             }
+        }
+
+        function scheduleMonitorCardRefreshes(delays = [800, 2000, 5000, 10000, 20000]) {
+            delays.forEach((delay) => {
+                window.setTimeout(refreshMonitorCards, delay);
+            });
         }
 
         function escapeHtml(value) {
@@ -1139,8 +1183,7 @@
                         showToast(data.message || "Monitor wurde angelegt.", "success");
                         addPendingMonitorCard(data);
                         refreshDashboardTop();
-                        window.setTimeout(refreshMonitorCards, 1200);
-                        window.setTimeout(refreshMonitorCards, 5000);
+                        scheduleMonitorCardRefreshes();
                     } catch (error) {
                         showToast("Monitor konnte nicht angelegt werden.", "error");
                     } finally {
@@ -1181,7 +1224,7 @@
                         }
                         const data = await response.json();
                         showToast((data && data.message) ? data.message : "Monitor wurde geprüft.", "info");
-                        refreshMonitorCards();
+                        scheduleMonitorCardRefreshes([500, 1500, 3500]);
                     } catch (error) {
                         showToast("Manueller Check fehlgeschlagen.", "error");
                     } finally {
@@ -1318,13 +1361,7 @@
             const target = event.detail?.target;
             if (!(target instanceof Element)) return;
             if (target.id !== "monitor-cards-shell") return;
-            dismissColdStartHint();
-            applyMonitorFilters();
-            restoreOpenDetails();
-            bindMonitorCreateForms();
-            bindMonitorToggleForms();
-            bindMonitorDeleteForms();
-            bindMonitorRunForms();
+            afterMonitorCardsUpdated();
         });
         document.body.addEventListener("htmx:beforeRequest", (event) => {
             const target = event.detail?.elt;
