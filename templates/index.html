@@ -538,7 +538,7 @@
                             Schließen
                         </button>
                     </div>
-                    <form action="/monitors" method="post" class="js-monitor-create grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4 sm:p-4" autocomplete="off" data-lpignore="true">
+                    <form action="/monitors" method="post" class="js-monitor-create grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-6 sm:p-4" autocomplete="off" data-lpignore="true">
                 <label class="space-y-1 sm:col-span-1 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input name="name" required class="{{ input_classes() }}" placeholder="Produktionsseite" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
@@ -559,7 +559,7 @@
                     <input id="new-monitor-category" type="hidden" name="category" value="">
                     <p class="field-help text-xs text-slate-500">Optional. Wähle eine vorhandene Gruppe oder lege über “Neue Kategorie...” eine neue an.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-1">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
                     <select id="new-monitor-type" name="monitor_type" onchange="togglePingTargetField('new')" class="{{ select_classes() }}" title="HTTP/S prüft eine Webseite/API. Ping prüft Host/IP. Kombi prüft beides.">
                         <option value="http">HTTP/S</option>
@@ -569,12 +569,12 @@
                     </select>
                     <p class="field-help text-xs text-slate-500">`oder` ist robust: ein erfolgreicher Weg reicht. `+` ist streng: beide Wege müssen erfolgreich sein.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-3">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-6">
                     <span class="text-sm text-slate-300" title="Das Hauptziel des Monitors. Bei HTTP/Kombi eine URL, bei Ping eine IP oder ein Hostname.">Ziel</span>
                     <input name="target" required class="{{ input_classes() }}" placeholder="https://example.com oder 1.1.1.1" title="HTTP/S: URL wie https://example.com. Ping: IP oder Hostname. Bei HTTP/Kombi ergänzt KeepUp https:// automatisch, wenn kein Schema angegeben ist.">
                     <p class="field-help text-xs text-slate-500">HTTP/S oder Kombi: URL. Ping: IP-Adresse oder Hostname.</p>
                 </label>
-                <label id="new-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-4">
+                <label id="new-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-6">
                     <span class="text-sm text-slate-300" title="Optionales separates Ziel für den Ping-Teil eines Kombi-Monitors.">Ping-Ziel (optional)</span>
                     <input name="ping_target" class="{{ input_classes() }}" placeholder="z. B. 192.168.1.7; leer = Hostname aus der HTTP-URL" title="Optional: IP oder Hostname, den KeepUp per Ping prüft. Leer lassen, wenn der Hostname aus der HTTP-URL verwendet werden soll.">
                     <p class="field-help text-xs text-slate-500">Nützlich, wenn die Webseite über eine Domain läuft, du aber den lokalen Host per IP pingen möchtest.</p>
@@ -597,7 +597,7 @@
                     <input type="number" min="0" max="5" step="1" name="retry_count" value="2" class="{{ input_classes() }}" title="Anzahl direkter Wiederholungen nach einem Fehler, bevor der Check als fehlgeschlagen gilt.">
                     <p class="field-help text-xs text-slate-500">Hilft gegen kurze Wackler. 2 ist ein guter Standard.</p>
                 </label>
-                <label class="field-help space-y-1 sm:col-span-2 lg:col-span-4">
+                <label class="field-help space-y-1 sm:col-span-2 lg:col-span-6">
                     <p class="field-help text-xs text-slate-500">`HEAD` ist für viele Webseiten schonender. `Retries` steuert, wie oft KeepUp nach einem HTTP- oder Ping-Fehler direkt erneut prüft.</p>
                 </label>
                 <label class="space-y-1">
@@ -605,20 +605,20 @@
                     <input type="number" min="2" step="1" name="timeout" value="10" class="{{ input_classes() }}" title="Wie lange KeepUp pro Versuch wartet, bevor Timeout gemeldet wird.">
                     <p class="field-help text-xs text-slate-500">Bei langsamen Webseiten lieber 10-20 Sekunden wählen.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-1 lg:col-span-2">
+                <label class="space-y-1 sm:col-span-1 lg:col-span-3">
                     <span class="text-sm text-slate-300" title="Optionaler Text, der im HTML-Rohtext vorkommen muss.">Muss Inhalt enthalten</span>
                     <input name="expected_text" class="{{ input_classes() }}" placeholder="z. B. Nextcloud" title="Optional: Wenn gesetzt, ist der Monitor nur UP, wenn dieser Text in der Serverantwort vorkommt.">
                     <p class="field-help text-xs text-slate-500">Optional. Leer lassen, wenn nur Erreichbarkeit geprüft werden soll.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-1 lg:col-span-2">
+                <label class="space-y-1 sm:col-span-1 lg:col-span-3">
                     <span class="text-sm text-slate-300" title="Optionaler Text, der im HTML-Rohtext nicht vorkommen darf.">Darf Inhalt nicht enthalten</span>
                     <input name="forbidden_text" class="{{ input_classes() }}" placeholder="z. B. Bad Gateway" title="Optional: Wenn dieser Text in der Serverantwort vorkommt, wird der Monitor als DOWN gewertet.">
                     <p class="field-help text-xs text-slate-500">Gut für Fehlerseiten wie `Bad Gateway` oder Wartungsseiten.</p>
                 </label>
-                <div class="field-help sm:col-span-2 lg:col-span-4 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+                <div class="field-help sm:col-span-2 lg:col-span-6 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
                     Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
                 </div>
-                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-4">
+                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-6">
                     <span data-create-label>Monitor speichern</span>
                     <span data-create-spinner class="hidden items-center justify-center gap-2">
                         <span class="h-4 w-4 rounded-full border-2 border-slate-950/30 border-t-slate-950 animate-spin"></span>
@@ -642,7 +642,7 @@
                             Schließen
                         </button>
                     </div>
-            <form id="edit-monitor-form" action="/monitors/0/edit" method="post" class="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4 sm:p-4">
+            <form id="edit-monitor-form" action="/monitors/0/edit" method="post" class="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-6 sm:p-4">
                 <label class="space-y-1 sm:col-span-1 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input id="edit-monitor-name" name="name" required class="{{ input_classes() }}" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
@@ -663,7 +663,7 @@
                     <input id="edit-monitor-category" type="hidden" name="category" value="">
                     <p class="field-help text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-1">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
                     <select id="edit-monitor-type" name="monitor_type" onchange="togglePingTargetField('edit')" class="{{ select_classes() }}" title="HTTP/S prüft eine Webseite/API. Ping prüft Host/IP. Kombi prüft beides.">
                         <option value="http">HTTP/S</option>
@@ -673,12 +673,12 @@
                     </select>
                     <p class="field-help text-xs text-slate-500">`oder` ist robust: ein erfolgreicher Weg reicht. `+` ist streng: beide Wege müssen erfolgreich sein.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-3">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-6">
                     <span class="text-sm text-slate-300" title="Das Hauptziel des Monitors. Bei HTTP/Kombi eine URL, bei Ping eine IP oder ein Hostname.">Ziel</span>
                     <input id="edit-monitor-target" name="target" required class="{{ input_classes() }}" title="HTTP/S: URL wie https://example.com. Ping: IP oder Hostname. Bei HTTP/Kombi ergänzt KeepUp https:// automatisch, wenn kein Schema angegeben ist.">
                     <p class="field-help text-xs text-slate-500">HTTP/S oder Kombi: URL. Ping: IP-Adresse oder Hostname.</p>
                 </label>
-                <label id="edit-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-4">
+                <label id="edit-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-6">
                     <span class="text-sm text-slate-300" title="Optionales separates Ziel für den Ping-Teil eines Kombi-Monitors.">Ping-Ziel (optional)</span>
                     <input id="edit-monitor-ping-target" name="ping_target" class="{{ input_classes() }}" placeholder="leer = Hostname aus der HTTP-URL" title="Optional: IP oder Hostname, den KeepUp per Ping prüft. Leer lassen, wenn der Hostname aus der HTTP-URL verwendet werden soll.">
                     <p class="field-help text-xs text-slate-500">Nützlich, wenn die Webseite über eine Domain läuft, du aber den lokalen Host per IP pingen möchtest.</p>
@@ -706,20 +706,20 @@
                     <input id="edit-monitor-timeout" type="number" min="2" step="1" name="timeout" required class="{{ input_classes() }}" title="Wie lange KeepUp pro Versuch wartet, bevor Timeout gemeldet wird.">
                     <p class="field-help text-xs text-slate-500">Bei langsamen Webseiten lieber 10-20 Sekunden wählen.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-1 lg:col-span-2">
+                <label class="space-y-1 sm:col-span-1 lg:col-span-3">
                     <span class="text-sm text-slate-300" title="Optionaler Text, der im HTML-Rohtext vorkommen muss.">Muss Inhalt enthalten</span>
                     <input id="edit-monitor-expected-text" name="expected_text" class="{{ input_classes() }}" title="Optional: Wenn gesetzt, ist der Monitor nur UP, wenn dieser Text in der Serverantwort vorkommt.">
                     <p class="field-help text-xs text-slate-500">Optional. Leer lassen, wenn nur Erreichbarkeit geprüft werden soll.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-1 lg:col-span-2">
+                <label class="space-y-1 sm:col-span-1 lg:col-span-3">
                     <span class="text-sm text-slate-300" title="Optionaler Text, der im HTML-Rohtext nicht vorkommen darf.">Darf Inhalt nicht enthalten</span>
                     <input id="edit-monitor-forbidden-text" name="forbidden_text" class="{{ input_classes() }}" title="Optional: Wenn dieser Text in der Serverantwort vorkommt, wird der Monitor als DOWN gewertet.">
                     <p class="field-help text-xs text-slate-500">Gut für Fehlerseiten wie `Bad Gateway` oder Wartungsseiten.</p>
                 </label>
-                <div class="field-help sm:col-span-2 lg:col-span-4 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+                <div class="field-help sm:col-span-2 lg:col-span-6 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
                     Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
                 </div>
-                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-4">
+                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-6">
                     Änderungen speichern
                 </button>
             </form>

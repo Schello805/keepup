@@ -92,6 +92,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitor-Dialoge sind am Desktop schmaler, damit die Felder nicht über die ganze Browserbreite laufen.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Tighten first monitor modal fields"),
+            "Die ersten Felder im Monitor-Dialog sind am Desktop kürzer und übersichtlicher angeordnet.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Improve dashboard sorting and edit position"),
             "Dashboard-Sortierung wurde erweitert und bearbeitete Karten behalten ihre Position ruhiger bei.",
         )
