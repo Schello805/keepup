@@ -282,8 +282,8 @@
                 </div>
             </form>
 
-            <section id="incident-feed-shell" hx-get="{{ incident_feed_url }}" hx-trigger="load" hx-swap="innerHTML">
-                {{ render_incident_feed_loading() }}
+            <section id="incident-feed-shell">
+                {{ render_incident_feed(feed_items, selected_item, pagination) }}
             </section>
         </section>
     </main>

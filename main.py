@@ -983,6 +983,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("avoid blocking live card refreshes after edits", "Live-Karten liefern vorhandene Daten sofort aus, während Aktualisierungen nach Monitoränderungen im Hintergrund laufen."),
         ("keep pending monitor category visible during refreshes", "Geänderte Monitor-Kategorien bleiben sofort sichtbar, auch wenn kurz ein älterer Kartenstand zurückkommt."),
         ("preserve sort selection during live refreshes", "Die gewählte Sortierung bleibt auch nach Live-Aktualisierungen sichtbar und aktiv."),
+        ("render incidents feed directly on page load", "Die Incident-Liste wird direkt mit der Seite ausgeliefert und bleibt nicht mehr unnötig im Wartebildschirm hängen."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
@@ -1632,7 +1633,7 @@ async def settings_system_status_partial(request: Request) -> HTMLResponse:
 
 @app.get("/incidents", response_class=HTMLResponse)
 async def incidents_page(request: Request) -> HTMLResponse:
-    return await asyncio.to_thread(render_template, request, "incidents.html", build_incidents_shell_context(request))
+    return await asyncio.to_thread(render_template, request, "incidents.html", build_incidents_context(request))
 
 
 @app.get("/changelog", response_class=HTMLResponse)

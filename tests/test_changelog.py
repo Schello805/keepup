@@ -100,6 +100,10 @@ class ChangelogTests(unittest.TestCase):
             "Die gewählte Sortierung bleibt auch nach Live-Aktualisierungen sichtbar und aktiv.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Render incidents feed directly on page load"),
+            "Die Incident-Liste wird direkt mit der Seite ausgeliefert und bleibt nicht mehr unnötig im Wartebildschirm hängen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )
