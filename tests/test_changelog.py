@@ -92,6 +92,10 @@ class ChangelogTests(unittest.TestCase):
             "Live-Karten liefern vorhandene Daten sofort aus, während Aktualisierungen nach Monitoränderungen im Hintergrund laufen.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Keep pending monitor category visible during refreshes"),
+            "Geänderte Monitor-Kategorien bleiben sofort sichtbar, auch wenn kurz ein älterer Kartenstand zurückkommt.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )

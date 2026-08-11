@@ -1257,6 +1257,7 @@
 
         function afterMonitorCardsUpdated() {
             dismissColdStartHint();
+            reapplyPendingMonitorCards();
             applyMonitorFilters();
             restoreOpenDetails();
             bindMonitorCreateForms();
@@ -1387,6 +1388,55 @@
             return div.innerHTML;
         }
 
+        function normalizeCategoryKey(value) {
+            const label = String(value || "").trim();
+            return label ? label.toLowerCase() : "__none__";
+        }
+
+        function pendingMonitorReflectsCard(pending, card) {
+            if (!(card instanceof HTMLElement)) return false;
+            const monitor = pending.monitor || {};
+            const expectedCategory = normalizeCategoryKey(monitor.category);
+            const expectedName = String(monitor.name || "").trim().toLowerCase();
+            const categoryMatches = (card.dataset.monitorCategory || "__none__") === expectedCategory;
+            const nameMatches = !expectedName || (card.dataset.monitorName || "") === expectedName;
+            return categoryMatches && nameMatches;
+        }
+
+        function rememberPendingMonitorCard(monitor, options = {}) {
+            const id = String(monitor?.id || "");
+            if (!id) return;
+            window.__keepupPendingMonitorCards = window.__keepupPendingMonitorCards || new Map();
+            window.__keepupPendingMonitorCards.set(id, {
+                monitor: { ...monitor },
+                options: { ...options, keepPosition: true, scroll: false },
+                expiresAt: Date.now() + 90000,
+            });
+        }
+
+        function reapplyPendingMonitorCards() {
+            const pendingCards = window.__keepupPendingMonitorCards;
+            if (!(pendingCards instanceof Map) || !pendingCards.size) return;
+            const now = Date.now();
+            pendingCards.forEach((pending, id) => {
+                const currentCard = document.querySelector(`[data-monitor-id="${id}"]`);
+                if (!pending || pending.expiresAt < now) {
+                    pendingCards.delete(id);
+                    return;
+                }
+                if (pendingMonitorReflectsCard(pending, currentCard)) {
+                    pendingCards.delete(id);
+                    return;
+                }
+                addPendingMonitorCard(pending.monitor, {
+                    ...pending.options,
+                    rememberPending: false,
+                    scroll: false,
+                    keepPosition: true,
+                });
+            });
+        }
+
         function addPendingMonitorCard(monitor, options = {}) {
             const grid = document.querySelector("#monitor-cards-shell .monitor-card-grid");
             if (!grid) {
@@ -1459,6 +1509,9 @@
                 grid.appendChild(card);
             } else {
                 grid.prepend(card);
+            }
+            if (options.rememberPending !== false) {
+                rememberPendingMonitorCard(monitor, options);
             }
             applyMonitorFilters();
             if (options.scroll !== false) {
