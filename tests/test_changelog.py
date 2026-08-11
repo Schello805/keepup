@@ -88,6 +88,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Constrain monitor modal width"),
+            "Monitor-Dialoge sind am Desktop schmaler, damit die Felder nicht über die ganze Browserbreite laufen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )

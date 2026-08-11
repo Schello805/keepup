@@ -525,7 +525,7 @@
 
         <section id="add-monitor-panel" class="monitor-modal fixed inset-0 z-[60] hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-6">
             <button type="button" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm" onclick="closeAddMonitorPanel()" aria-label="Dialog schließen"></button>
-            <div role="dialog" aria-modal="true" aria-labelledby="add-monitor-title" class="relative mx-auto flex min-h-full w-full max-w-6xl items-start sm:items-center">
+            <div role="dialog" aria-modal="true" aria-labelledby="add-monitor-title" class="relative mx-auto flex min-h-full w-full max-w-3xl items-start sm:items-center">
                 <div class="w-full rounded-3xl border border-sky-300/20 bg-keepup-panel/95 shadow-panel">
                     <div class="sticky top-0 z-20 flex items-start justify-between gap-3 rounded-t-3xl border-b border-white/10 bg-keepup-panel/95 px-4 py-2.5 backdrop-blur sm:px-5">
                         <div>
@@ -536,7 +536,7 @@
                             Schließen
                         </button>
                     </div>
-                    <form action="/monitors" method="post" class="js-monitor-create grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-6 sm:p-4" autocomplete="off" data-lpignore="true">
+                    <form action="/monitors" method="post" class="js-monitor-create grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4 sm:p-4" autocomplete="off" data-lpignore="true">
                 <label class="space-y-1 sm:col-span-1 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input name="name" required class="{{ input_classes() }}" placeholder="Produktionsseite" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
@@ -557,7 +557,7 @@
                     <input id="new-monitor-category" type="hidden" name="category" value="">
                     <p class="field-help text-xs text-slate-500">Optional. Wähle eine vorhandene Gruppe oder lege über “Neue Kategorie...” eine neue an.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-2">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-1">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
                     <select id="new-monitor-type" name="monitor_type" onchange="togglePingTargetField('new')" class="{{ select_classes() }}" title="HTTP/S prüft eine Webseite/API. Ping prüft Host/IP. Kombi prüft beides.">
                         <option value="http">HTTP/S</option>
@@ -567,12 +567,12 @@
                     </select>
                     <p class="field-help text-xs text-slate-500">`oder` ist robust: ein erfolgreicher Weg reicht. `+` ist streng: beide Wege müssen erfolgreich sein.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-6">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-3">
                     <span class="text-sm text-slate-300" title="Das Hauptziel des Monitors. Bei HTTP/Kombi eine URL, bei Ping eine IP oder ein Hostname.">Ziel</span>
                     <input name="target" required class="{{ input_classes() }}" placeholder="https://example.com oder 1.1.1.1" title="HTTP/S: URL wie https://example.com. Ping: IP oder Hostname. Bei HTTP/Kombi ergänzt KeepUp https:// automatisch, wenn kein Schema angegeben ist.">
                     <p class="field-help text-xs text-slate-500">HTTP/S oder Kombi: URL. Ping: IP-Adresse oder Hostname.</p>
                 </label>
-                <label id="new-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-6">
+                <label id="new-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-4">
                     <span class="text-sm text-slate-300" title="Optionales separates Ziel für den Ping-Teil eines Kombi-Monitors.">Ping-Ziel (optional)</span>
                     <input name="ping_target" class="{{ input_classes() }}" placeholder="z. B. 192.168.1.7; leer = Hostname aus der HTTP-URL" title="Optional: IP oder Hostname, den KeepUp per Ping prüft. Leer lassen, wenn der Hostname aus der HTTP-URL verwendet werden soll.">
                     <p class="field-help text-xs text-slate-500">Nützlich, wenn die Webseite über eine Domain läuft, du aber den lokalen Host per IP pingen möchtest.</p>
@@ -595,7 +595,7 @@
                     <input type="number" min="0" max="5" step="1" name="retry_count" value="2" class="{{ input_classes() }}" title="Anzahl direkter Wiederholungen nach einem Fehler, bevor der Check als fehlgeschlagen gilt.">
                     <p class="field-help text-xs text-slate-500">Hilft gegen kurze Wackler. 2 ist ein guter Standard.</p>
                 </label>
-                <label class="field-help space-y-1 sm:col-span-2 lg:col-span-6">
+                <label class="field-help space-y-1 sm:col-span-2 lg:col-span-4">
                     <p class="field-help text-xs text-slate-500">`HEAD` ist für viele Webseiten schonender. `Retries` steuert, wie oft KeepUp nach einem HTTP- oder Ping-Fehler direkt erneut prüft.</p>
                 </label>
                 <label class="space-y-1">
@@ -613,10 +613,10 @@
                     <input name="forbidden_text" class="{{ input_classes() }}" placeholder="z. B. Bad Gateway" title="Optional: Wenn dieser Text in der Serverantwort vorkommt, wird der Monitor als DOWN gewertet.">
                     <p class="field-help text-xs text-slate-500">Gut für Fehlerseiten wie `Bad Gateway` oder Wartungsseiten.</p>
                 </label>
-                <div class="field-help sm:col-span-2 lg:col-span-6 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+                <div class="field-help sm:col-span-2 lg:col-span-4 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
                     Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
                 </div>
-                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-6">
+                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-4">
                     <span data-create-label>Monitor speichern</span>
                     <span data-create-spinner class="hidden items-center justify-center gap-2">
                         <span class="h-4 w-4 rounded-full border-2 border-slate-950/30 border-t-slate-950 animate-spin"></span>
@@ -629,7 +629,7 @@
         </section>
         <section id="edit-monitor-panel" class="monitor-modal fixed inset-0 z-[60] hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-6">
             <button type="button" class="fixed inset-0 bg-slate-950/75 backdrop-blur-sm" onclick="closeEditPanel()" aria-label="Dialog schließen"></button>
-            <div role="dialog" aria-modal="true" aria-labelledby="edit-monitor-title" class="relative mx-auto flex min-h-full w-full max-w-6xl items-start sm:items-center">
+            <div role="dialog" aria-modal="true" aria-labelledby="edit-monitor-title" class="relative mx-auto flex min-h-full w-full max-w-3xl items-start sm:items-center">
                 <div class="w-full rounded-3xl border border-sky-300/20 bg-keepup-panel/95 shadow-panel">
                     <div class="sticky top-0 z-20 flex items-start justify-between gap-3 rounded-t-3xl border-b border-white/10 bg-keepup-panel/95 px-4 py-2.5 backdrop-blur sm:px-5">
                         <div>
@@ -640,7 +640,7 @@
                             Schließen
                         </button>
                     </div>
-            <form id="edit-monitor-form" action="/monitors/0/edit" method="post" class="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-6 sm:p-4">
+            <form id="edit-monitor-form" action="/monitors/0/edit" method="post" class="grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2 lg:grid-cols-4 sm:p-4">
                 <label class="space-y-1 sm:col-span-1 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Frei wählbarer Anzeigename für die Karte und Benachrichtigungen.">Name</span>
                     <input id="edit-monitor-name" name="name" required class="{{ input_classes() }}" title="Frei wählbarer Name, z. B. Nextcloud, Router oder Produktionsseite.">
@@ -661,7 +661,7 @@
                     <input id="edit-monitor-category" type="hidden" name="category" value="">
                     <p class="field-help text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-2">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-1">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
                     <select id="edit-monitor-type" name="monitor_type" onchange="togglePingTargetField('edit')" class="{{ select_classes() }}" title="HTTP/S prüft eine Webseite/API. Ping prüft Host/IP. Kombi prüft beides.">
                         <option value="http">HTTP/S</option>
@@ -671,12 +671,12 @@
                     </select>
                     <p class="field-help text-xs text-slate-500">`oder` ist robust: ein erfolgreicher Weg reicht. `+` ist streng: beide Wege müssen erfolgreich sein.</p>
                 </label>
-                <label class="space-y-1 sm:col-span-2 lg:col-span-6">
+                <label class="space-y-1 sm:col-span-2 lg:col-span-3">
                     <span class="text-sm text-slate-300" title="Das Hauptziel des Monitors. Bei HTTP/Kombi eine URL, bei Ping eine IP oder ein Hostname.">Ziel</span>
                     <input id="edit-monitor-target" name="target" required class="{{ input_classes() }}" title="HTTP/S: URL wie https://example.com. Ping: IP oder Hostname. Bei HTTP/Kombi ergänzt KeepUp https:// automatisch, wenn kein Schema angegeben ist.">
                     <p class="field-help text-xs text-slate-500">HTTP/S oder Kombi: URL. Ping: IP-Adresse oder Hostname.</p>
                 </label>
-                <label id="edit-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-6">
+                <label id="edit-ping-target-field" class="hidden space-y-1 sm:col-span-2 lg:col-span-4">
                     <span class="text-sm text-slate-300" title="Optionales separates Ziel für den Ping-Teil eines Kombi-Monitors.">Ping-Ziel (optional)</span>
                     <input id="edit-monitor-ping-target" name="ping_target" class="{{ input_classes() }}" placeholder="leer = Hostname aus der HTTP-URL" title="Optional: IP oder Hostname, den KeepUp per Ping prüft. Leer lassen, wenn der Hostname aus der HTTP-URL verwendet werden soll.">
                     <p class="field-help text-xs text-slate-500">Nützlich, wenn die Webseite über eine Domain läuft, du aber den lokalen Host per IP pingen möchtest.</p>
@@ -714,10 +714,10 @@
                     <input id="edit-monitor-forbidden-text" name="forbidden_text" class="{{ input_classes() }}" title="Optional: Wenn dieser Text in der Serverantwort vorkommt, wird der Monitor als DOWN gewertet.">
                     <p class="field-help text-xs text-slate-500">Gut für Fehlerseiten wie `Bad Gateway` oder Wartungsseiten.</p>
                 </label>
-                <div class="field-help sm:col-span-2 lg:col-span-6 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
+                <div class="field-help sm:col-span-2 lg:col-span-4 rounded-2xl border border-amber-300/20 bg-amber-400/10 px-4 py-3 text-xs leading-relaxed text-amber-100/90">
                     Inhalt-Regeln prüfen nur den HTML-Rohtext der Serverantwort. KeepUp führt kein JavaScript aus und klickt keine Cookie-, Login- oder Start-Modals weg. Für reine Erreichbarkeit diese Felder leer lassen.
                 </div>
-                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-6">
+                <button type="submit" class="{{ btn_classes('primary') }} sm:col-span-2 lg:col-span-4">
                     Änderungen speichern
                 </button>
             </form>
