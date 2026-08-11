@@ -88,6 +88,10 @@ class ChangelogTests(unittest.TestCase):
             "Dashboard-Filter und Sortierung bleiben nach dem Anlegen oder Speichern von Monitoren erhalten.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Avoid blocking live card refreshes after edits"),
+            "Live-Karten liefern vorhandene Daten sofort aus, während Aktualisierungen nach Monitoränderungen im Hintergrund laufen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )

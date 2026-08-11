@@ -980,6 +980,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("keep monitor edit button clickable during refreshes", "Der Speichern-Button im Monitor-Dialog bleibt auch bei mehreren laufenden Änderungen zuverlässig bedienbar."),
         ("align monitor modal field rows", "Felder im Monitor-Dialog sind am Desktop sauberer auf gleicher Höhe ausgerichtet."),
         ("preserve dashboard filters after monitor saves", "Dashboard-Filter und Sortierung bleiben nach dem Anlegen oder Speichern von Monitoren erhalten."),
+        ("avoid blocking live card refreshes after edits", "Live-Karten liefern vorhandene Daten sofort aus, während Aktualisierungen nach Monitoränderungen im Hintergrund laufen."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
@@ -1172,7 +1173,10 @@ def invalidate_dashboard_cards_cache() -> None:
 
 def mark_dashboard_cards_cache_stale() -> None:
     with _dashboard_cards_cache_lock:
-        _dashboard_cards_cache["expires_at"] = 0.0
+        if _dashboard_cards_cache.get("html"):
+            _dashboard_cards_cache["expires_at"] = time.time() - 1
+        else:
+            _dashboard_cards_cache["expires_at"] = 0.0
 
 
 def peek_dashboard_cards_html() -> Optional[str]:
@@ -1218,7 +1222,7 @@ def dashboard_cards_cache_is_stale() -> bool:
 
 def dashboard_cards_cache_needs_immediate_rebuild() -> bool:
     with _dashboard_cards_cache_lock:
-        return float(_dashboard_cards_cache.get("expires_at") or 0.0) == 0.0
+        return not bool(_dashboard_cards_cache.get("html"))
 
 
 async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
@@ -1239,11 +1243,11 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
     await execute_monitor_check(monitor_id)
-    await asyncio.to_thread(get_dashboard_cards_html, True)
+    await ensure_dashboard_cards_cache_refresh(force=True)
 
 
 async def refresh_dashboard_cards_cache() -> None:
-    await asyncio.to_thread(get_dashboard_cards_html, True)
+    await ensure_dashboard_cards_cache_refresh(force=True)
 
 
 def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
@@ -1655,7 +1659,7 @@ async def live_top_partial(request: Request) -> HTMLResponse:
 @app.get("/api/live/cards", response_class=HTMLResponse)
 async def live_cards_partial(request: Request) -> HTMLResponse:
     html = peek_dashboard_cards_html()
-    if html is None or dashboard_cards_cache_needs_immediate_rebuild():
+    if html is None:
         await ensure_dashboard_cards_cache_refresh(force=False)
         context = await asyncio.to_thread(build_dashboard_cards_payload)
         for monitor in context["monitors"]:
@@ -1848,7 +1852,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
     set_monitor_enabled(monitor_id, is_enabled)
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
-    await asyncio.to_thread(get_dashboard_cards_html, True)
+    asyncio.create_task(refresh_dashboard_cards_cache())
     message = "Monitor wurde fortgesetzt." if is_enabled else "Monitor wurde pausiert."
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
@@ -1871,7 +1875,8 @@ async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
 @app.post("/monitors/{monitor_id}/run")
 async def run_monitor_route(monitor_id: int, request: Request):
     result = await execute_monitor_check(monitor_id)
-    await asyncio.to_thread(get_dashboard_cards_html, True)
+    mark_dashboard_cards_cache_stale()
+    asyncio.create_task(refresh_dashboard_cards_cache())
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
         return JSONResponse(
@@ -2237,7 +2242,7 @@ async def import_configuration(request: Request, file: UploadFile = File(...)) -
     await asyncio.to_thread(import_backup, payload)
     reschedule_monitor_jobs(scheduler)
     mark_dashboard_cards_cache_stale()
-    await asyncio.to_thread(get_dashboard_cards_html, True)
+    asyncio.create_task(refresh_dashboard_cards_cache())
     asyncio.create_task(run_all_checks_once())
     return flash_redirect("/", "Backup wurde importiert. Checks laufen jetzt neu an.")
 
