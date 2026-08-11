@@ -981,6 +981,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
         ("constrain monitor modal width", "Monitor-Dialoge sind am Desktop schmaler, damit die Felder nicht über die ganze Browserbreite laufen."),
+        ("improve dashboard sorting and edit position", "Dashboard-Sortierung wurde erweitert und bearbeitete Karten behalten ihre Position ruhiger bei."),
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
         ("translate update changelog summaries", "Update-Änderungen werden konsequenter auf Deutsch zusammengefasst."),
@@ -1738,6 +1739,7 @@ async def create_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
+    created_monitor = get_monitor(monitor_id) or {}
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
@@ -1753,6 +1755,7 @@ async def create_monitor_route(
                 "monitor_type": "http" if is_combo else monitor_type,
                 "type_label": ("PING + HTTP" if ping_mode == "and" else "PING oder HTTP") if is_combo else monitor_type.upper(),
                 "interval": max(10, interval),
+                "created_at": created_monitor.get("created_at"),
                 "message": "Monitor wurde angelegt. Der erste Check läuft im Hintergrund.",
             }
         )
@@ -1825,6 +1828,7 @@ async def edit_monitor_route(
                 "monitor_type": "http" if is_combo else monitor_type,
                 "type_label": ("PING + HTTP" if ping_mode == "and" else "PING oder HTTP") if is_combo else monitor_type.upper(),
                 "interval": max(10, interval),
+                "created_at": monitor.get("created_at"),
                 "message": "Monitor wurde aktualisiert. Der Check läuft im Hintergrund.",
             }
         )

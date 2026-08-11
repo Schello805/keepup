@@ -92,6 +92,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitor-Dialoge sind am Desktop schmaler, damit die Felder nicht über die ganze Browserbreite laufen.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Improve dashboard sorting and edit position"),
+            "Dashboard-Sortierung wurde erweitert und bearbeitete Karten behalten ihre Position ruhiger bei.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )

@@ -32,13 +32,15 @@
                 <label class="flex items-center gap-3 rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-sm text-slate-300 lg:min-w-[15rem]">
                     <span class="shrink-0 text-slate-500">Sortierung</span>
                     <select id="monitor-sort-select" onchange="setSortOrder(this.value)" class="min-w-0 flex-1 bg-transparent text-sm text-slate-100 focus:outline-none">
-                        <option value="all">Alle</option>
-                        <option value="status">Status zuerst</option>
-                        <option value="response-desc">Antwortzeit absteigend</option>
-                        <option value="response-asc">Antwortzeit aufsteigend</option>
-                        <option value="uptime-desc">Uptime absteigend</option>
                         <option value="name-asc">Name A-Z</option>
                         <option value="name-desc">Name Z-A</option>
+                        <option value="response-asc">Schnellste zuerst</option>
+                        <option value="response-desc">Langsamste zuerst</option>
+                        <option value="uptime-desc">Uptime hoch zuerst</option>
+                        <option value="uptime-asc">Uptime niedrig zuerst</option>
+                        <option value="created-desc">Neueste zuerst</option>
+                        <option value="created-asc">Älteste zuerst</option>
+                        <option value="status">Status zuerst</option>
                     </select>
                 </label>
             </div>
@@ -215,7 +217,7 @@
             {% set cache_refresh_running = monitor.cache_refresh_running %}
             {% set category_label = monitor.category|trim if monitor.category else '' %}
             {% set category_key = category_label|lower if category_label else '__none__' %}
-            <article data-monitor-status="{{ status }}" data-monitor-category="{{ category_key }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ category_label ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
+            <article data-monitor-status="{{ status }}" data-monitor-category="{{ category_key }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ category_label ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-created="{{ monitor.created_at or monitor.id }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative flex min-w-0 w-full flex-1 transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-3 shadow-panel card-sheen">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
@@ -890,11 +892,12 @@
         }
 
         function getSortOrder() {
-            return window.localStorage.getItem("keepup-monitor-sort") || "all";
+            const order = window.localStorage.getItem("keepup-monitor-sort") || "name-asc";
+            return order === "all" ? "name-asc" : order;
         }
 
         function setSortOrder(order) {
-            window.localStorage.setItem("keepup-monitor-sort", order || "all");
+            window.localStorage.setItem("keepup-monitor-sort", order || "name-asc");
             applyMonitorFilters();
         }
 
@@ -930,9 +933,18 @@
         function compareMonitorCards(a, b, order) {
             const numeric = (card, key) => Number(card.dataset[key] || -1);
             const text = (card, key) => String(card.dataset[key] || "");
-            if (order === "all") {
-                return numeric(a, "monitorOrder") - numeric(b, "monitorOrder");
-            }
+            const metric = (card, key, fallback) => {
+                const value = Number(card.dataset[key]);
+                return Number.isFinite(value) && value >= 0 ? value : fallback;
+            };
+            const createdTime = (card) => {
+                const raw = card.dataset.monitorCreated || "";
+                const parsed = Date.parse(raw);
+                if (Number.isFinite(parsed)) return parsed;
+                const id = Number(card.dataset.monitorId || 0);
+                return Number.isFinite(id) ? id : 0;
+            };
+            if (order === "all") return numeric(a, "monitorOrder") - numeric(b, "monitorOrder");
             if (order === "name-asc") {
                 return text(a, "monitorName").localeCompare(text(b, "monitorName"), "de");
             }
@@ -940,13 +952,22 @@
                 return text(b, "monitorName").localeCompare(text(a, "monitorName"), "de");
             }
             if (order === "response-desc") {
-                return numeric(b, "monitorResponseTime") - numeric(a, "monitorResponseTime");
+                return metric(b, "monitorResponseTime", -1) - metric(a, "monitorResponseTime", -1);
             }
             if (order === "response-asc") {
-                return numeric(a, "monitorResponseTime") - numeric(b, "monitorResponseTime");
+                return metric(a, "monitorResponseTime", Number.MAX_SAFE_INTEGER) - metric(b, "monitorResponseTime", Number.MAX_SAFE_INTEGER);
             }
             if (order === "uptime-desc") {
-                return numeric(b, "monitorUptime") - numeric(a, "monitorUptime");
+                return metric(b, "monitorUptime", -1) - metric(a, "monitorUptime", -1);
+            }
+            if (order === "uptime-asc") {
+                return metric(a, "monitorUptime", Number.MAX_SAFE_INTEGER) - metric(b, "monitorUptime", Number.MAX_SAFE_INTEGER);
+            }
+            if (order === "created-desc") {
+                return createdTime(b) - createdTime(a);
+            }
+            if (order === "created-asc") {
+                return createdTime(a) - createdTime(b);
             }
             const statusDiff = numeric(a, "monitorStatusRank") - numeric(b, "monitorStatusRank");
             if (statusDiff !== 0) return statusDiff;
@@ -956,9 +977,6 @@
         function sortMonitorCards() {
             syncSortInput();
             const order = getSortOrder();
-            if (order === "all") {
-                return;
-            }
             document.querySelectorAll("#monitor-cards-shell .monitor-card-grid").forEach((grid) => {
                 const cards = [...grid.querySelectorAll(".monitor-card")];
                 if (!cards.length) return;
@@ -1367,7 +1385,6 @@
             window.localStorage.setItem("keepup-monitor-status-filter", "all");
             window.localStorage.setItem("keepup-monitor-category-filter", "all");
             window.localStorage.setItem("keepup-monitor-search", "");
-            window.localStorage.setItem("keepup-monitor-sort", "all");
             applyMonitorFilters();
         }
 
@@ -1379,6 +1396,8 @@
             }
             const existing = document.querySelector(`[data-monitor-id="${monitor.id}"]`);
             const nextSibling = existing?.nextElementSibling || null;
+            const previousOrder = existing?.dataset.monitorOrder || String(grid.querySelectorAll(".monitor-card").length);
+            const previousCreated = existing?.dataset.monitorCreated || monitor.created_at || monitor.id || previousOrder;
             if (existing) existing.remove();
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
             const categoryLabel = String(monitor.category || "").trim();
@@ -1395,8 +1414,9 @@
             card.dataset.monitorName = String(monitor.name || "").toLowerCase();
             card.dataset.monitorResponseTime = "-1";
             card.dataset.monitorUptime = "-1";
+            card.dataset.monitorCreated = previousCreated;
             card.dataset.monitorStatusRank = "1";
-            card.dataset.monitorOrder = "-1";
+            card.dataset.monitorOrder = previousOrder;
             card.dataset.monitorId = monitor.id;
             card.className = "monitor-card perspective-1000 flex min-w-0 cursor-wait";
             card.innerHTML = `
@@ -1531,6 +1551,7 @@
                     showToast(data.message || "Monitor wurde aktualisiert.", "success");
                     addPendingMonitorCard(data, {
                         keepPosition: true,
+                        scroll: false,
                         spinnerTitle: "Wird aktualisiert",
                         spinnerMessage: "Änderung wird geprüft...",
                     });
