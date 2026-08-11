@@ -1267,6 +1267,10 @@
             bindMonitorRunForms();
         }
 
+        function afterDashboardTopUpdated() {
+            applyMonitorFilters();
+        }
+
         async function replaceShellFromUrl(url, shellId, options = {}) {
             const shell = document.getElementById(shellId);
             if (!shell) return false;
@@ -1296,6 +1300,8 @@
             }
             if (shellId === "monitor-cards-shell") {
                 afterMonitorCardsUpdated();
+            } else if (shellId === "dashboard-top-shell") {
+                afterDashboardTopUpdated();
             }
             return true;
         }
@@ -1312,34 +1318,57 @@
             }
             if (!options.force && document.querySelector(".is-flipped")) return null;
             if (!options.force && navigator && navigator.onLine === false) return false;
+            if (!options.force && window.__keepupCardsRefreshPromise) {
+                return window.__keepupCardsRefreshPromise;
+            }
             window.__keepupCardsRefreshSequence = (window.__keepupCardsRefreshSequence || 0) + 1;
             const sequence = window.__keepupCardsRefreshSequence;
+            const promise = replaceShellFromUrl("/api/live/cards", "monitor-cards-shell", { ...options, sequence });
+            window.__keepupCardsRefreshPromise = promise;
             try {
-                return await replaceShellFromUrl("/api/live/cards", "monitor-cards-shell", { ...options, sequence });
+                return await promise;
             } catch (error) {
                 if (!isTransientNetworkError(error)) console.debug("Monitor cards refresh skipped", error);
                 return false;
+            } finally {
+                if (window.__keepupCardsRefreshPromise === promise) {
+                    window.__keepupCardsRefreshPromise = null;
+                }
             }
         }
 
         async function refreshDashboardTop() {
             if (navigator && navigator.onLine === false) return false;
+            if (window.__keepupTopRefreshPromise) {
+                return window.__keepupTopRefreshPromise;
+            }
+            const promise = replaceShellFromUrl("/api/live/top", "dashboard-top-shell");
+            window.__keepupTopRefreshPromise = promise;
             try {
-                return await replaceShellFromUrl("/api/live/top", "dashboard-top-shell");
+                return await promise;
             } catch (error) {
                 if (!isTransientNetworkError(error)) console.debug("Dashboard top refresh skipped", error);
                 return false;
+            } finally {
+                if (window.__keepupTopRefreshPromise === promise) {
+                    window.__keepupTopRefreshPromise = null;
+                }
             }
         }
 
         function scheduleMonitorCardRefreshes(delays = [800, 2000, 5000, 10000, 20000]) {
-            window.__keepupCardsRefreshTimers = window.__keepupCardsRefreshTimers || new Set();
+            window.__keepupCardsRefreshTimers = window.__keepupCardsRefreshTimers || new Map();
+            const now = Date.now();
             delays.forEach((delay) => {
+                const dueAt = now + delay;
+                for (const existing of window.__keepupCardsRefreshTimers.values()) {
+                    if (Math.abs(existing.dueAt - dueAt) < 300) return;
+                }
                 const timer = window.setTimeout(() => {
                     window.__keepupCardsRefreshTimers.delete(timer);
                     refreshMonitorCards();
                 }, delay);
-                window.__keepupCardsRefreshTimers.add(timer);
+                window.__keepupCardsRefreshTimers.set(timer, { dueAt });
             });
         }
 

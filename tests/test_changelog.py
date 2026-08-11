@@ -96,6 +96,10 @@ class ChangelogTests(unittest.TestCase):
             "Geänderte Monitor-Kategorien bleiben sofort sichtbar, auch wenn kurz ein älterer Kartenstand zurückkommt.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Preserve sort selection during live refreshes"),
+            "Die gewählte Sortierung bleibt auch nach Live-Aktualisierungen sichtbar und aktiv.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )

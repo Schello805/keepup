@@ -982,6 +982,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("preserve dashboard filters after monitor saves", "Dashboard-Filter und Sortierung bleiben nach dem Anlegen oder Speichern von Monitoren erhalten."),
         ("avoid blocking live card refreshes after edits", "Live-Karten liefern vorhandene Daten sofort aus, während Aktualisierungen nach Monitoränderungen im Hintergrund laufen."),
         ("keep pending monitor category visible during refreshes", "Geänderte Monitor-Kategorien bleiben sofort sichtbar, auch wenn kurz ein älterer Kartenstand zurückkommt."),
+        ("preserve sort selection during live refreshes", "Die gewählte Sortierung bleibt auch nach Live-Aktualisierungen sichtbar und aktiv."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
