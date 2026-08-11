@@ -80,6 +80,10 @@ class ChangelogTests(unittest.TestCase):
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Show monitor forms in compact modals"),
+            "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )

@@ -978,6 +978,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("fix category validation while monitors wait", "Kategorie-Auswahl und Speichern bleiben auch bei wartenden Monitoren bedienbar."),
         ("stabilize editing while monitors refresh", "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
+        ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
         ("translate update changelog summaries", "Update-Änderungen werden konsequenter auf Deutsch zusammengefasst."),
