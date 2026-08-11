@@ -580,7 +580,7 @@
                     <p class="field-help text-xs text-slate-500">Nützlich, wenn die Webseite über eine Domain läuft, du aber den lokalen Host per IP pingen möchtest.</p>
                 </label>
                 <label class="space-y-1">
-                    <span class="text-sm text-slate-300" title="Abstand zwischen zwei automatischen Prüfungen.">Intervall (Sekunden)</span>
+                    <span class="text-sm text-slate-300" title="Abstand zwischen zwei automatischen Prüfungen in Sekunden.">Intervall (s)</span>
                     <input type="number" min="10" step="10" name="interval" value="{{ settings.default_monitor_interval or 60 }}" class="{{ input_classes() }}" title="Wie oft KeepUp diesen Monitor automatisch prüft. Kürzere Intervalle erzeugen mehr Last.">
                     <p class="field-help text-xs text-slate-500">Empfohlen: 60 Sekunden oder höher, besonders auf Raspberry Pi.</p>
                 </label>
@@ -601,7 +601,7 @@
                     <p class="field-help text-xs text-slate-500">`HEAD` ist für viele Webseiten schonender. `Retries` steuert, wie oft KeepUp nach einem HTTP- oder Ping-Fehler direkt erneut prüft.</p>
                 </label>
                 <label class="space-y-1">
-                    <span class="text-sm text-slate-300" title="Maximale Wartezeit pro Versuch.">Timeout (Sekunden)</span>
+                    <span class="text-sm text-slate-300" title="Maximale Wartezeit pro Versuch in Sekunden.">Timeout (s)</span>
                     <input type="number" min="2" step="1" name="timeout" value="10" class="{{ input_classes() }}" title="Wie lange KeepUp pro Versuch wartet, bevor Timeout gemeldet wird.">
                     <p class="field-help text-xs text-slate-500">Bei langsamen Webseiten lieber 10-20 Sekunden wählen.</p>
                 </label>
@@ -697,12 +697,12 @@
                     <p class="field-help text-xs text-slate-500">Hilft gegen kurze Wackler. 2 ist ein guter Standard.</p>
                 </label>
                 <label class="space-y-1">
-                    <span class="text-sm text-slate-300" title="Abstand zwischen zwei automatischen Prüfungen.">Intervall (Sekunden)</span>
+                    <span class="text-sm text-slate-300" title="Abstand zwischen zwei automatischen Prüfungen in Sekunden.">Intervall (s)</span>
                     <input id="edit-monitor-interval" type="number" min="10" step="10" name="interval" required class="{{ input_classes() }}" title="Wie oft KeepUp diesen Monitor automatisch prüft. Kürzere Intervalle erzeugen mehr Last.">
                     <p class="field-help text-xs text-slate-500">Empfohlen: 60 Sekunden oder höher, besonders auf Raspberry Pi.</p>
                 </label>
                 <label class="space-y-1">
-                    <span class="text-sm text-slate-300" title="Maximale Wartezeit pro Versuch.">Timeout (Sekunden)</span>
+                    <span class="text-sm text-slate-300" title="Maximale Wartezeit pro Versuch in Sekunden.">Timeout (s)</span>
                     <input id="edit-monitor-timeout" type="number" min="2" step="1" name="timeout" required class="{{ input_classes() }}" title="Wie lange KeepUp pro Versuch wartet, bevor Timeout gemeldet wird.">
                     <p class="field-help text-xs text-slate-500">Bei langsamen Webseiten lieber 10-20 Sekunden wählen.</p>
                 </label>

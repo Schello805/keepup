@@ -978,6 +978,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("fix category validation while monitors wait", "Kategorie-Auswahl und Speichern bleiben auch bei wartenden Monitoren bedienbar."),
         ("stabilize editing while monitors refresh", "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren."),
         ("keep monitor edit button clickable during refreshes", "Der Speichern-Button im Monitor-Dialog bleibt auch bei mehreren laufenden Änderungen zuverlässig bedienbar."),
+        ("align monitor modal field rows", "Felder im Monitor-Dialog sind am Desktop sauberer auf gleicher Höhe ausgerichtet."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),

@@ -80,6 +80,10 @@ class ChangelogTests(unittest.TestCase):
             "Der Speichern-Button im Monitor-Dialog bleibt auch bei mehreren laufenden Änderungen zuverlässig bedienbar.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Align monitor modal field rows"),
+            "Felder im Monitor-Dialog sind am Desktop sauberer auf gleicher Höhe ausgerichtet.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )
