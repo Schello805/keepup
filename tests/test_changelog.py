@@ -84,6 +84,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Compact monitor form layout on desktop"),
+            "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )

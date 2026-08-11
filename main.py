@@ -979,6 +979,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("stabilize editing while monitors refresh", "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
+        ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
         ("fix changelog page theme", "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design."),
         ("show changelog during updates", "Während eines Updates werden die enthaltenen Änderungen direkt angezeigt."),
         ("translate update changelog summaries", "Update-Änderungen werden konsequenter auf Deutsch zusammengefasst."),
