@@ -76,6 +76,10 @@ class ChangelogTests(unittest.TestCase):
             "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Make live refresh tolerate network changes"),
+            "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Enhance Telegram notifications with links and check history"),
             "Telegram-Meldungen enthalten Links und eine kompakte Check-Historie.",
         )

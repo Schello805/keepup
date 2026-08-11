@@ -477,23 +477,23 @@
         {{ render_page_header(summary.overall_status, active_page) }}
 {% endif %}
         {% if partial == "top" %}
-        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
+        <section id="dashboard-top-shell" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
         {% elif partial == "cards" %}
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" class="mt-5">
             {{ render_monitor_cards(monitors) }}
         </section>
         {% elif partial == "cards-inner" %}
         {{ render_monitor_cards(monitors) }}
         {% elif partial == "cards-shell" %}
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" class="mt-5">
             {{ initial_cards_html | safe }}
         </section>
         {% elif partial == "monitor-detail" %}
         {{ render_monitor_detail(monitor) }}
         {% else %}
-        <section id="dashboard-top-shell" hx-get="/api/live/top" hx-trigger="every {{ settings.refresh_interval }}s" hx-swap="outerHTML" class="space-y-5">
+        <section id="dashboard-top-shell" class="space-y-5">
             {{ render_dashboard_top(summary, active_page) }}
         </section>
 
@@ -684,7 +684,7 @@
                 </button>
             </form>
         </section>
-        <section id="monitor-cards-shell" hx-get="/api/live/cards" hx-trigger="load delay:80ms, every {{ settings.refresh_interval }}s [!document.querySelector('.is-flipped')]" hx-swap="outerHTML" class="mt-5">
+        <section id="monitor-cards-shell" class="mt-5">
             {% if initial_cards_html %}
                 {{ initial_cards_html | safe }}
             {% else %}
@@ -1196,10 +1196,10 @@
             const replacement = template.content.firstElementChild;
             if (!(replacement instanceof HTMLElement)) return false;
             if (shellId === "monitor-cards-shell") {
-                if (options.sequence && options.sequence !== window.__keepupCardsRefreshSequence) return false;
+                if (options.sequence && options.sequence !== window.__keepupCardsRefreshSequence) return null;
                 if (!options.force && isEditPanelOpen()) {
                     window.__keepupCardsRefreshSkippedWhileEditing = true;
-                    return false;
+                    return null;
                 }
             }
             shell.replaceWith(replacement);
@@ -1212,26 +1212,34 @@
             return true;
         }
 
+        function isTransientNetworkError(error) {
+            const message = String(error?.message || error || "").toLowerCase();
+            return error instanceof TypeError || message.includes("network") || message.includes("failed to fetch");
+        }
+
         async function refreshMonitorCards(options = {}) {
             if (!options.force && isEditPanelOpen()) {
                 window.__keepupCardsRefreshSkippedWhileEditing = true;
-                return false;
+                return null;
             }
+            if (!options.force && document.querySelector(".is-flipped")) return null;
+            if (!options.force && navigator && navigator.onLine === false) return false;
             window.__keepupCardsRefreshSequence = (window.__keepupCardsRefreshSequence || 0) + 1;
             const sequence = window.__keepupCardsRefreshSequence;
             try {
                 return await replaceShellFromUrl("/api/live/cards", "monitor-cards-shell", { ...options, sequence });
             } catch (error) {
-                console.warn("Monitor cards refresh failed", error);
+                if (!isTransientNetworkError(error)) console.debug("Monitor cards refresh skipped", error);
                 return false;
             }
         }
 
         async function refreshDashboardTop() {
+            if (navigator && navigator.onLine === false) return false;
             try {
                 return await replaceShellFromUrl("/api/live/top", "dashboard-top-shell");
             } catch (error) {
-                console.warn("Dashboard top refresh failed", error);
+                if (!isTransientNetworkError(error)) console.debug("Dashboard top refresh skipped", error);
                 return false;
             }
         }
@@ -1242,6 +1250,45 @@
             window.__keepupCardsRefreshTimers = delays.map((delay) => {
                 return window.setTimeout(() => refreshMonitorCards(), delay);
             });
+        }
+
+        function startLivePolling(intervalSeconds) {
+            if (window.__keepupLivePollStarted) return;
+            window.__keepupLivePollStarted = true;
+            const baseDelay = Math.max(5, Number(intervalSeconds) || 30) * 1000;
+            const state = { failures: 0, timer: null };
+
+            const poll = async () => {
+                if (document.hidden || navigator.onLine === false) {
+                    state.failures = Math.min(state.failures + 1, 5);
+                    scheduleNext();
+                    return;
+                }
+                const results = await Promise.allSettled([refreshDashboardTop(), refreshMonitorCards()]);
+                const failed = results.some((result) => result.status === "rejected" || result.value === false);
+                state.failures = failed ? Math.min(state.failures + 1, 5) : 0;
+                scheduleNext();
+            };
+
+            const scheduleNext = () => {
+                const multiplier = state.failures ? Math.min(6, state.failures + 1) : 1;
+                window.clearTimeout(state.timer);
+                state.timer = window.setTimeout(poll, baseDelay * multiplier);
+            };
+
+            window.addEventListener("online", () => {
+                state.failures = 0;
+                window.clearTimeout(state.timer);
+                state.timer = window.setTimeout(poll, 500);
+            });
+            window.addEventListener("visibilitychange", () => {
+                if (!document.hidden) {
+                    state.failures = 0;
+                    window.clearTimeout(state.timer);
+                    state.timer = window.setTimeout(poll, 500);
+                }
+            });
+            state.timer = window.setTimeout(poll, 800);
         }
 
         function escapeHtml(value) {
@@ -1575,6 +1622,7 @@
         bindMonitorToggleForms();
         bindMonitorDeleteForms();
         bindMonitorRunForms();
+        startLivePolling({{ settings.refresh_interval | int }});
         window.bindCardFlipHandlers = function bindCardFlipHandlers() {};
         if (!window.__keepupWheelFixInstalled) {
             window.__keepupWheelFixInstalled = true;
@@ -1609,6 +1657,12 @@
                     return;
                 }
                 dismissColdStartHint();
+            }
+        });
+        document.body.addEventListener("htmx:sendError", (event) => {
+            const requestPath = String(event.detail?.pathInfo?.requestPath || event.detail?.xhr?.responseURL || "");
+            if (requestPath.includes("/api/live/cards") || requestPath.includes("/api/live/top")) {
+                event.stopPropagation();
             }
         });
     </script>
