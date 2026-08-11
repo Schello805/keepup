@@ -76,6 +76,10 @@ class ChangelogTests(unittest.TestCase):
             "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Keep monitor edit button clickable during refreshes"),
+            "Der Speichern-Button im Monitor-Dialog bleibt auch bei mehreren laufenden Änderungen zuverlässig bedienbar.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )

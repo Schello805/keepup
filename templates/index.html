@@ -1028,6 +1028,9 @@
             const panel = document.getElementById("edit-monitor-panel");
             const form = document.getElementById("edit-monitor-form");
             if (!panel || !form) return;
+            const submitButton = form.querySelector("button[type='submit']");
+            form.dataset.submitting = "0";
+            if (submitButton instanceof HTMLButtonElement) submitButton.disabled = false;
 
             form.action = `/monitors/${button.dataset.monitorId}/edit`;
             document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
@@ -1329,10 +1332,13 @@
         }
 
         function scheduleMonitorCardRefreshes(delays = [800, 2000, 5000, 10000, 20000]) {
-            window.__keepupCardsRefreshTimers = window.__keepupCardsRefreshTimers || [];
-            window.__keepupCardsRefreshTimers.forEach((timer) => window.clearTimeout(timer));
-            window.__keepupCardsRefreshTimers = delays.map((delay) => {
-                return window.setTimeout(() => refreshMonitorCards(), delay);
+            window.__keepupCardsRefreshTimers = window.__keepupCardsRefreshTimers || new Set();
+            delays.forEach((delay) => {
+                const timer = window.setTimeout(() => {
+                    window.__keepupCardsRefreshTimers.delete(timer);
+                    refreshMonitorCards();
+                }, delay);
+                window.__keepupCardsRefreshTimers.add(timer);
             });
         }
 
@@ -1526,14 +1532,16 @@
             form.dataset.bound = "1";
             form.addEventListener("submit", async (event) => {
                 event.preventDefault();
+                if (form.dataset.submitting === "1") return;
                 const button = form.querySelector("button[type='submit']");
-                if (button instanceof HTMLButtonElement) button.disabled = true;
                 try {
                     syncCategoryFormValue("edit");
                     if (!form.checkValidity()) {
                         form.reportValidity();
                         return;
                     }
+                    form.dataset.submitting = "1";
+                    if (button instanceof HTMLButtonElement) button.disabled = true;
                     const response = await fetch(form.action, {
                         method: "POST",
                         body: new FormData(form),
@@ -1560,6 +1568,7 @@
                 } catch (error) {
                     showToast("Monitor konnte nicht gespeichert werden.", "error");
                 } finally {
+                    form.dataset.submitting = "0";
                     if (button instanceof HTMLButtonElement) button.disabled = false;
                 }
             });

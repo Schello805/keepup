@@ -977,6 +977,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("show monitor group badges", "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an."),
         ("fix category validation while monitors wait", "Kategorie-Auswahl und Speichern bleiben auch bei wartenden Monitoren bedienbar."),
         ("stabilize editing while monitors refresh", "Das Bearbeiten von Monitoren bleibt stabil, auch wenn andere Karten gerade aktualisieren."),
+        ("keep monitor edit button clickable during refreshes", "Der Speichern-Button im Monitor-Dialog bleibt auch bei mehreren laufenden Änderungen zuverlässig bedienbar."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
@@ -1235,7 +1236,6 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
 
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
-    await asyncio.to_thread(get_dashboard_cards_html, True)
     await execute_monitor_check(monitor_id)
     await asyncio.to_thread(get_dashboard_cards_html, True)
 
