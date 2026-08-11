@@ -49,41 +49,41 @@
                 <span class="font-medium text-slate-200">{{ summary.last_updated_at or "-" }}</span>
             </div>
         </div>
-        <div class="grid grid-cols-2 gap-3 md:grid-cols-5">
-        <button type="button" data-filter="all" onclick="setStatusFilter('all')" class="status-filter-card rounded-2xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-sky-300/30 hover:bg-white/10">
-            <p class="text-xs uppercase tracking-wide text-slate-400">Monitore</p>
-            <p class="mt-1 text-2xl font-semibold">{{ summary.total }}</p>
+        <div class="grid grid-cols-2 gap-2 md:grid-cols-5">
+        <button type="button" data-filter="all" onclick="setStatusFilter('all')" class="status-filter-card rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:border-sky-300/30 hover:bg-white/10">
+            <p class="text-[11px] uppercase tracking-wide text-slate-400">Monitore</p>
+            <p class="text-xl font-semibold leading-tight">{{ summary.total }}</p>
         </button>
-        <button type="button" data-filter="up" onclick="setStatusFilter('up')" class="status-filter-card rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-3 text-left transition hover:border-emerald-300/40 hover:bg-emerald-500/20">
-            <p class="text-xs uppercase tracking-wide text-emerald-200/80">Up</p>
-            <p class="mt-1 text-2xl font-semibold text-emerald-300">{{ summary.up }}</p>
+        <button type="button" data-filter="up" onclick="setStatusFilter('up')" class="status-filter-card rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-left transition hover:border-emerald-300/40 hover:bg-emerald-500/20">
+            <p class="text-[11px] uppercase tracking-wide text-emerald-200/80">Up</p>
+            <p class="text-xl font-semibold leading-tight text-emerald-300">{{ summary.up }}</p>
         </button>
-        <button type="button" data-filter="down" onclick="setStatusFilter('down')" class="status-filter-card rounded-2xl border border-rose-400/20 bg-rose-500/10 p-3 text-left transition hover:border-rose-300/40 hover:bg-rose-500/20">
-            <p class="text-xs uppercase tracking-wide text-rose-200/80">Down</p>
-            <p class="mt-1 text-2xl font-semibold text-rose-300">{{ summary.down }}</p>
+        <button type="button" data-filter="down" onclick="setStatusFilter('down')" class="status-filter-card rounded-2xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-left transition hover:border-rose-300/40 hover:bg-rose-500/20">
+            <p class="text-[11px] uppercase tracking-wide text-rose-200/80">Down</p>
+            <p class="text-xl font-semibold leading-tight text-rose-300">{{ summary.down }}</p>
         </button>
-        <button type="button" data-filter="unknown" onclick="setStatusFilter('unknown')" class="status-filter-card rounded-2xl border border-amber-400/20 bg-amber-500/10 p-3 text-left transition hover:border-amber-300/40 hover:bg-amber-500/20">
-            <p class="text-xs uppercase tracking-wide text-amber-200/80">Unknown</p>
-            <p class="mt-1 text-2xl font-semibold text-amber-300">{{ summary.unknown }}</p>
+        <button type="button" data-filter="unknown" onclick="setStatusFilter('unknown')" class="status-filter-card rounded-2xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-left transition hover:border-amber-300/40 hover:bg-amber-500/20">
+            <p class="text-[11px] uppercase tracking-wide text-amber-200/80">Unknown</p>
+            <p class="text-xl font-semibold leading-tight text-amber-300">{{ summary.unknown }}</p>
         </button>
-        <button type="button" data-filter="paused" onclick="setStatusFilter('paused')" class="status-filter-card rounded-2xl border border-slate-300/20 bg-slate-400/10 p-3 text-left transition hover:border-slate-200/30 hover:bg-slate-400/20">
-            <p class="text-xs uppercase tracking-wide text-slate-300/80">Pausiert</p>
-            <p class="mt-1 text-2xl font-semibold text-slate-200">{{ summary.paused }}</p>
+        <button type="button" data-filter="paused" onclick="setStatusFilter('paused')" class="status-filter-card rounded-2xl border border-slate-300/20 bg-slate-400/10 px-3 py-2 text-left transition hover:border-slate-200/30 hover:bg-slate-400/20">
+            <p class="text-[11px] uppercase tracking-wide text-slate-300/80">Pausiert</p>
+            <p class="text-xl font-semibold leading-tight text-slate-200">{{ summary.paused }}</p>
         </button>
         </div>
         {% if summary.categories %}
-        <div class="rounded-2xl border border-white/10 bg-slate-950/25 p-3">
-            <div class="mb-2 flex items-center justify-between gap-3">
+        <div class="rounded-2xl border border-white/10 bg-slate-950/25 px-3 py-2">
+            <div class="mb-1.5 flex items-center justify-between gap-3">
                 <p class="text-xs uppercase tracking-[0.2em] text-slate-500">Gruppen</p>
                 <button type="button" data-category-filter="all" onclick="setCategoryFilter('all')" class="category-filter-card rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:bg-white/10">
                     Alle Gruppen
                 </button>
             </div>
-            <div class="flex gap-2 overflow-x-auto pb-1">
+            <div class="flex gap-2 overflow-x-auto">
                 {% for category in summary.categories %}
-                <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card shrink-0 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-left transition hover:border-sky-300/30 hover:bg-white/10">
+                <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-left transition hover:border-sky-300/30 hover:bg-white/10">
                     <span class="block max-w-[11rem] truncate text-sm font-semibold text-slate-100">{{ category.label }}</span>
-                    <span class="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
+                    <span class="flex items-center gap-2 text-[11px] text-slate-400">
                         <span>{{ category.total }} gesamt</span>
                         {% if category.down %}<span class="font-semibold text-rose-300">{{ category.down }} down</span>{% endif %}
                         {% if category.unknown %}<span class="font-semibold text-amber-200">{{ category.unknown }} offen</span>{% endif %}

@@ -984,6 +984,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("keep pending monitor category visible during refreshes", "Geänderte Monitor-Kategorien bleiben sofort sichtbar, auch wenn kurz ein älterer Kartenstand zurückkommt."),
         ("preserve sort selection during live refreshes", "Die gewählte Sortierung bleibt auch nach Live-Aktualisierungen sichtbar und aktiv."),
         ("render incidents feed directly on page load", "Die Incident-Liste wird direkt mit der Seite ausgeliefert und bleibt nicht mehr unnötig im Wartebildschirm hängen."),
+        ("compact dashboard summary area", "Der obere Dashboard-Bereich mit Status und Gruppen ist platzsparender dargestellt."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
