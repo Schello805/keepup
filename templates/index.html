@@ -1387,13 +1387,6 @@
             return div.innerHTML;
         }
 
-        function resetDashboardViewToAll() {
-            window.localStorage.setItem("keepup-monitor-status-filter", "all");
-            window.localStorage.setItem("keepup-monitor-category-filter", "all");
-            window.localStorage.setItem("keepup-monitor-search", "");
-            applyMonitorFilters();
-        }
-
         function addPendingMonitorCard(monitor, options = {}) {
             const grid = document.querySelector("#monitor-cards-shell .monitor-card-grid");
             if (!grid) {
@@ -1554,7 +1547,6 @@
                         return;
                     }
                     closeEditPanel();
-                    resetDashboardViewToAll();
                     rememberCategoryOption(data.category);
                     showToast(data.message || "Monitor wurde aktualisiert.", "success");
                     addPendingMonitorCard(data, {

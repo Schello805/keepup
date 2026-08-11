@@ -84,6 +84,10 @@ class ChangelogTests(unittest.TestCase):
             "Felder im Monitor-Dialog sind am Desktop sauberer auf gleicher Höhe ausgerichtet.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Preserve dashboard filters after monitor saves"),
+            "Dashboard-Filter und Sortierung bleiben nach dem Anlegen oder Speichern von Monitoren erhalten.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make live refresh tolerate network changes"),
             "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel.",
         )
