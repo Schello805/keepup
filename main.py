@@ -986,6 +986,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("render incidents feed directly on page load", "Die Incident-Liste wird direkt mit der Seite ausgeliefert und bleibt nicht mehr unnötig im Wartebildschirm hängen."),
         ("compact dashboard summary area", "Der obere Dashboard-Bereich mit Status und Gruppen ist platzsparender dargestellt."),
         ("add settings field tooltips", "Die Einstellungen erklären ihre Felder jetzt direkt über kompakte Tooltips."),
+        ("fix settings tooltip display", "Tooltips in den Einstellungen öffnen jetzt einzeln und sind besser lesbar."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
