@@ -29,6 +29,17 @@
 </section>
 {%- endmacro %}
 
+{% macro field_help(text) -%}
+<span class="group relative inline-flex align-middle">
+    <span role="button" tabindex="0" aria-label="{{ text }}" class="ml-1 inline-flex h-5 w-5 items-center justify-center rounded-full border border-sky-300/25 bg-sky-500/10 text-[11px] font-semibold text-sky-100 transition hover:bg-sky-500/20 focus:outline-none focus:border-sky-300">
+        ?
+    </span>
+    <span class="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-2xl border border-white/10 bg-slate-950/95 px-3 py-2 text-xs leading-5 text-slate-200 shadow-panel group-hover:block group-focus-within:block">
+        {{ text }}
+    </span>
+</span>
+{%- endmacro %}
+
 {% if partial == "system-status" %}
 {{ render_system_status(system_metrics) }}
 {% else %}
@@ -84,11 +95,11 @@
                 {% call accordion_section('settings-general', 'Allgemein', 'Basis-URL und Zeitzone für UI, Logs und Benachrichtigungen.', True) %}
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <label class="space-y-2 lg:col-span-2">
-                            <span class="text-sm text-slate-300">KeepUp URL</span>
+                            <span class="text-sm text-slate-300">KeepUp URL {{ field_help("Adresse deiner KeepUp-Weboberfläche. Diese URL wird als Öffnen-Link in Telegram-, ntfy- und E-Mail-Benachrichtigungen verwendet.") }}</span>
                             <input name="keepup_base_url" value="{{ settings.keepup_base_url }}" placeholder="http://192.168.1.151:8000" class="{{ input_classes() }}">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Zeitzone</span>
+                            <span class="text-sm text-slate-300">Zeitzone {{ field_help("Legt fest, in welcher Zeitzone Zeiten im Dashboard, in Incidents, Logs und Benachrichtigungen angezeigt werden.") }}</span>
                             <select name="app_timezone" class="{{ select_classes() }}">
                                 {% for timezone_option in timezone_options %}
                                 <option value="{{ timezone_option }}" {% if settings.app_timezone == timezone_option %}selected{% endif %}>{{ timezone_option }}</option>
@@ -103,39 +114,39 @@
                 {% call accordion_section('settings-timing', 'Zeit & Intervalle', 'Globale Steuerung für Prüfintervalle, Schwellen und Datenaufbewahrung.', True) %}
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Standard-Intervall für neue Monitore (Sek.)</span>
+                            <span class="text-sm text-slate-300">Standard-Intervall für neue Monitore (Sek.) {{ field_help("Vorgabewert beim Anlegen neuer Monitore. Bestehende Monitore behalten ihr eigenes Intervall, solange kein globales Intervall gesetzt ist.") }}</span>
                             <input type="number" min="10" step="10" name="default_monitor_interval" value="{{ settings.default_monitor_interval or 60 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Globales Intervall für alle Monitore (Sek.)</span>
+                            <span class="text-sm text-slate-300">Globales Intervall für alle Monitore (Sek.) {{ field_help("Optionaler Override für alle aktiven Monitore. 0 bedeutet: kein Override, jeder Monitor nutzt sein eigenes Intervall.") }}</span>
                             <input type="number" min="0" step="10" name="global_monitor_interval_override" value="{{ settings.global_monitor_interval_override or 0 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Checks aufbewahren (Tage)</span>
+                            <span class="text-sm text-slate-300">Checks aufbewahren (Tage) {{ field_help("Bestimmt, wie lange einzelne Check-Ergebnisse in der lokalen Datenbank bleiben. Kürzer spart Speicher, länger verbessert Verlauf und Auswertungen.") }}</span>
                             <input type="number" min="1" step="1" name="retention_days" value="{{ settings.retention_days or 7 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Alarm erst nach X Fehlschlägen (DOWN)</span>
+                            <span class="text-sm text-slate-300">Alarm erst nach X Fehlschlägen (DOWN) {{ field_help("So viele fehlgeschlagene Checks müssen nacheinander auftreten, bevor KeepUp den Monitor wirklich als DOWN meldet.") }}</span>
                             <input type="number" min="1" step="1" name="down_failures_threshold" value="{{ settings.down_failures_threshold or 3 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Recovery erst nach X Erfolgen (UP)</span>
+                            <span class="text-sm text-slate-300">Recovery erst nach X Erfolgen (UP) {{ field_help("So viele erfolgreiche Checks müssen nacheinander auftreten, bevor ein DOWN-Monitor wieder als UP gemeldet wird.") }}</span>
                             <input type="number" min="1" step="1" name="up_successes_threshold" value="{{ settings.up_successes_threshold or 1 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Sammelmeldungs-Fenster (Sek.)</span>
+                            <span class="text-sm text-slate-300">Sammelmeldungs-Fenster (Sek.) {{ field_help("Mehrere Statuswechsel innerhalb dieses Zeitfensters werden gebündelt, damit Telegram, ntfy oder E-Mail nicht unnötig viele Einzelmeldungen senden.") }}</span>
                             <input type="number" min="0" step="1" name="notification_batch_window_seconds" value="{{ settings.notification_batch_window_seconds if settings.notification_batch_window_seconds is not none else 30 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Scheduler-Jitter (Sek.)</span>
+                            <span class="text-sm text-slate-300">Scheduler-Jitter (Sek.) {{ field_help("Verteilt Checks zufällig um einige Sekunden, damit viele Monitore nicht exakt gleichzeitig starten. Das entlastet besonders Raspberry Pis.") }}</span>
                             <input type="number" min="0" step="1" name="scheduler_jitter_seconds" value="{{ settings.scheduler_jitter_seconds if settings.scheduler_jitter_seconds is not none else 10 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Flapping-Fenster (Minuten)</span>
+                            <span class="text-sm text-slate-300">Flapping-Fenster (Minuten) {{ field_help("Zeitraum, in dem KeepUp häufige Statuswechsel zählt. Nützlich, um wackelige Dienste als flapping zu erkennen.") }}</span>
                             <input type="number" min="1" step="1" name="flapping_window_minutes" value="{{ settings.flapping_window_minutes or 15 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Flapping ab X Statuswechseln</span>
+                            <span class="text-sm text-slate-300">Flapping ab X Statuswechseln {{ field_help("Ab dieser Anzahl an UP/DOWN-Wechseln innerhalb des Flapping-Fensters markiert KeepUp den Monitor als instabil.") }}</span>
                             <input type="number" min="2" step="1" name="flapping_transition_threshold" value="{{ settings.flapping_transition_threshold or 3 }}" class="{{ input_classes() }} appearance-none">
                         </label>
                     </div>
@@ -149,7 +160,7 @@
                     <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <h3 class="text-base font-semibold text-slate-100">Telegram</h3>
+                                <h3 class="text-base font-semibold text-slate-100">Telegram {{ field_help("Aktiviert Statusmeldungen über einen Telegram-Bot. Der Bot sendet DOWN- und Recovery-Meldungen in den angegebenen Chat.") }}</h3>
                                 <p class="mt-1 text-sm text-slate-400">Bot-Token und Chat-ID für Statusmeldungen.</p>
                             </div>
                             <input type="checkbox" name="telegram_enabled" {% if settings.telegram_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
@@ -170,12 +181,12 @@
                         </details>
                         <div class="mt-4 grid grid-cols-1 gap-3">
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Bot Token</span>
+                                <span class="text-sm text-slate-300">Bot Token {{ field_help("Token aus dem BotFather. Wird gespeichert, aber aus Sicherheitsgründen nach dem Speichern nicht mehr im Formular angezeigt.") }}</span>
                                 <input name="telegram_bot_token" value="" placeholder="{% if settings.telegram_bot_token %}Gespeichert - leer lassen zum Beibehalten{% else %}123456:ABC...{% endif %}" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                                 <p class="text-xs text-slate-500">Aus Sicherheitsgründen wird der gespeicherte Token nicht angezeigt. Leer lassen, um ihn beizubehalten.</p>
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Chat ID</span>
+                                <span class="text-sm text-slate-300">Chat ID {{ field_help("Telegram-Chat oder Gruppen-ID, an die KeepUp Meldungen sendet. Gruppen-IDs beginnen häufig mit -100.") }}</span>
                                 <input name="telegram_chat_id" value="{{ settings.telegram_chat_id }}" placeholder="-1001234567890" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                         </div>
@@ -190,23 +201,23 @@
                     <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <h3 class="text-base font-semibold text-slate-100">ntfy</h3>
+                                <h3 class="text-base font-semibold text-slate-100">ntfy {{ field_help("Aktiviert Push-Benachrichtigungen über deine ntfy-Instanz. Ideal für selbst gehostete, einfache Push-Meldungen.") }}</h3>
                                 <p class="mt-1 text-sm text-slate-400">Push-Nachrichten über deine selbst gehostete ntfy-Instanz.</p>
                             </div>
                             <input type="checkbox" name="ntfy_enabled" {% if settings.ntfy_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
                         </div>
                         <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <label class="space-y-2 sm:col-span-2">
-                                <span class="text-sm text-slate-300">Server-URL</span>
+                                <span class="text-sm text-slate-300">Server-URL {{ field_help("Basisadresse deiner ntfy-Instanz, zum Beispiel https://ntfy.example.com. Das Topic wird separat eingetragen.") }}</span>
                                 <input name="ntfy_server_url" value="{{ settings.ntfy_server_url }}" placeholder="https://ntfy.example.com" autocomplete="url" data-lpignore="true" class="{{ input_classes() }}">
                                 <p class="text-xs text-slate-500">Basis-URL deiner ntfy-Instanz, ohne Topic am Ende.</p>
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Topic</span>
+                                <span class="text-sm text-slate-300">Topic {{ field_help("ntfy-Kanal, in den KeepUp sendet. Clients abonnieren genau dieses Topic, um Meldungen zu erhalten.") }}</span>
                                 <input name="ntfy_topic" value="{{ settings.ntfy_topic }}" placeholder="keepup-alerts" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Priorität</span>
+                                <span class="text-sm text-slate-300">Priorität {{ field_help("Priorität der ntfy-Nachricht. Höhere Werte fallen in der App stärker auf; Normal ist für die meisten Installationen passend.") }}</span>
                                 <select name="ntfy_priority" class="{{ select_classes() }}">
                                     {% for priority, label in [(1, '1 - Minimum'), (2, '2 - Niedrig'), (3, '3 - Normal'), (4, '4 - Hoch'), (5, '5 - Maximal')] %}
                                     <option value="{{ priority }}" {% if settings.ntfy_priority == priority %}selected{% endif %}>{{ label }}</option>
@@ -214,16 +225,16 @@
                                 </select>
                             </label>
                             <label class="space-y-2 sm:col-span-2">
-                                <span class="text-sm text-slate-300">Access Token</span>
+                                <span class="text-sm text-slate-300">Access Token {{ field_help("Optionaler ntfy-Zugriffstoken für geschützte Topics. Wenn gesetzt, nutzt KeepUp diesen Token statt Benutzername und Passwort.") }}</span>
                                 <input name="ntfy_token" type="password" value="" placeholder="{% if settings.ntfy_token %}Gespeichert - leer lassen zum Beibehalten{% else %}Optionaler ntfy Token{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
                                 <p class="text-xs text-slate-500">Für geschützte Topics. Wenn Token gesetzt ist, wird er bevorzugt vor Benutzer/Passwort verwendet.</p>
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Benutzername</span>
+                                <span class="text-sm text-slate-300">Benutzername {{ field_help("Optionaler Benutzername für Basic Auth bei ntfy. Wird nur verwendet, wenn kein Access Token eingetragen ist.") }}</span>
                                 <input name="ntfy_username" value="{{ settings.ntfy_username }}" placeholder="Optional" autocomplete="username" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Passwort</span>
+                                <span class="text-sm text-slate-300">Passwort {{ field_help("Optionales ntfy-Passwort für Basic Auth. Leer lassen, um ein bereits gespeichertes Passwort beizubehalten.") }}</span>
                                 <input name="ntfy_password" type="password" value="" placeholder="{% if settings.ntfy_password %}Gespeichert - leer lassen zum Beibehalten{% else %}Optional{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                         </div>
@@ -238,7 +249,7 @@
                     <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4">
                         <div class="flex items-start justify-between gap-3">
                             <div>
-                                <h3 class="text-base font-semibold text-slate-100">SMTP / E-Mail</h3>
+                                <h3 class="text-base font-semibold text-slate-100">SMTP / E-Mail {{ field_help("Aktiviert E-Mail-Benachrichtigungen über deinen SMTP-Server. KeepUp sendet Statuswechsel an die eingetragene Empfängeradresse.") }}</h3>
                                 <p class="mt-1 text-sm text-slate-400">Versand bei Down und Recovery über deinen Mailserver.</p>
                             </div>
                             <input type="checkbox" name="smtp_enabled" {% if settings.smtp_enabled %}checked{% endif %} class="{{ checkbox_classes('md') }}">
@@ -246,39 +257,39 @@
                         <p class="mt-3 text-sm text-slate-400">Aktiviere SMTP und hinterlege Host/Empfänger.</p>
                         <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <label class="space-y-2 sm:col-span-2">
-                                <span class="text-sm text-slate-300">SMTP Host</span>
+                                <span class="text-sm text-slate-300">SMTP Host {{ field_help("Hostname oder IP deines Mailservers, zum Beispiel smtp.example.com.") }}</span>
                                 <input name="smtp_host" value="{{ settings.smtp_host }}" placeholder="smtp.example.com" autocomplete="url" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Port</span>
+                                <span class="text-sm text-slate-300">Port {{ field_help("SMTP-Port deines Mailservers. Typisch sind 587 für STARTTLS, 465 für SSL oder 25 für unverschlüsselt im lokalen Netz.") }}</span>
                                 <input type="number" name="smtp_port" value="{{ settings.smtp_port }}" placeholder="587" inputmode="numeric" autocomplete="off" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Benutzername</span>
+                                <span class="text-sm text-slate-300">Benutzername {{ field_help("SMTP-Benutzername. Häufig ist das die Absenderadresse oder ein eigener Mailserver-Login.") }}</span>
                                 <input name="smtp_username" value="{{ settings.smtp_username }}" placeholder="monitor@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                             <label class="space-y-2 sm:col-span-2">
-                                <span class="text-sm text-slate-300">Passwort</span>
+                                <span class="text-sm text-slate-300">Passwort {{ field_help("SMTP-Passwort oder App-Passwort. Wird gespeichert, aber danach nicht mehr im Formular angezeigt.") }}</span>
                                 <input name="smtp_password" type="password" value="" placeholder="{% if settings.smtp_password %}Gespeichert - leer lassen zum Beibehalten{% else %}SMTP Passwort{% endif %}" autocomplete="new-password" data-lpignore="true" class="{{ input_classes() }}">
                                 <p class="text-xs text-slate-500">Das gespeicherte Passwort wird nicht angezeigt. Leer lassen, um es beizubehalten.</p>
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">Von E-Mail</span>
+                                <span class="text-sm text-slate-300">Von E-Mail {{ field_help("Absenderadresse der KeepUp-Mails. Sie sollte vom SMTP-Server akzeptiert werden.") }}</span>
                                 <input name="smtp_from_email" value="{{ settings.smtp_from_email }}" placeholder="keepup@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                             <label class="space-y-2">
-                                <span class="text-sm text-slate-300">An E-Mail</span>
+                                <span class="text-sm text-slate-300">An E-Mail {{ field_help("Empfängeradresse für KeepUp-Alarme und Recovery-Meldungen.") }}</span>
                                 <input name="smtp_to_email" value="{{ settings.smtp_to_email }}" placeholder="admin@example.com" autocomplete="email" data-lpignore="true" class="{{ input_classes() }}">
                             </label>
                         </div>
                         <div class="mt-4 flex flex-wrap gap-4 text-sm text-slate-300">
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" name="smtp_use_tls" {% if settings.smtp_use_tls %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
-                                STARTTLS
+                                STARTTLS {{ field_help("Startet die Verbindung zunächst unverschlüsselt und wechselt dann auf TLS. Üblich bei Port 587.") }}
                             </label>
                             <label class="flex items-center gap-2">
                                 <input type="checkbox" name="smtp_use_ssl" {% if settings.smtp_use_ssl %}checked{% endif %} class="{{ checkbox_classes('sm') }}">
-                                SSL
+                                SSL {{ field_help("Verbindet sich direkt verschlüsselt mit dem SMTP-Server. Üblich bei Port 465. Nicht gleichzeitig mit STARTTLS nutzen, außer dein Server verlangt es ausdrücklich.") }}
                             </label>
                         </div>
                         <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
