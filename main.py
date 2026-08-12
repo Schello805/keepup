@@ -987,6 +987,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("compact dashboard summary area", "Der obere Dashboard-Bereich mit Status und Gruppen ist platzsparender dargestellt."),
         ("add settings field tooltips", "Die Einstellungen erklären ihre Felder jetzt direkt über kompakte Tooltips."),
         ("fix settings tooltip display", "Tooltips in den Einstellungen öffnen jetzt einzeln und sind besser lesbar."),
+        ("make settings tooltips wider on mobile", "Tooltips in den Einstellungen nutzen auf Smartphones mehr Bildschirmbreite."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
