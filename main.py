@@ -989,6 +989,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("fix settings tooltip display", "Tooltips in den Einstellungen öffnen jetzt einzeln und sind besser lesbar."),
         ("make settings tooltips wider on mobile", "Tooltips in den Einstellungen nutzen auf Smartphones mehr Bildschirmbreite."),
         ("keep dashboard counts and filters in sync", "Dashboard-Zähler entsprechen zuverlässig den Monitor-Karten und aktive Filter sind deutlich sichtbar."),
+        ("isolate dashboard cache test data", "Die automatischen Cache-Tests laufen jetzt unabhängig von einer vorhandenen lokalen Datenbank."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),

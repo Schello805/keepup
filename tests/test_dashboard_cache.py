@@ -37,7 +37,10 @@ class DashboardCacheTests(unittest.TestCase):
                 main._dashboard_cards_cache["html"] = "<section>fresh</section>"
                 main._dashboard_cards_cache["expires_at"] = 9999999999.0
 
-        with patch.object(main, "wait_for_dashboard_cards_cache_refresh", side_effect=refresh_cache) as refresh:
+        with (
+            patch.object(main, "wait_for_dashboard_cards_cache_refresh", side_effect=refresh_cache) as refresh,
+            patch.object(main, "get_settings", return_value={"refresh_interval": 30}),
+        ):
             response = main.asyncio.run(main.live_cards_partial(None))
 
         refresh.assert_awaited_once_with(force=False)
