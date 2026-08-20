@@ -401,6 +401,14 @@
             </div>
             {% endfor %}
         </section>
+        <div id="monitor-filter-empty" class="hidden rounded-2xl border border-sky-300/20 bg-sky-500/10 px-4 py-3 text-sm text-slate-300">
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p><span class="font-semibold text-sky-100">Keine Treffer.</span> Zu den aktiven Filtern passen aktuell keine Monitore.</p>
+                <button type="button" onclick="clearDashboardFilters()" class="shrink-0 rounded-xl border border-sky-200/20 bg-slate-950/35 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-slate-950/50">
+                    Alle Monitore anzeigen
+                </button>
+            </div>
+        </div>
     </section>
 {%- endmacro %}
 
@@ -440,6 +448,7 @@
             align-items: stretch;
         }
         .monitor-card { min-height: 0; }
+        body.has-empty-monitor-filter footer { margin-top: 1.25rem; }
         .monitor-modal input:not([type="hidden"]),
         .monitor-modal select {
             height: 2.25rem;
@@ -1071,6 +1080,12 @@
                 const matchesSearch = !query || haystack.includes(query);
                 card.classList.toggle("is-hidden", !(matchesStatus && matchesCategory && matchesSearch));
             });
+            const cards = [...document.querySelectorAll("#monitor-cards-shell .monitor-card")];
+            const hasActiveFilter = filter !== "all" || category !== "all" || Boolean(query);
+            const hasVisibleCards = cards.some((card) => !card.classList.contains("is-hidden"));
+            const showEmptyFilterState = hasActiveFilter && cards.length > 0 && !hasVisibleCards;
+            document.getElementById("monitor-filter-empty")?.classList.toggle("hidden", !showEmptyFilterState);
+            document.body.classList.toggle("has-empty-monitor-filter", showEmptyFilterState);
             renderActiveDashboardFilters();
             sortMonitorCards();
             normalizeAllCardsView();

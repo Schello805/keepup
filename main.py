@@ -992,6 +992,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("keep dashboard counts and filters in sync", "Dashboard-Zähler entsprechen zuverlässig den Monitor-Karten und aktive Filter sind deutlich sichtbar."),
         ("isolate dashboard cache test data", "Die automatischen Cache-Tests laufen jetzt unabhängig von einer vorhandenen lokalen Datenbank."),
         ("synchronize live monitor status displays", "Kopfzeile, Statuszähler und Monitor-Karten zeigen bei Statuswechseln jetzt denselben Stand."),
+        ("leeren filterzustand kompakt anzeigen", "Leere Filterergebnisse werden kompakt erklärt, ohne großen Abstand vor dem Changelog."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
