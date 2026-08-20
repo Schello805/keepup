@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import main
 
@@ -25,6 +26,22 @@ class DashboardCacheTests(unittest.TestCase):
 
         self.assertIsNone(main.peek_dashboard_cards_html())
         self.assertTrue(main.dashboard_cards_cache_needs_immediate_rebuild())
+
+    def test_live_cards_waits_for_stale_cache_refresh(self):
+        with main._dashboard_cards_cache_lock:
+            main._dashboard_cards_cache["html"] = "<section>stale</section>"
+            main._dashboard_cards_cache["expires_at"] = 0.0
+
+        async def refresh_cache(force=False):
+            with main._dashboard_cards_cache_lock:
+                main._dashboard_cards_cache["html"] = "<section>fresh</section>"
+                main._dashboard_cards_cache["expires_at"] = 9999999999.0
+
+        with patch.object(main, "wait_for_dashboard_cards_cache_refresh", side_effect=refresh_cache) as refresh:
+            response = main.asyncio.run(main.live_cards_partial(None))
+
+        refresh.assert_awaited_once_with(force=False)
+        self.assertIn("fresh", response.body.decode())
 
 
 if __name__ == "__main__":

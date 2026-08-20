@@ -988,6 +988,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add settings field tooltips", "Die Einstellungen erklären ihre Felder jetzt direkt über kompakte Tooltips."),
         ("fix settings tooltip display", "Tooltips in den Einstellungen öffnen jetzt einzeln und sind besser lesbar."),
         ("make settings tooltips wider on mobile", "Tooltips in den Einstellungen nutzen auf Smartphones mehr Bildschirmbreite."),
+        ("keep dashboard counts and filters in sync", "Dashboard-Zähler entsprechen zuverlässig den Monitor-Karten und aktive Filter sind deutlich sichtbar."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
@@ -1246,6 +1247,14 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
             logger.exception("dashboard_cards_refresh_failed")
 
     _dashboard_cards_refresh_task = asyncio.create_task(_refresh())
+
+
+async def wait_for_dashboard_cards_cache_refresh(force: bool = False) -> None:
+    """Refresh stale cards once and wait until the shared cache is coherent."""
+    await ensure_dashboard_cards_cache_refresh(force=force)
+    task = _dashboard_cards_refresh_task
+    if task is not None:
+        await asyncio.shield(task)
 
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
@@ -1665,16 +1674,18 @@ async def live_top_partial(request: Request) -> HTMLResponse:
 
 @app.get("/api/live/cards", response_class=HTMLResponse)
 async def live_cards_partial(request: Request) -> HTMLResponse:
+    if dashboard_cards_cache_is_stale():
+        await wait_for_dashboard_cards_cache_refresh(force=False)
     html = peek_dashboard_cards_html()
     if html is None:
-        await ensure_dashboard_cards_cache_refresh(force=False)
+        await wait_for_dashboard_cards_cache_refresh(force=True)
+        html = peek_dashboard_cards_html()
+    if html is None:
         context = await asyncio.to_thread(build_dashboard_cards_payload)
         for monitor in context["monitors"]:
             if monitor.get("enabled", 1):
                 monitor["cache_refresh_running"] = True
         return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "cards"})
-    else:
-        await ensure_dashboard_cards_cache_refresh(force=False)
     settings = get_settings()
     return await asyncio.to_thread(
         render_template,

@@ -93,6 +93,15 @@
             </div>
         </div>
         {% endif %}
+        <div id="active-dashboard-filters" class="hidden flex-col items-stretch justify-between gap-2 rounded-2xl border border-sky-300/30 bg-sky-500/10 px-3 py-2 text-sm shadow-panel sm:flex-row sm:items-center sm:gap-3">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
+                <span class="shrink-0 font-semibold text-sky-100">Aktive Filter</span>
+                <div id="active-dashboard-filter-chips" class="flex min-w-0 flex-wrap gap-1.5"></div>
+            </div>
+            <button type="button" onclick="clearDashboardFilters()" class="shrink-0 rounded-xl border border-sky-200/30 bg-slate-950/35 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-slate-950/50">
+                Filter löschen
+            </button>
+        </div>
     </div>
 {%- endmacro %}
 
@@ -454,7 +463,7 @@
             }
         }
         .status-filter-card.is-active {
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 18px 40px rgba(7, 17, 31, 0.28);
+            box-shadow: inset 0 0 0 2px rgba(125, 211, 252, 0.6), 0 18px 40px rgba(7, 17, 31, 0.28);
             transform: translateY(-1px);
         }
         .category-filter-card.is-active {
@@ -891,6 +900,58 @@
             applyMonitorFilters();
         }
 
+        function clearDashboardFilters() {
+            window.localStorage.setItem("keepup-monitor-status-filter", "all");
+            window.localStorage.setItem("keepup-monitor-category-filter", "all");
+            window.localStorage.setItem("keepup-monitor-search", "");
+            applyMonitorFilters();
+        }
+
+        function getCategoryFilterLabel(category) {
+            if (category === "all") return "";
+            const button = [...document.querySelectorAll(".category-filter-card")]
+                .find((item) => item.dataset.categoryFilter === category);
+            return button?.querySelector("span")?.textContent?.trim() || category;
+        }
+
+        function renderActiveDashboardFilters() {
+            const shell = document.getElementById("active-dashboard-filters");
+            const chips = document.getElementById("active-dashboard-filter-chips");
+            if (!shell || !chips) return;
+            const status = getStatusFilter();
+            const category = getCategoryFilter();
+            const query = (window.localStorage.getItem("keepup-monitor-search") || "").trim();
+            const statusLabels = { up: "Status: UP", down: "Status: DOWN", unknown: "Status: UNKNOWN", paused: "Status: pausiert" };
+            const labels = [];
+            if (status !== "all") labels.push(statusLabels[status] || `Status: ${status}`);
+            if (category !== "all") labels.push(`Gruppe: ${getCategoryFilterLabel(category)}`);
+            if (query) labels.push(`Suche: ${query}`);
+            chips.replaceChildren(...labels.map((label) => {
+                const chip = document.createElement("span");
+                chip.className = "max-w-full truncate rounded-full border border-sky-200/20 bg-slate-950/40 px-2.5 py-1 text-xs font-medium text-sky-100";
+                chip.textContent = label;
+                return chip;
+            }));
+            shell.classList.toggle("hidden", labels.length === 0);
+            shell.classList.toggle("flex", labels.length > 0);
+            document.getElementById("monitor-search-input")?.closest("label")?.classList.toggle("border-sky-300/60", Boolean(query));
+        }
+
+        function syncDashboardSummaryFromCards() {
+            const cards = [...document.querySelectorAll("#monitor-cards-shell .monitor-card")];
+            if (!cards.length) return;
+            const counts = { all: cards.length, up: 0, down: 0, unknown: 0, paused: 0 };
+            cards.forEach((card) => {
+                const status = card.dataset.monitorStatus || "unknown";
+                if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+            });
+            document.querySelectorAll(".status-filter-card").forEach((card) => {
+                const value = counts[card.dataset.filter];
+                const target = card.querySelector("p:last-child");
+                if (target && Number.isInteger(value)) target.textContent = String(value);
+            });
+        }
+
         function getSortOrder() {
             const order = window.localStorage.getItem("keepup-monitor-sort") || "name-asc";
             return order === "all" ? "name-asc" : order;
@@ -1006,6 +1067,7 @@
                 const matchesSearch = !query || haystack.includes(query);
                 card.classList.toggle("is-hidden", !(matchesStatus && matchesCategory && matchesSearch));
             });
+            renderActiveDashboardFilters();
             sortMonitorCards();
             normalizeAllCardsView();
             dismissColdStartHint();
@@ -1258,6 +1320,7 @@
         function afterMonitorCardsUpdated() {
             dismissColdStartHint();
             reapplyPendingMonitorCards();
+            syncDashboardSummaryFromCards();
             applyMonitorFilters();
             restoreOpenDetails();
             bindMonitorCreateForms();
