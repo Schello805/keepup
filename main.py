@@ -1055,6 +1055,13 @@ def _humanize_commit_subject(subject: str) -> str:
     for prefix, text in translations:
         if lower.startswith(prefix):
             return text
+    german_markers = (
+        " der ", " die ", " das ", " und ", " für ", " wurde ", " werden ",
+        "beheben", "verbessern", "anzeigen", "synchronisieren", "entfernen", "aktualisieren",
+    )
+    padded_lower = f" {lower} "
+    if any(marker in padded_lower for marker in german_markers) or any(char in lower for char in "äöüß"):
+        return f"{normalized}." if normalized and not normalized.endswith(".") else normalized
     keyword_summaries = (
         (("card", "height"), "Die Darstellung der Monitor-Karten wurde verbessert."),
         (("monitor", "card"), "Die Monitor-Karten wurden im Frontend verbessert."),
@@ -1073,9 +1080,7 @@ def _humanize_commit_subject(subject: str) -> str:
     for keywords, text in keyword_summaries:
         if all(keyword in lower for keyword in keywords):
             return text
-    if normalized:
-        return "Technische Verbesserung wurde eingespielt."
-    return "Technische Änderung im Projekt."
+    return ""
 
 
 def _format_german_date(date_value: str) -> str:
@@ -1117,14 +1122,16 @@ def get_changelog_items(limit: int = 8) -> list[dict[str, str]]:
         if len(parts) != 3:
             continue
         sha, committed_at, subject = (part.strip() for part in parts)
-        items.append(
-            {
-                "sha": sha,
-                "committed_at": committed_at,
-                "subject": subject,
-                "summary": _humanize_commit_subject(subject),
-            }
-        )
+        summary = _humanize_commit_subject(subject)
+        if summary:
+            items.append(
+                {
+                    "sha": sha,
+                    "committed_at": committed_at,
+                    "subject": subject,
+                    "summary": summary,
+                }
+            )
 
     _changelog_cache["items"] = items
     _changelog_cache["expires_at"] = now + 60
@@ -1409,7 +1416,9 @@ def _get_update_commit_details(previous_sha: Optional[str], current_sha: Optiona
         if len(parts) != 3:
             continue
         sha, committed_at, subject = (part.strip() for part in parts)
-        changes.append(_format_commit_change(sha, subject, committed_at))
+        change = _format_commit_change(sha, subject, committed_at)
+        if change["summary"]:
+            changes.append(change)
     return changes
 
 
@@ -1433,7 +1442,9 @@ async def _get_pending_update_changes(local_sha: Optional[str], remote_sha: Opti
             author_payload = commit_payload.get("author") or {}
             committed_at = str(author_payload.get("date") or "")
             if sha and message:
-                changes.append(_format_commit_change(sha, message, committed_at))
+                change = _format_commit_change(sha, message, committed_at)
+                if change["summary"]:
+                    changes.append(change)
         return list(reversed(changes))
     except Exception:
         return []

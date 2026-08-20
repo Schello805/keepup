@@ -220,7 +220,7 @@ systemctl restart keepup.service</p>
                     if (entry && typeof entry === 'object') {
                         return {
                             sha: entry.sha || '',
-                            summary: entry.summary || entry.subject || 'Technische Änderung',
+                            summary: entry.summary || '',
                             subject: entry.subject || '',
                             committedAt: entry.committed_at || '',
                         };
@@ -229,7 +229,7 @@ systemctl restart keepup.service</p>
                     const match = text.match(/^([a-f0-9]{7,})\s+(.+)$/i);
                     return {
                         sha: match ? match[1].slice(0, 7) : '',
-                        summary: match ? match[2] : (text || 'Technische Änderung'),
+                        summary: match ? match[2] : text,
                         subject: text,
                         committedAt: '',
                     };
@@ -264,9 +264,8 @@ systemctl restart keepup.service</p>
                         summary.textContent = entry.summary;
                         const context = document.createElement('p');
                         context.className = 'mt-1 text-xs leading-5 text-slate-400';
-                        const technical = entry.subject && entry.subject !== entry.summary ? `Technisch: ${entry.subject}` : '';
                         const reference = entry.sha ? `Commit ${entry.sha}` : '';
-                        context.textContent = [technical, reference].filter(Boolean).join(' · ');
+                        context.textContent = reference;
                         card.appendChild(meta);
                         card.appendChild(summary);
                         if (context.textContent) card.appendChild(context);

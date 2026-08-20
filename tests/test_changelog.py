@@ -10,10 +10,19 @@ class ChangelogTests(unittest.TestCase):
 
         self.assertEqual(summary, "Automatische Tests auf GitHub wurden ergänzt.")
 
-    def test_unknown_commit_subject_stays_readable(self):
+    def test_known_keyword_commit_subject_stays_readable(self):
         summary = _humanize_commit_subject("improve dashboard loading")
 
         self.assertEqual(summary, "Das Dashboard wurde verbessert.")
+
+    def test_unknown_technical_commit_is_hidden(self):
+        self.assertEqual(_humanize_commit_subject("Refactor internal helper plumbing"), "")
+
+    def test_german_commit_subject_is_used_as_summary(self):
+        self.assertEqual(
+            _humanize_commit_subject("Aktive Filter im Dashboard deutlicher anzeigen"),
+            "Aktive Filter im Dashboard deutlicher anzeigen.",
+        )
 
     def test_recent_monitor_card_commit_is_humanized(self):
         summary = _humanize_commit_subject("Tighten monitor card height")
@@ -22,7 +31,7 @@ class ChangelogTests(unittest.TestCase):
 
     def test_changelog_cache_keeps_enough_items_for_detail_page(self):
         output = "\n".join(
-            f"abcde{i}\t21.07.2026 13:4{i}\tchange {i}"
+            f"abcde{i}\t21.07.2026 13:4{i}\timprove dashboard change {i}"
             for i in range(8)
         )
         _changelog_cache["items"] = None
