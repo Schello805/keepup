@@ -950,6 +950,10 @@
                 const target = card.querySelector("p:last-child");
                 if (target && Number.isInteger(value)) target.textContent = String(value);
             });
+            const title = document.getElementById("page-header-title");
+            if (title) {
+                title.textContent = counts.down === 0 ? "All systems operational" : `${counts.down} issue(s) detected`;
+            }
         }
 
         function getSortOrder() {
@@ -1331,6 +1335,7 @@
         }
 
         function afterDashboardTopUpdated() {
+            syncDashboardSummaryFromCards();
             applyMonitorFilters();
         }
 
@@ -1848,6 +1853,7 @@
         setCategoryFormValue("new", "");
         clearOpenDetails();
         dismissColdStartHint();
+        syncDashboardSummaryFromCards();
         applyMonitorFilters();
         restoreOpenDetails();
         bindMonitorCreateForms();

@@ -17,6 +17,7 @@ from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import uvicorn
+from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.gzip import GZipMiddleware
@@ -78,7 +79,7 @@ DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
 MAX_IMPORT_BYTES = max(1, int(os.environ.get("KEEPUP_MAX_IMPORT_MB", "25"))) * 1024 * 1024
 IMPORT_READ_CHUNK_BYTES = 1024 * 1024
 _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
-_dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None}
+_dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None, "generation": 0}
 _dashboard_cards_cache_lock = threading.Lock()
 _dashboard_cards_refresh_task: Optional[asyncio.Task] = None
 _changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
@@ -990,6 +991,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("make settings tooltips wider on mobile", "Tooltips in den Einstellungen nutzen auf Smartphones mehr Bildschirmbreite."),
         ("keep dashboard counts and filters in sync", "Dashboard-Zähler entsprechen zuverlässig den Monitor-Karten und aktive Filter sind deutlich sichtbar."),
         ("isolate dashboard cache test data", "Die automatischen Cache-Tests laufen jetzt unabhängig von einer vorhandenen lokalen Datenbank."),
+        ("synchronize live monitor status displays", "Kopfzeile, Statuszähler und Monitor-Karten zeigen bei Statuswechseln jetzt denselben Stand."),
         ("make live refresh tolerate network changes", "Live-Aktualisierungen reagieren ruhiger auf kurze Netzwerkwechsel."),
         ("show monitor forms in compact modals", "Monitor anlegen und bearbeiten öffnet jetzt als kompaktes Overlay ohne Scrollsprung."),
         ("compact monitor form layout on desktop", "Monitor-Formulare sind am Desktop deutlich kompakter und passen besser auf eine Bildschirmhöhe."),
@@ -1178,10 +1180,12 @@ def invalidate_dashboard_cards_cache() -> None:
     with _dashboard_cards_cache_lock:
         _dashboard_cards_cache["html"] = None
         _dashboard_cards_cache["expires_at"] = 0.0
+        _dashboard_cards_cache["generation"] = int(_dashboard_cards_cache.get("generation") or 0) + 1
 
 
 def mark_dashboard_cards_cache_stale() -> None:
     with _dashboard_cards_cache_lock:
+        _dashboard_cards_cache["generation"] = int(_dashboard_cards_cache.get("generation") or 0) + 1
         if _dashboard_cards_cache.get("html"):
             _dashboard_cards_cache["expires_at"] = time.time() - 1
         else:
@@ -1206,6 +1210,7 @@ def get_dashboard_cards_html(force_refresh: bool = False) -> Optional[str]:
     with _dashboard_cards_cache_lock:
         cached_html = _dashboard_cards_cache.get("html")
         expires_at = float(_dashboard_cards_cache.get("expires_at") or 0.0)
+        generation = int(_dashboard_cards_cache.get("generation") or 0)
         if not force_refresh and cached_html and now < expires_at:
             return str(cached_html)
         stale_html = str(cached_html) if cached_html else None
@@ -1218,6 +1223,8 @@ def get_dashboard_cards_html(force_refresh: bool = False) -> Optional[str]:
         return stale_html
 
     with _dashboard_cards_cache_lock:
+        if generation != int(_dashboard_cards_cache.get("generation") or 0):
+            return stale_html
         _dashboard_cards_cache["html"] = html
         _dashboard_cards_cache["expires_at"] = time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS
     return html
@@ -1252,10 +1259,13 @@ async def ensure_dashboard_cards_cache_refresh(force: bool = False) -> None:
 
 async def wait_for_dashboard_cards_cache_refresh(force: bool = False) -> None:
     """Refresh stale cards once and wait until the shared cache is coherent."""
-    await ensure_dashboard_cards_cache_refresh(force=force)
-    task = _dashboard_cards_refresh_task
-    if task is not None:
-        await asyncio.shield(task)
+    for attempt in range(2):
+        await ensure_dashboard_cards_cache_refresh(force=force or attempt > 0)
+        task = _dashboard_cards_refresh_task
+        if task is not None:
+            await asyncio.shield(task)
+        if not dashboard_cards_cache_is_stale():
+            return
 
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
@@ -1265,6 +1275,16 @@ async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
 
 async def refresh_dashboard_cards_cache() -> None:
     await ensure_dashboard_cards_cache_refresh(force=True)
+
+
+def handle_scheduler_job_executed(event: Any) -> None:
+    result = getattr(event, "retval", None)
+    if (
+        str(getattr(event, "job_id", "")).startswith("monitor-")
+        and isinstance(result, dict)
+        and result.get("status_changed")
+    ):
+        mark_dashboard_cards_cache_stale()
 
 
 def _schedule_self_restart(delay_seconds: float = 1.8) -> None:
@@ -1484,10 +1504,12 @@ async def lifespan(app: FastAPI):
         replace_existing=True,
     )
     reschedule_monitor_jobs(scheduler)
+    scheduler.add_listener(handle_scheduler_job_executed, EVENT_JOB_EXECUTED)
     scheduler.start()
     async def _run_initial_checks() -> None:
         try:
             await run_all_checks_once()
+            mark_dashboard_cards_cache_stale()
         except Exception:
             logger.exception("initial_checks_failed")
 
