@@ -82,8 +82,8 @@
             <div class="flex gap-2 overflow-x-auto">
                 {% for category in summary.categories %}
                 <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-left transition hover:border-sky-300/30 hover:bg-white/10">
-                    <span class="block max-w-[11rem] truncate text-sm font-semibold text-slate-100">{{ category.label }}</span>
-                    <span class="flex items-center gap-2 text-[11px] text-slate-400">
+                    <span data-category-label class="block max-w-[11rem] truncate text-sm font-semibold text-slate-100">{{ category.label }}</span>
+                    <span data-category-stats class="flex items-center gap-2 text-[11px] text-slate-400">
                         <span>{{ category.total }} gesamt</span>
                         {% if category.down %}<span class="font-semibold text-rose-300">{{ category.down }} down</span>{% endif %}
                         {% if category.unknown %}<span class="font-semibold text-amber-200">{{ category.unknown }} offen</span>{% endif %}
@@ -950,14 +950,35 @@
             const cards = [...document.querySelectorAll("#monitor-cards-shell .monitor-card")];
             if (!cards.length) return;
             const counts = { all: cards.length, up: 0, down: 0, unknown: 0, paused: 0 };
+            const categoryCounts = new Map();
             cards.forEach((card) => {
                 const status = card.dataset.monitorStatus || "unknown";
                 if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+                const category = card.dataset.monitorCategory || "__none__";
+                const categorySummary = categoryCounts.get(category) || { total: 0, down: 0, unknown: 0 };
+                categorySummary.total += 1;
+                if (status === "down") categorySummary.down += 1;
+                if (status === "unknown") categorySummary.unknown += 1;
+                categoryCounts.set(category, categorySummary);
             });
             document.querySelectorAll(".status-filter-card").forEach((card) => {
                 const value = counts[card.dataset.filter];
                 const target = card.querySelector("p:last-child");
                 if (target && Number.isInteger(value)) target.textContent = String(value);
+            });
+            document.querySelectorAll(".category-filter-card[data-category-filter]:not([data-category-filter='all'])").forEach((card) => {
+                const summary = categoryCounts.get(card.dataset.categoryFilter) || { total: 0, down: 0, unknown: 0 };
+                const stats = card.querySelector("[data-category-stats]");
+                if (!stats) return;
+                const parts = [{ text: `${summary.total} gesamt`, className: "" }];
+                if (summary.down) parts.push({ text: `${summary.down} down`, className: "font-semibold text-rose-300" });
+                if (summary.unknown) parts.push({ text: `${summary.unknown} offen`, className: "font-semibold text-amber-200" });
+                stats.replaceChildren(...parts.map((part) => {
+                    const span = document.createElement("span");
+                    span.textContent = part.text;
+                    span.className = part.className;
+                    return span;
+                }));
             });
             const title = document.getElementById("page-header-title");
             if (title) {
@@ -1559,6 +1580,8 @@
             const nextSibling = existing?.nextElementSibling || null;
             const previousOrder = existing?.dataset.monitorOrder || String(grid.querySelectorAll(".monitor-card").length);
             const previousCreated = existing?.dataset.monitorCreated || monitor.created_at || monitor.id || previousOrder;
+            const previousStatus = existing?.dataset.monitorStatus || "unknown";
+            const previousStatusRank = existing?.dataset.monitorStatusRank || "1";
             if (existing) existing.remove();
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
             const categoryLabel = String(monitor.category || "").trim();
@@ -1569,14 +1592,14 @@
             const spinnerTitle = options.spinnerTitle || "Erster Check läuft";
             const spinnerMessage = options.spinnerMessage || "Warte auf erste Rückmeldung...";
             const card = document.createElement("article");
-            card.dataset.monitorStatus = "unknown";
+            card.dataset.monitorStatus = previousStatus;
             card.dataset.monitorCategory = categoryKey;
             card.dataset.monitorSearch = `${monitor.name || ""} ${categoryLabel} ${monitor.target || ""} ${monitor.ping_target || ""}`.toLowerCase();
             card.dataset.monitorName = String(monitor.name || "").toLowerCase();
             card.dataset.monitorResponseTime = "-1";
             card.dataset.monitorUptime = "-1";
             card.dataset.monitorCreated = previousCreated;
-            card.dataset.monitorStatusRank = "1";
+            card.dataset.monitorStatusRank = previousStatusRank;
             card.dataset.monitorOrder = previousOrder;
             card.dataset.monitorId = monitor.id;
             card.className = "monitor-card perspective-1000 flex min-w-0 cursor-wait";
