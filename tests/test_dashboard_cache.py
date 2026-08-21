@@ -118,6 +118,7 @@ class DashboardCacheTests(unittest.TestCase):
         with (
             patch.object(main, "build_dashboard_context", return_value=context),
             patch.object(main, "render_template_content", side_effect=render),
+            patch.object(main, "build_status_wall_payload", return_value={"version": 1, "summary": {}, "monitors": []}),
         ):
             with main._dashboard_snapshot_cache_lock:
                 main._dashboard_snapshot_cache.update(version=0, expires_at=0.0, payload=None)

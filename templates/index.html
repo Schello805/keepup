@@ -83,9 +83,9 @@
                     Alle Gruppen
                 </button>
             </div>
-            <div class="flex gap-2 overflow-x-auto">
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                 {% for category in summary.categories %}
-                <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card shrink-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-left transition hover:border-sky-300/30 hover:bg-white/10">
+                <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-left transition hover:border-sky-300/30 hover:bg-white/10">
                     <span data-category-label class="block max-w-[11rem] truncate text-sm font-semibold text-slate-100">{{ category.label }}</span>
                     <span data-category-stats class="flex items-center gap-2 text-[11px] text-slate-400">
                         <span>{{ category.total }} gesamt</span>
@@ -298,10 +298,6 @@
                                 {% endif %}
                             </span>
                         </div>
-                        <div class="mt-1 h-6 overflow-hidden rounded-lg bg-slate-950/20 px-1" title="Antwortzeit der letzten Checks">
-                            <svg data-response-sparkline data-values='{{ monitor.response_history|tojson }}' class="h-full w-full" viewBox="0 0 240 24" preserveAspectRatio="none" aria-label="Antwortzeitverlauf"></svg>
-                        </div>
-
                         <div class="mt-2 grid grid-cols-3 gap-2 text-xs flex-shrink-0">
                             <div class="rounded-xl bg-slate-950/45 p-2 text-center">
                                 <p class="text-[10px] uppercase tracking-wide text-slate-400">Seit {{ monitor.uptime_since_days if monitor.uptime_since_days is not none else "-" }} T</p>
@@ -460,8 +456,6 @@
         }
         .monitor-card { min-height: 0; }
         .monitor-card.status-changed { animation: status-pulse 1.1s ease-out; }
-        .sparkline-path { fill: none; stroke: rgba(125,211,252,.9); stroke-width: 2; vector-effect: non-scaling-stroke; }
-        .sparkline-area { fill: rgba(56,189,248,.10); }
         @keyframes status-pulse {
             0% { transform: scale(.985); filter: brightness(1.45); }
             55% { transform: scale(1.008); }
@@ -850,12 +844,64 @@
 
         function clearOpenDetails() {}
 
+        window.__keepupDetailCache = window.__keepupDetailCache || new Map();
+        window.__keepupDetailPromises = window.__keepupDetailPromises || new Map();
+
+        async function loadMonitorDetailHtml(monitorId, force = false) {
+            const key = String(monitorId);
+            const cached = window.__keepupDetailCache.get(key);
+            if (!force && cached && Date.now() - cached.loadedAt < 60000) return cached.html;
+            if (window.__keepupDetailPromises.has(key)) return window.__keepupDetailPromises.get(key);
+            const promise = (async () => {
+                const response = await fetch(`/api/monitors/${encodeURIComponent(key)}/details`, {
+                    headers: { "HX-Request": "true" },
+                    credentials: "same-origin",
+                });
+                if (!response.ok) throw new Error("detail_load_failed");
+                const html = await response.text();
+                window.__keepupDetailCache.set(key, { html, loadedAt: Date.now() });
+                return html;
+            })();
+            window.__keepupDetailPromises.set(key, promise);
+            try { return await promise; }
+            finally { window.__keepupDetailPromises.delete(key); }
+        }
+
+        function prefetchMonitorDetails() {
+            if (window.__keepupDetailPrefetchScheduled) return;
+            window.__keepupDetailPrefetchScheduled = true;
+            window.setTimeout(async () => {
+                window.__keepupDetailPrefetchScheduled = false;
+                const hasMissingDetails = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
+                    .some((card) => !window.__keepupDetailCache.has(String(card.dataset.monitorId)));
+                if (!hasMissingDetails || window.__keepupDetailBatchPromise) return;
+                window.__keepupDetailBatchPromise = fetch("/api/monitor-details", { cache: "no-store", credentials: "same-origin" })
+                    .then((response) => {
+                        if (!response.ok) throw new Error("detail_batch_failed");
+                        return response.json();
+                    })
+                    .then((payload) => {
+                        const loadedAt = Date.now();
+                        Object.entries(payload.details || {}).forEach(([id, html]) => {
+                            window.__keepupDetailCache.set(String(id), { html: String(html), loadedAt });
+                        });
+                    })
+                    .catch(() => {})
+                    .finally(() => { window.__keepupDetailBatchPromise = null; });
+                await window.__keepupDetailBatchPromise;
+            }, 500);
+        }
+
         async function openMonitorDetails(monitorId) {
             const inner = document.getElementById(`card-inner-${monitorId}`);
             if (!inner || inner.classList.contains("is-flipped")) return;
 
             const content = document.getElementById(`card-back-content-${monitorId}`);
-            if (content) {
+            const cached = window.__keepupDetailCache.get(String(monitorId));
+            if (content && cached) {
+                content.innerHTML = cached.html;
+                renderCharts(content).catch((error) => console.warn("Detail chart skipped", error));
+            } else if (content) {
                 content.innerHTML = `
                     <div class="space-y-4">
                         <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
@@ -873,10 +919,9 @@
             inner.classList.add("is-flipped");
 
             try {
-                const response = await fetch(`/api/monitors/${monitorId}/details`, { headers: { "HX-Request": "true" } });
-                if (!response.ok) throw new Error("failed");
-                if (content) {
-                    content.innerHTML = await response.text();
+                const html = await loadMonitorDetailHtml(monitorId, Boolean(cached && Date.now() - cached.loadedAt >= 60000));
+                if (content && (!cached || html !== cached.html)) {
+                    content.innerHTML = html;
                     // Charts are optional. A charting error must never hide the loaded detail data.
                     renderCharts(content).catch((error) => {
                         console.warn("Detail chart skipped", error);
@@ -1406,7 +1451,7 @@
             bindMonitorToggleForms();
             bindMonitorDeleteForms();
             bindMonitorRunForms();
-            renderResponseSparklines();
+            prefetchMonitorDetails();
             refreshFocusMode();
         }
 
@@ -1418,33 +1463,6 @@
         function isTransientNetworkError(error) {
             const message = String(error?.message || error || "").toLowerCase();
             return error instanceof TypeError || message.includes("network") || message.includes("failed to fetch");
-        }
-
-        function renderResponseSparklines(scope = document) {
-            scope.querySelectorAll("svg[data-response-sparkline]").forEach((svg) => {
-                if (!(svg instanceof SVGElement) || svg.dataset.rendered === "1") return;
-                let values = [];
-                try { values = JSON.parse(svg.dataset.values || "[]"); } catch (_) { values = []; }
-                const points = values.filter((value) => value !== null).map(Number).filter(Number.isFinite);
-                if (points.length < 2) return;
-                const max = Math.max(...points, 1);
-                const width = 240;
-                const height = 24;
-                const coords = points.map((value, index) => {
-                    const x = (index / Math.max(1, points.length - 1)) * width;
-                    const y = height - 3 - (value / max) * (height - 6);
-                    return `${x.toFixed(1)},${y.toFixed(1)}`;
-                });
-                const ns = "http://www.w3.org/2000/svg";
-                const area = document.createElementNS(ns, "path");
-                area.setAttribute("class", "sparkline-area");
-                area.setAttribute("d", `M0,24 L${coords.join(" L")} L240,24 Z`);
-                const line = document.createElementNS(ns, "polyline");
-                line.setAttribute("class", "sparkline-path");
-                line.setAttribute("points", coords.join(" "));
-                svg.replaceChildren(area, line);
-                svg.dataset.rendered = "1";
-            });
         }
 
         function dashboardSoundsEnabled() {
@@ -1463,28 +1481,32 @@
             const enabled = !dashboardSoundsEnabled();
             window.localStorage.setItem("keepup-dashboard-sounds", enabled ? "1" : "0");
             syncDashboardSoundButton();
-            if (enabled) playStatusSound("up");
+            playSoundSequence(enabled ? [420, 620, 820] : [820, 620, 420], true);
         }
 
-        function playStatusSound(status) {
-            if (!dashboardSoundsEnabled()) return;
+        function playSoundSequence(frequencies, force = false) {
+            if (!force && !dashboardSoundsEnabled()) return;
             try {
                 const AudioContextClass = window.AudioContext || window.webkitAudioContext;
                 const context = new AudioContextClass();
                 const gain = context.createGain();
                 gain.gain.setValueAtTime(0.0001, context.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.045, context.currentTime + 0.02);
-                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.42);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.58);
                 gain.connect(context.destination);
-                [status === "down" ? 280 : 520, status === "down" ? 210 : 700].forEach((frequency, index) => {
+                frequencies.forEach((frequency, index) => {
                     const oscillator = context.createOscillator();
                     oscillator.type = "sine";
                     oscillator.frequency.value = frequency;
                     oscillator.connect(gain);
-                    oscillator.start(context.currentTime + index * 0.13);
-                    oscillator.stop(context.currentTime + 0.3 + index * 0.13);
+                    oscillator.start(context.currentTime + index * 0.12);
+                    oscillator.stop(context.currentTime + 0.22 + index * 0.12);
                 });
             } catch (_) {}
+        }
+
+        function playStatusSound(status) {
+            playSoundSequence(status === "down" ? [320, 230] : [480, 680]);
         }
 
         function captureConfirmedStatuses() {
@@ -1645,7 +1667,6 @@
             clone.querySelectorAll("[id]").forEach((item) => item.removeAttribute("id"));
             clone.querySelectorAll("form, button").forEach((item) => item.remove());
             target.replaceChildren(clone);
-            renderResponseSparklines(target);
         }
 
         function closeFocusMode() {
@@ -2041,7 +2062,7 @@
         bindMonitorToggleForms();
         bindMonitorDeleteForms();
         bindMonitorRunForms();
-        renderResponseSparklines();
+        prefetchMonitorDetails();
         syncDashboardSoundButton();
         startLivePolling({{ settings.refresh_interval | int }});
         startDashboardLiveEvents();

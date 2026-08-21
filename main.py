@@ -624,6 +624,7 @@ def build_dashboard_snapshot(request: Request) -> dict[str, Any]:
         "summary": context["summary"],
         "top_html": render_template_content("index.html", {**context, "partial": "top"}),
         "cards_html": render_template_content("index.html", {**context, "partial": "cards"}),
+        "wall": build_status_wall_payload(context["monitors"]),
     }
     if version == get_dashboard_snapshot_version():
         with _dashboard_snapshot_cache_lock:
@@ -635,9 +636,9 @@ def build_dashboard_snapshot(request: Request) -> dict[str, Any]:
     return payload
 
 
-def build_status_wall_payload() -> dict[str, Any]:
-    payload = build_dashboard_cards_payload()
-    monitors = payload["monitors"]
+def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
+    if monitors is None:
+        monitors = build_dashboard_cards_payload()["monitors"]
     summary = {
         "total": len(monitors),
         "up": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "up"),
@@ -736,6 +737,37 @@ def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[
         "monitor": monitor,
         "active_page": "dashboard",
     }
+
+
+def build_all_monitor_detail_html(request: Request) -> dict[str, str]:
+    settings = get_settings()
+    app_timezone = settings.get("app_timezone", "UTC")
+    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
+    monitors = list_monitors(include_heavy_details=True)
+    logs_by_monitor = get_recent_logs_for_monitors([int(monitor["id"]) for monitor in monitors])
+    result: dict[str, str] = {}
+    for monitor in monitors:
+        monitor_id = int(monitor["id"])
+        monitor["effective_interval"] = global_interval_override or int(monitor.get("interval") or 60)
+        monitor["logs"] = logs_by_monitor.get(monitor_id, [])
+        monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
+        monitor["last_checked_at"] = format_timestamp(monitor.get("last_checked_at"), app_timezone)
+        monitor["last_change_at"] = format_timestamp(monitor.get("last_change_at"), app_timezone)
+        monitor["last_success_at"] = format_timestamp(monitor.get("last_success_at"), app_timezone)
+        monitor["last_down_at"] = format_timestamp(monitor.get("last_down_at"), app_timezone)
+        for log in monitor["logs"]:
+            log["checked_at"] = format_timestamp(log.get("checked_at"), app_timezone)
+        result[str(monitor_id)] = render_template_content(
+            "index.html",
+            {
+                "request": request,
+                "settings": settings,
+                "monitor": monitor,
+                "active_page": "dashboard",
+                "partial": "monitor-detail",
+            },
+        )
+    return result
 
 
 def build_dashboard_shell_context(request: Request) -> dict:
@@ -1750,10 +1782,11 @@ async def dashboard(request: Request) -> HTMLResponse:
 
 @app.get("/wall", response_class=HTMLResponse)
 async def status_wall(request: Request) -> HTMLResponse:
+    snapshot = await asyncio.to_thread(build_dashboard_snapshot, request)
     context = {
         "request": request,
         "settings": get_settings(),
-        "payload": build_status_wall_payload(),
+        "payload": snapshot["wall"],
         "app_version": get_app_version_display(),
     }
     return await asyncio.to_thread(render_template, request, "status_wall.html", context)
@@ -1799,9 +1832,9 @@ async def dashboard_snapshot(request: Request) -> JSONResponse:
 
 
 @app.get("/api/status-wall")
-async def status_wall_snapshot() -> JSONResponse:
-    payload = await asyncio.to_thread(build_status_wall_payload)
-    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+async def status_wall_snapshot(request: Request) -> JSONResponse:
+    snapshot = await asyncio.to_thread(build_dashboard_snapshot, request)
+    return JSONResponse(snapshot["wall"], headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/live/events")
@@ -1859,6 +1892,12 @@ async def monitor_detail_partial(request: Request, monitor_id: int) -> HTMLRespo
     if not context:
         raise HTTPException(status_code=404, detail="Monitor not found")
     return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "monitor-detail"})
+
+
+@app.get("/api/monitor-details")
+async def all_monitor_details(request: Request) -> JSONResponse:
+    details = await asyncio.to_thread(build_all_monitor_detail_html, request)
+    return JSONResponse({"details": details}, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/monitors")

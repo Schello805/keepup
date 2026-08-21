@@ -28,11 +28,12 @@ Die App setzt auf:
 - Mobile-First-Dashboard mit Live-Updates
 - Atomare, versionierte Dashboard-Snapshots für konsistente Karten und Zähler
 - Live-Statuswechsel per Server-Sent Events (SSE)
-- Mini-Timelines für Antwortzeiten und animierte bestätigte Statuswechsel
+- Animierte bestätigte Statuswechsel
 - Gruppen-Dashboard mit Verfügbarkeit und langsamstem Monitor
 - Fokusmodus für einzelne Monitore
 - Vollbild-Status-Wall unter `/wall` für Tablet, Wanddisplay und Kioskmodus
 - Optionaler dezenter Browser-Sound bei bestätigtem Ausfall oder Recovery
+- Im Hintergrund gebündelt vorgeladene Kartendetails für sofortiges Umdrehen
 - Separate Einstellungsseite
 - Testversand für Telegram, ntfy und SMTP
 - In-App-Update-Prüfung

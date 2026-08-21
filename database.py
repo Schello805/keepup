@@ -596,11 +596,6 @@ def list_monitors(
         for monitor in monitors:
             rows = list(reversed(recent_checks_by_monitor.get(monitor["id"], [])))
             monitor["history"] = [r["status"] for r in rows]
-            monitor["response_history"] = [
-                round(float(r["response_time"]), 1) if r["response_time"] is not None else None
-                for r in rows
-            ]
-
             recent_statuses = [row["status"] for row in recent_checks_by_monitor.get(monitor["id"], [])]
             total = len(recent_statuses)
             up_count = sum(1 for status in recent_statuses if status == "up")
