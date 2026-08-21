@@ -96,7 +96,7 @@
             {{ render_system_status(system_metrics) }}
 
             <form action="/settings/notifications" method="post" class="space-y-4" autocomplete="off" data-lpignore="true">
-                {% call accordion_section('settings-general', 'Allgemein', 'Basis-URL, Zeitzone und optionales Wetter für das Dashboard.', True) %}
+                {% call accordion_section('settings-general', 'Allgemein', 'Basis-URL, Zeitzone und optionales Wetter für die Status-Wall.', True) %}
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <label class="space-y-2 lg:col-span-2">
                             <span class="text-sm text-slate-300">KeepUp URL {{ field_help("Adresse deiner KeepUp-Weboberfläche. Diese URL wird als Öffnen-Link in Telegram-, ntfy- und E-Mail-Benachrichtigungen verwendet.") }}</span>
@@ -111,7 +111,7 @@
                             </select>
                         </label>
                         <label class="space-y-2">
-                            <span class="text-sm text-slate-300">Wetter-Ort {{ field_help("Optionaler Ort für das heutige Wetter im Dashboard. KeepUp übermittelt diese Ortsangabe an Open-Meteo und speichert die Prognose 15 Minuten zwischen.") }}</span>
+                            <span class="text-sm text-slate-300">Wetter-Ort {{ field_help("Optionaler Ort für das heutige Wetter in der Status-Wall. KeepUp übermittelt diese Ortsangabe an Open-Meteo und speichert die Prognose 15 Minuten zwischen.") }}</span>
                             <input name="weather_location" value="{{ settings.weather_location }}" maxlength="120" placeholder="z. B. Bechhofen an der Heide" class="{{ input_classes() }}">
                             <span class="block text-xs text-slate-500">Optional. Bei mehrdeutigen Namen Ort genauer angeben, z. B. „Neustadt, Bayern“. Leer lassen, um die Wetteranzeige auszublenden.</span>
                         </label>

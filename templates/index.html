@@ -876,8 +876,7 @@
                     .map((card) => String(card.dataset.monitorId || ""))
                     .filter((id) => {
                         if (!id) return false;
-                        const cached = window.__keepupDetailCache.get(id);
-                        return !cached || Date.now() - cached.loadedAt >= 60000;
+                        return !window.__keepupDetailCache.has(id);
                     });
                 if (!monitorIds.length) return;
 
@@ -895,7 +894,7 @@
                         }
                     }
                 };
-                await Promise.all(Array.from({ length: Math.min(3, monitorIds.length) }, worker));
+                await worker();
             }, 0);
         }
 
