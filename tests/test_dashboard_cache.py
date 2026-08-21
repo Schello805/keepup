@@ -15,6 +15,7 @@ class DashboardCacheTests(unittest.TestCase):
             main._dashboard_snapshot_cache.update(version=0, expires_at=0.0, payload=None)
         with main._status_wall_cache_lock:
             main._status_wall_cache.update(version=0, expires_at=0.0, payload=None)
+        main.invalidate_monitor_detail_cache()
 
     def test_stale_existing_cards_do_not_need_immediate_rebuild(self):
         with main._dashboard_cards_cache_lock:
@@ -165,6 +166,42 @@ class DashboardCacheTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 307)
         self.assertEqual(response.headers["location"], "/static/logo.png")
+
+    def test_monitor_detail_html_is_served_from_server_cache(self):
+        with (
+            patch.object(main, "build_monitor_detail_context", return_value={"monitor": {"id": 7}}) as build,
+            patch.object(main, "render_template_content", return_value="<section>cached detail</section>") as render,
+        ):
+            first = main.get_monitor_detail_html(SimpleNamespace(), 7)
+            second = main.get_monitor_detail_html(SimpleNamespace(), 7)
+
+        self.assertEqual(first, second)
+        build.assert_called_once()
+        render.assert_called_once()
+
+    def test_monitor_detail_force_refresh_rebuilds_cache(self):
+        with (
+            patch.object(main, "build_monitor_detail_context", return_value={"monitor": {"id": 7}}) as build,
+            patch.object(main, "render_template_content", side_effect=["first", "second"]),
+        ):
+            self.assertEqual(main.get_monitor_detail_html(SimpleNamespace(), 7), "first")
+            self.assertEqual(main.get_monitor_detail_html(SimpleNamespace(), 7, force_refresh=True), "second")
+
+        self.assertEqual(build.call_count, 2)
+
+    def test_invalidated_detail_render_cannot_republish_stale_html(self):
+        def render_and_invalidate(*_args, **_kwargs):
+            main.invalidate_monitor_detail_cache(7)
+            return "stale"
+
+        with (
+            patch.object(main, "build_monitor_detail_context", return_value={"monitor": {"id": 7}}),
+            patch.object(main, "render_template_content", side_effect=render_and_invalidate),
+        ):
+            self.assertEqual(main.get_monitor_detail_html(SimpleNamespace(), 7), "stale")
+
+        with main._monitor_detail_cache_lock:
+            self.assertNotIn(7, main._monitor_detail_cache)
 
 
 if __name__ == "__main__":

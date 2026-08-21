@@ -34,7 +34,7 @@ Die App setzt auf:
 - Vollbild-Status-Wall unter `/wall` mit drei wählbaren Informationsdichten für Tablet, Wanddisplay und Kioskmodus
 - Optionales heutiges Wetter ausschließlich in der Status-Wall für einen frei wählbaren Ort über Open-Meteo, ohne API-Schlüssel und mit lokalem 15-Minuten-Cache
 - Optionaler dezenter Browser-Sound bei bestätigtem Ausfall oder Recovery
-- Im Hintergrund gebündelt vorgeladene Kartendetails für sofortiges Umdrehen
+- Im Hintergrund vorgeladene und serverseitig zwischengespeicherte Kartendetails für sofortiges Umdrehen und weniger Datenbankabfragen
 - Nicht blockierende Snapshot-Caches: Dashboard und Status-Wall bleiben auch während eines Neuaufbaus erreichbar
 - Nach einem Browser-Update wird automatisch ein JSON-Backup heruntergeladen und anschließend das Dashboard neu geladen
 - Separate Einstellungsseite

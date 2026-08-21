@@ -81,6 +81,7 @@ WEATHER_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 _update_status_cache: dict[str, Any] = {"expires_at": 0.0, "payload": None}
 APP_VERSION_TTL_SECONDS = 60
 DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
+MONITOR_DETAIL_CACHE_TTL_SECONDS = 120
 MAX_IMPORT_BYTES = max(1, int(os.environ.get("KEEPUP_MAX_IMPORT_MB", "25"))) * 1024 * 1024
 IMPORT_READ_CHUNK_BYTES = 1024 * 1024
 _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
@@ -95,6 +96,9 @@ _dashboard_snapshot_refresh_task: Optional[asyncio.Task] = None
 _status_wall_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload": None}
 _status_wall_cache_lock = threading.Lock()
 _status_wall_refresh_task: Optional[asyncio.Task] = None
+_monitor_detail_cache: dict[int, dict[str, Any]] = {}
+_monitor_detail_cache_lock = threading.Lock()
+_monitor_detail_cache_generation = 0
 _changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
 _weather_cache: dict[str, Any] = {"location": "", "expires_at": 0.0, "payload": None}
 _weather_cache_lock = asyncio.Lock()
@@ -956,6 +960,38 @@ def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[
     }
 
 
+def invalidate_monitor_detail_cache(monitor_id: Optional[int] = None) -> None:
+    global _monitor_detail_cache_generation
+    with _monitor_detail_cache_lock:
+        _monitor_detail_cache_generation += 1
+        if monitor_id is None:
+            _monitor_detail_cache.clear()
+        else:
+            _monitor_detail_cache.pop(int(monitor_id), None)
+
+
+def get_monitor_detail_html(request: Request, monitor_id: int, force_refresh: bool = False) -> Optional[str]:
+    monitor_id = int(monitor_id)
+    now = time.time()
+    with _monitor_detail_cache_lock:
+        cached = _monitor_detail_cache.get(monitor_id)
+        generation = _monitor_detail_cache_generation
+        if cached and not force_refresh and now < float(cached.get("expires_at") or 0.0):
+            return str(cached["html"])
+
+    context = build_monitor_detail_context(request, monitor_id)
+    if not context:
+        return None
+    html = render_template_content("index.html", {**context, "partial": "monitor-detail"})
+    with _monitor_detail_cache_lock:
+        if generation == _monitor_detail_cache_generation:
+            _monitor_detail_cache[monitor_id] = {
+                "html": html,
+                "expires_at": time.time() + MONITOR_DETAIL_CACHE_TTL_SECONDS,
+            }
+    return html
+
+
 def build_all_monitor_detail_html(request: Request) -> dict[str, str]:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
@@ -1606,6 +1642,7 @@ async def wait_for_dashboard_cards_cache_refresh(force: bool = False) -> None:
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
     await execute_monitor_check(monitor_id)
+    invalidate_monitor_detail_cache(monitor_id)
     mark_dashboard_cards_cache_stale()
     await ensure_dashboard_cards_cache_refresh(force=True)
 
@@ -1621,6 +1658,10 @@ def handle_scheduler_job_executed(event: Any) -> None:
         and isinstance(result, dict)
         and result.get("status_changed")
     ):
+        try:
+            invalidate_monitor_detail_cache(int(str(event.job_id).removeprefix("monitor-")))
+        except ValueError:
+            invalidate_monitor_detail_cache()
         mark_dashboard_cards_cache_stale()
 
 
@@ -2152,11 +2193,11 @@ async def live_cards_partial(request: Request) -> HTMLResponse:
 
 
 @app.get("/api/monitors/{monitor_id}/details", response_class=HTMLResponse)
-async def monitor_detail_partial(request: Request, monitor_id: int) -> HTMLResponse:
-    context = await asyncio.to_thread(build_monitor_detail_context, request, monitor_id)
-    if not context:
+async def monitor_detail_partial(request: Request, monitor_id: int, refresh: bool = False) -> HTMLResponse:
+    html = await asyncio.to_thread(get_monitor_detail_html, request, monitor_id, refresh)
+    if html is None:
         raise HTTPException(status_code=404, detail="Monitor not found")
-    return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": "monitor-detail"})
+    return HTMLResponse(html, headers={"Cache-Control": "private, max-age=15"})
 
 
 @app.get("/api/monitor-details")
@@ -2226,6 +2267,7 @@ async def create_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
+    invalidate_monitor_detail_cache(monitor_id)
     created_monitor = get_monitor(monitor_id) or {}
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
@@ -2300,6 +2342,7 @@ async def edit_monitor_route(
         expected_text=expected_text,
         forbidden_text=forbidden_text,
     )
+    invalidate_monitor_detail_cache(monitor_id)
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
@@ -2330,6 +2373,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
         raise HTTPException(status_code=404, detail="Monitor not found")
     is_enabled = not bool(monitor.get("enabled", 1))
     set_monitor_enabled(monitor_id, is_enabled)
+    invalidate_monitor_detail_cache(monitor_id)
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(refresh_dashboard_cards_cache())
@@ -2343,6 +2387,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 @app.post("/monitors/{monitor_id}/delete")
 async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
     delete_monitor(monitor_id)
+    invalidate_monitor_detail_cache(monitor_id)
     remove_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(refresh_dashboard_cards_cache())
@@ -2355,6 +2400,7 @@ async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
 @app.post("/monitors/{monitor_id}/run")
 async def run_monitor_route(monitor_id: int, request: Request):
     result = await execute_monitor_check(monitor_id)
+    invalidate_monitor_detail_cache(monitor_id)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(refresh_dashboard_cards_cache())
     accept = (request.headers.get("accept") or "").lower()
@@ -2441,6 +2487,7 @@ async def update_notification_settings(
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
     update_settings(payload)
+    invalidate_monitor_detail_cache()
     reschedule_monitor_jobs(scheduler)
     return flash_redirect("/settings", "Einstellungen wurden gespeichert.")
 
@@ -2516,6 +2563,7 @@ async def test_telegram_settings(
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
     update_settings(payload)
+    invalidate_monitor_detail_cache()
 
     if not payload["telegram_bot_token"] or not payload["telegram_chat_id"]:
         return flash_redirect("/settings", "Bitte Bot-Token und Chat-ID für Telegram ausfüllen.", "error")
@@ -2599,6 +2647,7 @@ async def test_ntfy_rich_settings(
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
     update_settings(payload)
+    invalidate_monitor_detail_cache()
 
     if not payload["ntfy_server_url"] or not payload["ntfy_topic"]:
         return flash_redirect("/settings", "Bitte ntfy Server-URL und Topic für den Layout-Test ausfüllen.", "error")
@@ -2682,6 +2731,7 @@ async def test_smtp_settings(
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
     update_settings(payload)
+    invalidate_monitor_detail_cache()
 
     if not payload["smtp_host"] or not payload["smtp_to_email"]:
         return flash_redirect("/settings", "Bitte SMTP-Host und Ziel-E-Mail für den SMTP-Test ausfüllen.", "error")
@@ -2728,6 +2778,7 @@ async def import_configuration(request: Request, file: UploadFile = File(...)) -
         return flash_redirect("/settings", f"Ungültige JSON-Datei: {exc}", "error")
 
     await asyncio.to_thread(import_backup, payload)
+    invalidate_monitor_detail_cache()
     reschedule_monitor_jobs(scheduler)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(refresh_dashboard_cards_cache())

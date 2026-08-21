@@ -853,7 +853,8 @@
             if (!force && cached && Date.now() - cached.loadedAt < 60000) return cached.html;
             if (window.__keepupDetailPromises.has(key)) return window.__keepupDetailPromises.get(key);
             const promise = (async () => {
-                const response = await fetch(`/api/monitors/${encodeURIComponent(key)}/details`, {
+                const refreshQuery = force ? "?refresh=true" : "";
+                const response = await fetch(`/api/monitors/${encodeURIComponent(key)}/details${refreshQuery}`, {
                     headers: { "HX-Request": "true" },
                     credentials: "same-origin",
                 });
