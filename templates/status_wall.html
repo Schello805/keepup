@@ -8,23 +8,48 @@
     <link rel="stylesheet" href="/static/keepup.css">
     <style>
         body { background: radial-gradient(circle at 15% 0%, rgba(14,165,233,.16), transparent 32%), radial-gradient(circle at 90% 15%, rgba(16,185,129,.12), transparent 28%), #07111f; }
-        .wall-card { animation: wall-in .45s ease-out both; }
-        .wall-card[data-status="up"] { border-color: rgba(110,231,183,.3); background: rgba(16,185,129,.1); }
-        .wall-card[data-status="down"] { border-color: rgba(253,164,175,.38); background: rgba(244,63,94,.15); }
-        .wall-card[data-status="unknown"] { border-color: rgba(252,211,77,.32); background: rgba(245,158,11,.12); }
+        .wall-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .wall-card { display: flex; min-height: 7.5rem; flex-direction: column; animation: wall-in .45s ease-out both; }
+        .wall-card[data-status="up"] { border-color: rgba(52,211,153,.52); background: linear-gradient(145deg, rgba(16,185,129,.22), rgba(6,78,59,.2)); }
+        .wall-card[data-status="down"] { border-color: rgba(251,113,133,.62); background: linear-gradient(145deg, rgba(244,63,94,.3), rgba(76,5,25,.28)); }
+        .wall-card[data-status="unknown"] { border-color: rgba(251,191,36,.5); background: linear-gradient(145deg, rgba(245,158,11,.22), rgba(69,26,3,.22)); }
         .wall-card[data-status="paused"] { border-color: rgba(203,213,225,.2); background: rgba(148,163,184,.08); }
         .wall-dot[data-status="up"] { background: #34d399; }
         .wall-dot[data-status="down"] { background: #fb7185; }
         .wall-dot[data-status="unknown"] { background: #fbbf24; }
         .wall-dot[data-status="paused"] { background: #94a3b8; }
-        .wall-status[data-status="up"] { color: #a7f3d0; background: rgba(16,185,129,.2); }
-        .wall-status[data-status="down"] { color: #fecdd3; background: rgba(244,63,94,.22); }
+        .wall-status { display: inline-flex; min-width: 2rem; align-items: center; justify-content: center; white-space: nowrap; line-height: 1rem; }
+        .wall-status[data-status="up"] { color: #d1fae5; background: rgba(16,185,129,.38); }
+        .wall-status[data-status="down"] { color: #ffe4e6; background: rgba(244,63,94,.4); }
         .wall-status[data-status="unknown"] { color: #fde68a; background: rgba(245,158,11,.2); }
         .wall-status[data-status="paused"] { color: #cbd5e1; background: rgba(148,163,184,.15); }
+        .wall-history { margin-top: auto; padding-top: .25rem; }
+        .wall-size-button[aria-pressed="true"] { border-color: rgba(56,189,248,.6); background: rgba(14,165,233,.22); color: #e0f2fe; }
+        body[data-wall-size="small"] .wall-card { min-height: 5.5rem; padding: .375rem; }
+        body[data-wall-size="small"] .wall-card-name { margin-top: .125rem; font-size: .75rem; }
+        body[data-wall-size="small"] .wall-card-target { font-size: .5rem; }
+        body[data-wall-size="small"] .wall-card-meta { margin-top: .25rem; }
+        body[data-wall-size="small"] .wall-history i { height: .3rem; }
+        body[data-wall-size="large"] .wall-card { min-height: 12rem; padding: 1rem; }
+        body[data-wall-size="large"] .wall-card-name { margin-top: .75rem; font-size: 1.25rem; }
+        body[data-wall-size="large"] .wall-card-target { margin-top: .125rem; font-size: .875rem; }
+        body[data-wall-size="large"] .wall-card-meta { margin-top: 1rem; }
+        body[data-wall-size="large"] .wall-history { padding-top: .75rem; }
+        body[data-wall-size="large"] .wall-history i { height: 1rem; }
+        @media (min-width: 640px) {
+            body[data-wall-size="small"] .wall-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+            body[data-wall-size="medium"] .wall-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+            body[data-wall-size="large"] .wall-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
+        @media (min-width: 1024px) {
+            body[data-wall-size="small"] .wall-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+            body[data-wall-size="medium"] .wall-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+            body[data-wall-size="large"] .wall-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        }
         @keyframes wall-in { from { opacity: 0; transform: translateY(8px); } }
     </style>
 </head>
-<body class="min-h-screen text-slate-100">
+<body data-wall-size="medium" class="min-h-screen text-slate-100">
     <main class="mx-auto min-h-screen max-w-[1800px] p-2 sm:p-3">
         <header class="sticky top-2 z-20 mb-2 flex flex-col gap-2 rounded-2xl border border-white/10 bg-slate-950/85 p-2.5 shadow-panel backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
             <div class="flex items-center gap-2">
@@ -32,6 +57,11 @@
                 <div><p class="text-[8px] font-semibold uppercase tracking-[.24em] text-sky-300">Live Status-Wall</p><h1 class="text-base font-semibold leading-tight">{{ settings.app_name }}</h1></div>
             </div>
             <div class="flex flex-wrap items-center gap-1.5">
+                <div class="flex items-center rounded-lg border border-white/10 bg-white/5 p-0.5" aria-label="Kartengröße">
+                    <button type="button" data-wall-size-option="small" class="wall-size-button rounded-md border border-transparent px-1.5 py-1 text-[9px] font-semibold text-slate-400" aria-pressed="false">Klein</button>
+                    <button type="button" data-wall-size-option="medium" class="wall-size-button rounded-md border border-transparent px-1.5 py-1 text-[9px] font-semibold text-slate-400" aria-pressed="true">Mittel</button>
+                    <button type="button" data-wall-size-option="large" class="wall-size-button rounded-md border border-transparent px-1.5 py-1 text-[9px] font-semibold text-slate-400" aria-pressed="false">Groß</button>
+                </div>
                 <div id="wall-summary" class="flex items-center gap-1.5"></div>
                 <time id="wall-clock" class="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs font-semibold tabular-nums"></time>
                 <button type="button" onclick="toggleFullscreen()" class="min-h-8 rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold hover:bg-white/10">Vollbild</button>
@@ -39,7 +69,7 @@
             </div>
         </header>
         <section id="wall-groups" class="mb-2 flex flex-wrap gap-1.5"></section>
-        <section id="wall-grid" class="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-8"></section>
+        <section id="wall-grid" class="wall-grid grid gap-1.5"></section>
     </main>
     <script>
         let wallVersion = {{ payload.version }};
@@ -49,6 +79,29 @@
             const node = document.createElement("div");
             node.textContent = String(value ?? "");
             return node.innerHTML;
+        }
+
+        function setWallSize(size, persist = true) {
+            const allowedSizes = new Set(["small", "medium", "large"]);
+            const selectedSize = allowedSizes.has(size) ? size : "medium";
+            document.body.dataset.wallSize = selectedSize;
+            document.querySelectorAll("[data-wall-size-option]").forEach((button) => {
+                button.setAttribute("aria-pressed", String(button.dataset.wallSizeOption === selectedSize));
+            });
+            if (persist) {
+                try {
+                    window.localStorage.setItem("keepupWallSize", selectedSize);
+                } catch (_) {
+                }
+            }
+        }
+
+        function getSavedWallSize() {
+            try {
+                return window.localStorage.getItem("keepupWallSize") || "medium";
+            } catch (_) {
+                return "medium";
+            }
         }
 
         function renderWall(payload) {
@@ -72,15 +125,16 @@
             document.getElementById("wall-groups").innerHTML = [...groups.entries()].map(([name, item]) => `<span class="rounded-full border ${item.down ? "border-rose-400/30 bg-rose-500/10 text-rose-100" : "border-white/10 bg-white/5 text-slate-300"} px-2 py-1 text-[10px] font-semibold">${escapeText(name)} · ${item.total}${item.down ? ` · ${item.down} down` : ""}</span>`).join("");
 
             const rank = { down: 0, unknown: 1, up: 2, paused: 3 };
+            const statusLabels = { up: "UP", down: "DOWN", unknown: "OFFEN", paused: "PAUSE" };
             const monitors = [...(payload.monitors || [])].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.name.localeCompare(b.name, "de"));
             document.getElementById("wall-grid").innerHTML = monitors.map((monitor, index) => {
                 const history = (monitor.history || []).slice(-12).map((status) => `<i class="h-2 flex-1 rounded-full ${status === "up" ? "bg-emerald-400" : status === "down" ? "bg-rose-400" : "bg-amber-400"}"></i>`).join("");
                 return `<article data-status="${escapeText(monitor.status)}" class="wall-card min-w-0 rounded-xl border p-2 shadow-panel" style="animation-delay:${Math.min(index * 18, 260)}ms">
-                    <div class="flex items-center justify-between gap-1.5"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2 w-2 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase">${escapeText(monitor.status)}</span></div>
-                    <h2 class="mt-1 truncate text-sm font-semibold leading-tight">${escapeText(monitor.name)}</h2>
-                    <p class="truncate text-[10px] leading-tight text-slate-400">${escapeText(monitor.target)}</p>
-                    <div class="mt-1.5 flex items-end justify-between gap-1.5"><span class="truncate text-[8px] uppercase tracking-wide text-slate-500">${escapeText(monitor.category)}</span><strong class="shrink-0 text-xs tabular-nums">${monitor.response_time == null ? "–" : `${Math.round(monitor.response_time)} ms`}</strong></div>
-                    <div class="mt-1 flex gap-0.5">${history}</div>
+                    <div class="flex items-center justify-between gap-1.5"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2 w-2 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-md px-1.5 py-0.5 text-[8px] font-bold uppercase">${escapeText(statusLabels[monitor.status] || monitor.status)}</span></div>
+                    <h2 class="wall-card-name mt-1 truncate text-sm font-semibold leading-tight">${escapeText(monitor.name)}</h2>
+                    <p class="wall-card-target truncate text-[10px] leading-tight text-slate-400">${escapeText(monitor.target)}</p>
+                    <div class="wall-card-meta mt-1.5 flex items-end justify-between gap-1.5"><span class="truncate text-[8px] uppercase tracking-wide text-slate-400">${escapeText(monitor.category)}</span><strong class="shrink-0 text-xs tabular-nums">${monitor.response_time == null ? "–" : `${Math.round(monitor.response_time)} ms`}</strong></div>
+                    <div class="wall-history flex gap-0.5">${history}</div>
                 </article>`;
             }).join("");
         }
@@ -111,6 +165,10 @@
         }
 
         function updateClock() { document.getElementById("wall-clock").textContent = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date()); }
+        setWallSize(getSavedWallSize(), false);
+        document.querySelectorAll("[data-wall-size-option]").forEach((button) => {
+            button.addEventListener("click", () => setWallSize(button.dataset.wallSizeOption));
+        });
         renderWall(wallPayload);
         updateClock();
         window.setInterval(updateClock, 1000);
