@@ -35,6 +35,7 @@ Die App setzt auf:
 - Optionaler dezenter Browser-Sound bei bestätigtem Ausfall oder Recovery
 - Im Hintergrund gebündelt vorgeladene Kartendetails für sofortiges Umdrehen
 - Nicht blockierende Snapshot-Caches: Dashboard und Status-Wall bleiben auch während eines Neuaufbaus erreichbar
+- Nach einem Browser-Update wird automatisch ein JSON-Backup heruntergeladen und anschließend das Dashboard neu geladen
 - Separate Einstellungsseite
 - Testversand für Telegram, ntfy und SMTP
 - In-App-Update-Prüfung
