@@ -2079,6 +2079,11 @@ async def weather_today() -> JSONResponse:
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> RedirectResponse:
+    return RedirectResponse(url="/static/logo.png", status_code=307)
+
+
 @app.get("/api/status-wall")
 async def status_wall_snapshot(request: Request) -> JSONResponse:
     payload = peek_status_wall_payload()

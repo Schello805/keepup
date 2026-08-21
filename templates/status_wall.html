@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#07111f">
     <title>{{ settings.app_name }} Status-Wall</title>
+    <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="stylesheet" href="/static/keepup.css">
     <style>
         body { background: radial-gradient(circle at 15% 0%, rgba(14,165,233,.16), transparent 32%), radial-gradient(circle at 90% 15%, rgba(16,185,129,.12), transparent 28%), #07111f; }
@@ -25,12 +26,15 @@
         .wall-status[data-status="paused"] { color: #cbd5e1; background: rgba(148,163,184,.15); }
         .wall-history { margin-top: auto; padding-top: .25rem; }
         .wall-card-details { display: none; }
+        .wall-weather-details { display: none; }
         .wall-status-long { display: none; }
         .wall-size-button[aria-pressed="true"] { border-color: rgba(56,189,248,.6); background: rgba(14,165,233,.22); color: #e0f2fe; }
+        .wall-spinner { animation: wall-spin .9s linear infinite; }
         body[data-wall-size="small"] .wall-card { min-height: 5.5rem; padding: .375rem; }
         body[data-wall-size="small"] .wall-card-name { margin-top: .125rem; font-size: .75rem; }
         body[data-wall-size="small"] .wall-card-target,
         body[data-wall-size="small"] .wall-card-category { display: none; }
+        body[data-wall-size="small"] .wall-weather-copy [data-weather-condition] { display: none; }
         body[data-wall-size="small"] .wall-card-meta { margin-top: auto; justify-content: flex-end; }
         body[data-wall-size="small"] .wall-history i { height: .3rem; }
         body[data-wall-size="large"] .wall-card { min-height: 12rem; padding: 1rem; }
@@ -38,6 +42,7 @@
         body[data-wall-size="large"] .wall-card-target { margin-top: .125rem; font-size: .875rem; }
         body[data-wall-size="large"] .wall-card-meta { margin-top: .75rem; }
         body[data-wall-size="large"] .wall-card-details { display: grid; }
+        body[data-wall-size="large"] .wall-weather-details { display: inline; }
         body[data-wall-size="large"] .wall-status-short { display: none; }
         body[data-wall-size="large"] .wall-status-long { display: inline; }
         body[data-wall-size="large"] .wall-history { padding-top: .75rem; }
@@ -53,6 +58,7 @@
             body[data-wall-size="large"] .wall-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         }
         @keyframes wall-in { from { opacity: 0; transform: translateY(8px); } }
+        @keyframes wall-spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body data-wall-size="medium" class="min-h-screen text-slate-100">
@@ -66,7 +72,16 @@
                         <h1 class="text-lg font-semibold leading-tight">{{ settings.app_name }}</h1>
                     </div>
                 </div>
-                <div id="wall-summary" class="flex flex-wrap items-center gap-1.5 lg:justify-center"></div>
+                <div class="flex flex-wrap items-center gap-1.5 lg:justify-center">
+                    <div id="wall-summary" class="flex flex-wrap items-center gap-1.5"></div>
+                    {% if settings.weather_location %}
+                    <div id="wall-weather" class="flex min-h-8 items-center gap-2 rounded-lg border border-sky-300/20 bg-sky-500/10 px-2.5 py-1 text-xs" aria-live="polite">
+                        <span data-weather-icon class="text-base" aria-hidden="true">…</span>
+                        <span class="wall-weather-copy min-w-0"><strong data-weather-temperature>–</strong> <span data-weather-condition class="text-slate-300">Wetter lädt…</span></span>
+                        <span class="wall-weather-details text-[10px] text-slate-400"><span data-weather-location>{{ settings.weather_location }}</span> · <span data-weather-range>–</span> · ☂ <span data-weather-rain>–</span></span>
+                    </div>
+                    {% endif %}
+                </div>
                 <div class="flex flex-wrap items-center gap-1.5 lg:justify-end">
                     <time id="wall-clock" class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold tabular-nums"></time>
                     <button type="button" onclick="toggleFullscreen()" class="min-h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs font-semibold hover:bg-white/10">Vollbild</button>
@@ -85,11 +100,19 @@
                 </div>
             </div>
         </header>
-        <section id="wall-grid" class="wall-grid grid gap-1.5"></section>
+        <section id="wall-loading" class="flex min-h-[45vh] flex-col items-center justify-center gap-3 text-center" aria-live="polite">
+            <span class="wall-spinner h-10 w-10 rounded-full border-4 border-sky-300/20 border-t-sky-300" aria-hidden="true"></span>
+            <div><p class="font-semibold text-slate-100">Status-Wall wird geladen</p><p data-wall-loading-text class="mt-1 text-sm text-slate-400">Monitore werden vorbereitet…</p></div>
+        </section>
+        <section id="wall-error" class="hidden min-h-[45vh] items-center justify-center text-center" aria-live="assertive">
+            <div class="rounded-2xl border border-rose-400/25 bg-rose-500/10 px-6 py-5"><p class="font-semibold text-rose-100">Status-Wall konnte nicht geladen werden</p><p class="mt-1 text-sm text-slate-300">KeepUp versucht es automatisch erneut.</p></div>
+        </section>
+        <section id="wall-grid" class="wall-grid hidden gap-1.5"></section>
     </main>
     <script>
         let wallVersion = {{ payload.version }};
         let wallPayload = {{ payload|tojson }};
+        let wallRefreshTimer = null;
 
         function escapeText(value) {
             const node = document.createElement("div");
@@ -144,7 +167,8 @@
             const statusLabels = { up: "UP", down: "DOWN", unknown: "OFFEN", paused: "PAUSE" };
             const statusLongLabels = { up: "Erreichbar", down: "Ausgefallen", unknown: "Unbekannt", paused: "Pausiert" };
             const monitors = [...(payload.monitors || [])].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.name.localeCompare(b.name, "de"));
-            document.getElementById("wall-grid").innerHTML = monitors.map((monitor, index) => {
+            const grid = document.getElementById("wall-grid");
+            grid.innerHTML = monitors.map((monitor, index) => {
                 const history = (monitor.history || []).slice(-12).map((status) => `<i class="h-2 flex-1 rounded-full ${status === "up" ? "bg-emerald-400" : status === "down" ? "bg-rose-400" : "bg-amber-400"}"></i>`).join("");
                 return `<article data-status="${escapeText(monitor.status)}" class="wall-card min-w-0 rounded-xl border p-2 shadow-panel" style="animation-delay:${Math.min(index * 18, 260)}ms">
                     <div class="flex items-center justify-between gap-1.5"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2 w-2 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-md px-2 py-0.5 text-[9px] font-bold uppercase"><span class="wall-status-short">${escapeText(statusLabels[monitor.status] || monitor.status)}</span><span class="wall-status-long">${escapeText(statusLongLabels[monitor.status] || monitor.status)}</span></span></div>
@@ -160,18 +184,73 @@
                     <div class="wall-history flex gap-0.5">${history}</div>
                 </article>`;
             }).join("");
+            if (monitors.length || Number(summary.total || 0) === 0) setWallState("ready");
+        }
+
+        function setWallState(state) {
+            const loading = document.getElementById("wall-loading");
+            const error = document.getElementById("wall-error");
+            const grid = document.getElementById("wall-grid");
+            loading.classList.toggle("hidden", state !== "loading");
+            loading.classList.toggle("flex", state === "loading");
+            error.classList.toggle("hidden", state !== "error");
+            error.classList.toggle("flex", state === "error");
+            grid.classList.toggle("hidden", state !== "ready");
+            grid.classList.toggle("grid", state === "ready");
+        }
+
+        function scheduleWallRefresh(delay = 1000) {
+            window.clearTimeout(wallRefreshTimer);
+            wallRefreshTimer = window.setTimeout(refreshWall, delay);
         }
 
         async function refreshWall() {
-            const response = await fetch("/api/status-wall", { cache: "no-store" });
-            if (response.status === 202) {
-                window.setTimeout(refreshWall, 1000);
-                return;
+            try {
+                const response = await fetch("/api/status-wall", { cache: "no-store", credentials: "same-origin" });
+                if (response.status === 202) {
+                    setWallState("loading");
+                    scheduleWallRefresh(1000);
+                    return;
+                }
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const payload = await response.json();
+                if (Number(payload.version || 0) < wallVersion) return;
+                renderWall(payload);
+                if (!(payload.monitors || []).length && Number(payload.summary?.total || 0) > 0) {
+                    setWallState("loading");
+                    scheduleWallRefresh(1000);
+                }
+            } catch (_) {
+                setWallState("error");
+                scheduleWallRefresh(3000);
             }
-            if (!response.ok) return;
-            const payload = await response.json();
-            if (Number(payload.version || 0) < wallVersion) return;
-            renderWall(payload);
+        }
+
+        function formatWeatherTemperature(value) {
+            const number = Number(value);
+            return Number.isFinite(number) ? `${Math.round(number)} °C` : "–";
+        }
+
+        async function loadWallWeather() {
+            const shell = document.getElementById("wall-weather");
+            if (!shell) return;
+            const setText = (selector, value) => { const node = shell.querySelector(selector); if (node) node.textContent = value; };
+            try {
+                const response = await fetch("/api/weather/today", { cache: "no-store", credentials: "same-origin" });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                setText("[data-weather-location]", data.location || {{ settings.weather_location | tojson }});
+                setText("[data-weather-icon]", data.ok ? (data.icon || "?") : "?");
+                setText("[data-weather-condition]", data.ok ? (data.condition || "Wetterlage unbekannt") : (data.message || "Nicht verfügbar"));
+                setText("[data-weather-temperature]", data.ok ? formatWeatherTemperature(data.temperature) : "–");
+                setText("[data-weather-range]", data.ok ? `${formatWeatherTemperature(data.temperature_min)} / ${formatWeatherTemperature(data.temperature_max)}` : "–");
+                const rain = Number(data.precipitation_probability);
+                setText("[data-weather-rain]", data.ok && Number.isFinite(rain) ? `${Math.round(rain)} %` : "–");
+            } catch (_) {
+                setText("[data-weather-icon]", "?");
+                setText("[data-weather-condition]", "Nicht verfügbar");
+                setText("[data-weather-temperature]", "–");
+            }
         }
 
         function startEvents() {
@@ -193,9 +272,15 @@
             button.addEventListener("click", () => setWallSize(button.dataset.wallSizeOption));
         });
         renderWall(wallPayload);
+        if (!(wallPayload.monitors || []).length && Number(wallPayload.summary?.total || 0) > 0) {
+            setWallState("loading");
+            scheduleWallRefresh(0);
+        }
+        loadWallWeather();
         updateClock();
         window.setInterval(updateClock, 1000);
         window.setInterval(refreshWall, 30000);
+        window.setInterval(loadWallWeather, 15 * 60 * 1000);
         startEvents();
     </script>
 </body>

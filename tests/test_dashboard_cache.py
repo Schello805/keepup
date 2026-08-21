@@ -160,6 +160,12 @@ class DashboardCacheTests(unittest.TestCase):
         self.assertIn('"ready":false', response.body.decode())
         refresh.assert_awaited_once_with()
 
+    def test_favicon_redirects_to_logo(self):
+        response = main.asyncio.run(main.favicon())
+
+        self.assertEqual(response.status_code, 307)
+        self.assertEqual(response.headers["location"], "/static/logo.png")
+
 
 if __name__ == "__main__":
     unittest.main()
