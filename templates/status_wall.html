@@ -83,10 +83,10 @@
                     {% endif %}
                 </div>
                 <div class="flex flex-wrap items-center gap-1.5 lg:justify-end">
-                    <span id="wall-sound-status" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400" role="status" aria-label="Sound ist ausgeschaltet" title="Sound ist ausgeschaltet">
+                    <button type="button" id="wall-sound-status" onclick="toggleWallSound()" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10" aria-pressed="false" aria-label="Sound einschalten" title="Sound einschalten">
                         <svg data-sound-icon="on" class="hidden h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4V5Zm4.5 3.5a5 5 0 0 1 0 7M18 6a8 8 0 0 1 0 12"/></svg>
                         <svg data-sound-icon="off" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4V5Zm4 5 5 5m0-5-5 5"/></svg>
-                    </span>
+                    </button>
                     <time id="wall-clock" class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold tabular-nums"></time>
                     <button type="button" onclick="toggleFullscreen()" class="min-h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs font-semibold hover:bg-white/10">Vollbild</button>
                     <a href="/" class="inline-flex min-h-8 items-center rounded-lg bg-sky-500 px-2.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">Dashboard</a>
@@ -148,11 +148,12 @@
         }
 
         function syncWallSoundStatus() {
-            const enabled = window.localStorage.getItem("keepup-dashboard-sounds") === "1";
+            const enabled = wallSoundsEnabled();
             const indicator = document.getElementById("wall-sound-status");
             if (!indicator) return;
-            const label = enabled ? "Sound ist eingeschaltet" : "Sound ist ausgeschaltet";
+            const label = enabled ? "Sound ausschalten" : "Sound einschalten";
             indicator.setAttribute("aria-label", label);
+            indicator.setAttribute("aria-pressed", String(enabled));
             indicator.title = label;
             indicator.classList.toggle("border-emerald-400/30", enabled);
             indicator.classList.toggle("bg-emerald-500/15", enabled);
@@ -164,9 +165,53 @@
             indicator.querySelector('[data-sound-icon="off"]')?.classList.toggle("hidden", enabled);
         }
 
+        function wallSoundsEnabled() {
+            return window.localStorage.getItem("keepup-dashboard-sounds") === "1";
+        }
+
+        function playWallSoundSequence(frequencies) {
+            try {
+                const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                const context = new AudioContextClass();
+                const gain = context.createGain();
+                gain.gain.setValueAtTime(0.0001, context.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.045, context.currentTime + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.58);
+                gain.connect(context.destination);
+                frequencies.forEach((frequency, index) => {
+                    const oscillator = context.createOscillator();
+                    oscillator.type = "sine";
+                    oscillator.frequency.value = frequency;
+                    oscillator.connect(gain);
+                    oscillator.start(context.currentTime + index * 0.12);
+                    oscillator.stop(context.currentTime + 0.22 + index * 0.12);
+                });
+            } catch (_) {
+            }
+        }
+
+        function toggleWallSound() {
+            const enabled = !wallSoundsEnabled();
+            window.localStorage.setItem("keepup-dashboard-sounds", enabled ? "1" : "0");
+            syncWallSoundStatus();
+            playWallSoundSequence(enabled ? [420, 620, 820] : [820, 620, 420]);
+        }
+
         function renderWall(payload) {
+            const previousStatuses = new Map((wallPayload.monitors || []).map((monitor) => [String(monitor.id), monitor.status]));
             wallPayload = payload;
             wallVersion = Number(payload.version || wallVersion);
+            if (previousStatuses.size && wallSoundsEnabled()) {
+                let transitionSound = null;
+                (payload.monitors || []).forEach((monitor) => {
+                    const previousStatus = previousStatuses.get(String(monitor.id));
+                    if (previousStatus === monitor.status) return;
+                    if (monitor.status === "down") transitionSound = "down";
+                    else if (!transitionSound && previousStatus === "down" && monitor.status === "up") transitionSound = "up";
+                });
+                if (transitionSound === "down") playWallSoundSequence([320, 230]);
+                else if (transitionSound === "up") playWallSoundSequence([480, 680]);
+            }
             const summary = payload.summary || {};
             const summaryNode = document.getElementById("wall-summary");
             summaryNode.innerHTML = [
@@ -195,7 +240,7 @@
                     <div class="flex items-center justify-between gap-1.5"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2 w-2 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-md px-2 py-0.5 text-[9px] font-bold uppercase"><span class="wall-status-short">${escapeText(statusLabels[monitor.status] || monitor.status)}</span><span class="wall-status-long">${escapeText(statusLongLabels[monitor.status] || monitor.status)}</span></span></div>
                     <h2 class="wall-card-name mt-1 truncate text-sm font-semibold leading-tight">${escapeText(monitor.name)}</h2>
                     <p class="wall-card-target truncate text-[10px] leading-tight text-slate-400">${escapeText(monitor.target)}</p>
-                    <div class="wall-card-meta mt-1.5 flex items-end justify-between gap-1.5"><span class="wall-card-category truncate text-[8px] uppercase tracking-wide text-slate-400">${escapeText(monitor.category)}</span><strong class="shrink-0 text-xs tabular-nums">${monitor.response_time == null ? "–" : `${Math.round(monitor.response_time)} ms`}</strong></div>
+                    <div class="wall-card-meta mt-1.5 flex items-end justify-between gap-1.5"><span class="wall-card-category truncate text-[7px] font-medium tracking-wide text-slate-500">${escapeText(monitor.category)}</span><strong class="shrink-0 text-xs tabular-nums">${monitor.response_time == null ? "–" : `${Math.round(monitor.response_time)} ms`}</strong></div>
                     <dl class="wall-card-details mt-3 grid-cols-2 gap-2 text-xs">
                         <div class="rounded-xl bg-slate-950/25 px-2.5 py-2"><dt class="text-[9px] uppercase tracking-wide text-slate-500">Prüfung</dt><dd class="mt-0.5 font-semibold">${escapeText(monitor.type || "–")}</dd></div>
                         <div class="rounded-xl bg-slate-950/25 px-2.5 py-2"><dt class="text-[9px] uppercase tracking-wide text-slate-500">Intervall</dt><dd class="mt-0.5 font-semibold tabular-nums">${monitor.interval ? `${monitor.interval} s` : "–"}</dd></div>
