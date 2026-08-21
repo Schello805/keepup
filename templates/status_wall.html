@@ -87,6 +87,10 @@
 
         async function refreshWall() {
             const response = await fetch("/api/status-wall", { cache: "no-store" });
+            if (response.status === 202) {
+                window.setTimeout(refreshWall, 1000);
+                return;
+            }
             if (!response.ok) return;
             const payload = await response.json();
             if (Number(payload.version || 0) < wallVersion) return;

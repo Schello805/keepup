@@ -1541,6 +1541,10 @@
             if (window.__keepupSnapshotPromise) return window.__keepupSnapshotPromise;
             const promise = (async () => {
                 const response = await fetch("/api/dashboard/snapshot", { cache: "no-store", credentials: "same-origin" });
+                if (response.status === 202) {
+                    window.setTimeout(() => refreshDashboardSnapshot(options), 1000);
+                    return null;
+                }
                 if (!response.ok) return false;
                 const payload = await response.json();
                 const version = Number(payload.version || 0);

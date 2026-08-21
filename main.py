@@ -86,6 +86,10 @@ _dashboard_snapshot_version = 1
 _dashboard_snapshot_version_lock = threading.Lock()
 _dashboard_snapshot_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload": None}
 _dashboard_snapshot_cache_lock = threading.Lock()
+_dashboard_snapshot_refresh_task: Optional[asyncio.Task] = None
+_status_wall_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload": None}
+_status_wall_cache_lock = threading.Lock()
+_status_wall_refresh_task: Optional[asyncio.Task] = None
 _changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
 _system_metrics_cache: dict[str, Any] = {
     "timestamp": None,
@@ -633,7 +637,33 @@ def build_dashboard_snapshot(request: Request) -> dict[str, Any]:
                 expires_at=time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS,
                 payload=payload,
             )
+        with _status_wall_cache_lock:
+            _status_wall_cache.update(
+                version=version,
+                expires_at=time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS,
+                payload=payload["wall"],
+            )
     return payload
+
+
+def peek_dashboard_snapshot() -> Optional[dict[str, Any]]:
+    with _dashboard_snapshot_cache_lock:
+        payload = _dashboard_snapshot_cache.get("payload")
+        return payload if isinstance(payload, dict) else None
+
+
+async def ensure_dashboard_snapshot_refresh(request: Request) -> None:
+    global _dashboard_snapshot_refresh_task
+    if _dashboard_snapshot_refresh_task is not None and not _dashboard_snapshot_refresh_task.done():
+        return
+
+    async def refresh() -> None:
+        try:
+            await asyncio.to_thread(build_dashboard_snapshot, request)
+        except Exception:
+            logger.exception("dashboard_snapshot_refresh_failed")
+
+    _dashboard_snapshot_refresh_task = asyncio.create_task(refresh())
 
 
 def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
@@ -646,7 +676,7 @@ def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -
         "unknown": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "unknown"),
         "paused": sum(1 for monitor in monitors if not monitor.get("enabled", 1)),
     }
-    return {
+    payload = {
         "version": get_dashboard_snapshot_version(),
         "summary": summary,
         "monitors": [
@@ -663,6 +693,34 @@ def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -
             for monitor in monitors
         ],
     }
+    if get_dashboard_snapshot_version() == payload["version"]:
+        with _status_wall_cache_lock:
+            _status_wall_cache.update(
+                version=payload["version"],
+                expires_at=time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS,
+                payload=payload,
+            )
+    return payload
+
+
+def peek_status_wall_payload() -> Optional[dict[str, Any]]:
+    with _status_wall_cache_lock:
+        payload = _status_wall_cache.get("payload")
+        return payload if isinstance(payload, dict) else None
+
+
+async def ensure_status_wall_refresh() -> None:
+    global _status_wall_refresh_task
+    if _status_wall_refresh_task is not None and not _status_wall_refresh_task.done():
+        return
+
+    async def refresh() -> None:
+        try:
+            await asyncio.to_thread(build_status_wall_payload)
+        except Exception:
+            logger.exception("status_wall_refresh_failed")
+
+    _status_wall_refresh_task = asyncio.create_task(refresh())
 
 
 def build_dashboard_cards_payload() -> dict[str, Any]:
@@ -1777,16 +1835,26 @@ async def dashboard(request: Request) -> HTMLResponse:
                 monitor["cache_refresh_running"] = True
         context["cold_start_monitors"] = cold_start_payload["monitors"]
     await ensure_dashboard_cards_cache_refresh(force=False)
+    await ensure_dashboard_snapshot_refresh(request)
     return await asyncio.to_thread(render_template, request, "index.html", context)
 
 
 @app.get("/wall", response_class=HTMLResponse)
 async def status_wall(request: Request) -> HTMLResponse:
-    snapshot = await asyncio.to_thread(build_dashboard_snapshot, request)
+    payload = peek_status_wall_payload()
+    if payload is None:
+        summary = await asyncio.to_thread(get_monitor_summary)
+        payload = {
+            "version": 0,
+            "summary": summary,
+            "monitors": [],
+            "loading": True,
+        }
+    await ensure_status_wall_refresh()
     context = {
         "request": request,
         "settings": get_settings(),
-        "payload": snapshot["wall"],
+        "payload": payload,
         "app_version": get_app_version_display(),
     }
     return await asyncio.to_thread(render_template, request, "status_wall.html", context)
@@ -1827,14 +1895,38 @@ async def dashboard_partial(request: Request) -> HTMLResponse:
 
 @app.get("/api/dashboard/snapshot")
 async def dashboard_snapshot(request: Request) -> JSONResponse:
-    payload = await asyncio.to_thread(build_dashboard_snapshot, request)
+    payload = peek_dashboard_snapshot()
+    version = get_dashboard_snapshot_version()
+    if payload is None or int(payload.get("version") or 0) != version:
+        await ensure_dashboard_snapshot_refresh(request)
+        return JSONResponse(
+            {"ready": False, "version": version},
+            status_code=202,
+            headers={"Cache-Control": "no-store", "Retry-After": "1"},
+        )
+    with _dashboard_snapshot_cache_lock:
+        expired = time.time() >= float(_dashboard_snapshot_cache.get("expires_at") or 0.0)
+    if expired:
+        await ensure_dashboard_snapshot_refresh(request)
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/status-wall")
 async def status_wall_snapshot(request: Request) -> JSONResponse:
-    snapshot = await asyncio.to_thread(build_dashboard_snapshot, request)
-    return JSONResponse(snapshot["wall"], headers={"Cache-Control": "no-store"})
+    payload = peek_status_wall_payload()
+    version = get_dashboard_snapshot_version()
+    if payload is None or int(payload.get("version") or 0) != version:
+        await ensure_status_wall_refresh()
+        return JSONResponse(
+            {"ready": False, "version": version},
+            status_code=202,
+            headers={"Cache-Control": "no-store", "Retry-After": "1"},
+        )
+    with _status_wall_cache_lock:
+        expired = time.time() >= float(_status_wall_cache.get("expires_at") or 0.0)
+    if expired:
+        await ensure_status_wall_refresh()
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/live/events")

@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import main
 
@@ -13,6 +13,8 @@ class DashboardCacheTests(unittest.TestCase):
             main._dashboard_cards_cache["generation"] = 0
         with main._dashboard_snapshot_cache_lock:
             main._dashboard_snapshot_cache.update(version=0, expires_at=0.0, payload=None)
+        with main._status_wall_cache_lock:
+            main._status_wall_cache.update(version=0, expires_at=0.0, payload=None)
 
     def test_stale_existing_cards_do_not_need_immediate_rebuild(self):
         with main._dashboard_cards_cache_lock:
@@ -139,6 +141,24 @@ class DashboardCacheTests(unittest.TestCase):
         self.assertEqual(payload["summary"]["up"], 1)
         self.assertEqual(payload["summary"]["down"], 1)
         self.assertEqual([item["status"] for item in payload["monitors"]], ["up", "down"])
+
+    def test_cold_dashboard_snapshot_returns_retry_response_immediately(self):
+        request = SimpleNamespace()
+        with patch.object(main, "ensure_dashboard_snapshot_refresh", new=AsyncMock()) as refresh:
+            response = main.asyncio.run(main.dashboard_snapshot(request))
+
+        self.assertEqual(response.status_code, 202)
+        self.assertIn('"ready":false', response.body.decode())
+        refresh.assert_awaited_once_with(request)
+
+    def test_cold_status_wall_returns_retry_response_immediately(self):
+        request = SimpleNamespace()
+        with patch.object(main, "ensure_status_wall_refresh", new=AsyncMock()) as refresh:
+            response = main.asyncio.run(main.status_wall_snapshot(request))
+
+        self.assertEqual(response.status_code, 202)
+        self.assertIn('"ready":false', response.body.decode())
+        refresh.assert_awaited_once_with()
 
 
 if __name__ == "__main__":
