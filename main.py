@@ -839,9 +839,14 @@ def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -
                 "name": monitor["name"],
                 "target": monitor["target"],
                 "category": str(monitor.get("category") or "Ohne Kategorie"),
+                "type": (
+                    "PING + HTTP" if monitor.get("ping_mode") == "and" else "PING ODER HTTP"
+                ) if monitor.get("ping_enabled") else str(monitor.get("type") or "").upper(),
                 "status": monitor["display_status"],
                 "response_time": monitor.get("last_response_time"),
                 "last_checked_at": monitor.get("last_checked_at"),
+                "interval": monitor.get("effective_interval"),
+                "uptime_30d": monitor.get("uptime_30d"),
                 "history": monitor.get("history") or [],
             }
             for monitor in monitors
