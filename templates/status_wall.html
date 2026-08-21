@@ -83,6 +83,10 @@
                     {% endif %}
                 </div>
                 <div class="flex flex-wrap items-center gap-1.5 lg:justify-end">
+                    <span id="wall-sound-status" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400" role="status" aria-label="Sound ist ausgeschaltet" title="Sound ist ausgeschaltet">
+                        <svg data-sound-icon="on" class="hidden h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4V5Zm4.5 3.5a5 5 0 0 1 0 7M18 6a8 8 0 0 1 0 12"/></svg>
+                        <svg data-sound-icon="off" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4V5Zm4 5 5 5m0-5-5 5"/></svg>
+                    </span>
                     <time id="wall-clock" class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold tabular-nums"></time>
                     <button type="button" onclick="toggleFullscreen()" class="min-h-8 rounded-lg border border-white/10 bg-white/5 px-2.5 text-xs font-semibold hover:bg-white/10">Vollbild</button>
                     <a href="/" class="inline-flex min-h-8 items-center rounded-lg bg-sky-500 px-2.5 text-xs font-semibold text-slate-950 hover:bg-sky-400">Dashboard</a>
@@ -141,6 +145,23 @@
             } catch (_) {
                 return "medium";
             }
+        }
+
+        function syncWallSoundStatus() {
+            const enabled = window.localStorage.getItem("keepup-dashboard-sounds") === "1";
+            const indicator = document.getElementById("wall-sound-status");
+            if (!indicator) return;
+            const label = enabled ? "Sound ist eingeschaltet" : "Sound ist ausgeschaltet";
+            indicator.setAttribute("aria-label", label);
+            indicator.title = label;
+            indicator.classList.toggle("border-emerald-400/30", enabled);
+            indicator.classList.toggle("bg-emerald-500/15", enabled);
+            indicator.classList.toggle("text-emerald-200", enabled);
+            indicator.classList.toggle("border-white/10", !enabled);
+            indicator.classList.toggle("bg-white/5", !enabled);
+            indicator.classList.toggle("text-slate-400", !enabled);
+            indicator.querySelector('[data-sound-icon="on"]')?.classList.toggle("hidden", !enabled);
+            indicator.querySelector('[data-sound-icon="off"]')?.classList.toggle("hidden", enabled);
         }
 
         function renderWall(payload) {
@@ -268,6 +289,10 @@
 
         function updateClock() { document.getElementById("wall-clock").textContent = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date()); }
         setWallSize(getSavedWallSize(), false);
+        syncWallSoundStatus();
+        window.addEventListener("storage", (event) => {
+            if (event.key === "keepup-dashboard-sounds") syncWallSoundStatus();
+        });
         document.querySelectorAll("[data-wall-size-option]").forEach((button) => {
             button.addEventListener("click", () => setWallSize(button.dataset.wallSizeOption));
         });
