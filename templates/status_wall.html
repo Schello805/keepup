@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#07111f">
+    <title>{{ settings.app_name }} Status-Wall</title>
+    <link rel="stylesheet" href="/static/keepup.css">
+    <style>
+        body { background: radial-gradient(circle at 15% 0%, rgba(14,165,233,.16), transparent 32%), radial-gradient(circle at 90% 15%, rgba(16,185,129,.12), transparent 28%), #07111f; }
+        .wall-card { animation: wall-in .45s ease-out both; }
+        .wall-card[data-status="up"] { border-color: rgba(110,231,183,.3); background: rgba(16,185,129,.1); }
+        .wall-card[data-status="down"] { border-color: rgba(253,164,175,.38); background: rgba(244,63,94,.15); }
+        .wall-card[data-status="unknown"] { border-color: rgba(252,211,77,.32); background: rgba(245,158,11,.12); }
+        .wall-card[data-status="paused"] { border-color: rgba(203,213,225,.2); background: rgba(148,163,184,.08); }
+        .wall-dot[data-status="up"] { background: #34d399; }
+        .wall-dot[data-status="down"] { background: #fb7185; }
+        .wall-dot[data-status="unknown"] { background: #fbbf24; }
+        .wall-dot[data-status="paused"] { background: #94a3b8; }
+        .wall-status[data-status="up"] { color: #a7f3d0; background: rgba(16,185,129,.2); }
+        .wall-status[data-status="down"] { color: #fecdd3; background: rgba(244,63,94,.22); }
+        .wall-status[data-status="unknown"] { color: #fde68a; background: rgba(245,158,11,.2); }
+        .wall-status[data-status="paused"] { color: #cbd5e1; background: rgba(148,163,184,.15); }
+        @keyframes wall-in { from { opacity: 0; transform: translateY(8px); } }
+    </style>
+</head>
+<body class="min-h-screen text-slate-100">
+    <main class="mx-auto min-h-screen max-w-[1800px] p-3 sm:p-5">
+        <header class="sticky top-3 z-20 mb-4 flex flex-col gap-3 rounded-3xl border border-white/10 bg-slate-950/85 p-4 shadow-panel backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex items-center gap-3">
+                <img src="/static/logo.png" class="h-12 w-12 rounded-xl border border-white/10 bg-white p-1" alt="KeepUp">
+                <div><p class="text-[10px] font-semibold uppercase tracking-[.3em] text-sky-300">Live Status-Wall</p><h1 class="text-xl font-semibold">{{ settings.app_name }}</h1></div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <div id="wall-summary" class="flex items-center gap-2"></div>
+                <time id="wall-clock" class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-semibold tabular-nums"></time>
+                <button type="button" onclick="toggleFullscreen()" class="min-h-10 rounded-xl border border-white/10 bg-white/5 px-3 text-sm font-semibold hover:bg-white/10">Vollbild</button>
+                <a href="/" class="inline-flex min-h-10 items-center rounded-xl bg-sky-500 px-3 text-sm font-semibold text-slate-950 hover:bg-sky-400">Dashboard</a>
+            </div>
+        </header>
+        <section id="wall-groups" class="mb-4 flex gap-2 overflow-x-auto"></section>
+        <section id="wall-grid" class="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-7"></section>
+    </main>
+    <script>
+        let wallVersion = {{ payload.version }};
+        let wallPayload = {{ payload|tojson }};
+
+        function escapeText(value) {
+            const node = document.createElement("div");
+            node.textContent = String(value ?? "");
+            return node.innerHTML;
+        }
+
+        function renderWall(payload) {
+            wallPayload = payload;
+            wallVersion = Number(payload.version || wallVersion);
+            const summary = payload.summary || {};
+            const summaryNode = document.getElementById("wall-summary");
+            summaryNode.innerHTML = [
+                ["UP", summary.up, "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"],
+                ["DOWN", summary.down, "border-rose-400/20 bg-rose-500/10 text-rose-200"],
+                ["OFFEN", summary.unknown, "border-amber-400/20 bg-amber-500/10 text-amber-200"]
+            ].map(([label, value, classes]) => `<span class="rounded-xl border px-3 py-2 text-xs font-semibold ${classes}">${label} <strong class="ml-1 text-base">${value || 0}</strong></span>`).join("");
+
+            const groups = new Map();
+            (payload.monitors || []).forEach((monitor) => {
+                const group = groups.get(monitor.category) || { total: 0, down: 0 };
+                group.total += 1;
+                if (monitor.status === "down") group.down += 1;
+                groups.set(monitor.category, group);
+            });
+            document.getElementById("wall-groups").innerHTML = [...groups.entries()].map(([name, item]) => `<span class="shrink-0 rounded-full border ${item.down ? "border-rose-400/30 bg-rose-500/10 text-rose-100" : "border-white/10 bg-white/5 text-slate-300"} px-3 py-1.5 text-xs font-semibold">${escapeText(name)} · ${item.total}${item.down ? ` · ${item.down} down` : ""}</span>`).join("");
+
+            const rank = { down: 0, unknown: 1, up: 2, paused: 3 };
+            const monitors = [...(payload.monitors || [])].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.name.localeCompare(b.name, "de"));
+            document.getElementById("wall-grid").innerHTML = monitors.map((monitor, index) => {
+                const history = (monitor.history || []).slice(-12).map((status) => `<i class="h-4 flex-1 rounded-full ${status === "up" ? "bg-emerald-400" : status === "down" ? "bg-rose-400" : "bg-amber-400"}"></i>`).join("");
+                return `<article data-status="${escapeText(monitor.status)}" class="wall-card min-w-0 rounded-2xl border p-3 shadow-panel" style="animation-delay:${Math.min(index * 18, 260)}ms">
+                    <div class="flex items-center justify-between gap-2"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2.5 w-2.5 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-full px-2 py-0.5 text-[10px] font-bold uppercase">${escapeText(monitor.status)}</span></div>
+                    <h2 class="mt-2 truncate text-base font-semibold">${escapeText(monitor.name)}</h2>
+                    <p class="truncate text-xs text-slate-400">${escapeText(monitor.target)}</p>
+                    <div class="mt-3 flex items-end justify-between gap-2"><span class="text-[10px] uppercase tracking-wide text-slate-500">${escapeText(monitor.category)}</span><strong class="text-sm tabular-nums">${monitor.response_time == null ? "–" : `${Math.round(monitor.response_time)} ms`}</strong></div>
+                    <div class="mt-2 flex gap-1">${history}</div>
+                </article>`;
+            }).join("");
+        }
+
+        async function refreshWall() {
+            const response = await fetch("/api/status-wall", { cache: "no-store" });
+            if (!response.ok) return;
+            const payload = await response.json();
+            if (Number(payload.version || 0) < wallVersion) return;
+            renderWall(payload);
+        }
+
+        function startEvents() {
+            const source = new EventSource("/api/live/events");
+            source.addEventListener("snapshot", (event) => {
+                if (Number(event.data || 0) > wallVersion) refreshWall();
+            });
+            source.onerror = () => { source.close(); window.setTimeout(startEvents, 5000); };
+        }
+
+        function toggleFullscreen() {
+            if (document.fullscreenElement) document.exitFullscreen();
+            else document.documentElement.requestFullscreen?.();
+        }
+
+        function updateClock() { document.getElementById("wall-clock").textContent = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date()); }
+        renderWall(wallPayload);
+        updateClock();
+        window.setInterval(updateClock, 1000);
+        window.setInterval(refreshWall, 30000);
+        startEvents();
+    </script>
+</body>
+</html>

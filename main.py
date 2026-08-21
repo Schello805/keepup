@@ -21,7 +21,7 @@ from apscheduler.events import EVENT_JOB_EXECUTED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import httpx
@@ -82,6 +82,10 @@ _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
 _dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None, "generation": 0}
 _dashboard_cards_cache_lock = threading.Lock()
 _dashboard_cards_refresh_task: Optional[asyncio.Task] = None
+_dashboard_snapshot_version = 1
+_dashboard_snapshot_version_lock = threading.Lock()
+_dashboard_snapshot_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload": None}
+_dashboard_snapshot_cache_lock = threading.Lock()
 _changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
 _system_metrics_cache: dict[str, Any] = {
     "timestamp": None,
@@ -589,6 +593,77 @@ def build_dashboard_context(request: Request) -> dict:
     }
 
 
+def get_dashboard_snapshot_version() -> int:
+    with _dashboard_snapshot_version_lock:
+        return _dashboard_snapshot_version
+
+
+def advance_dashboard_snapshot_version() -> int:
+    global _dashboard_snapshot_version
+    with _dashboard_snapshot_version_lock:
+        _dashboard_snapshot_version += 1
+        return _dashboard_snapshot_version
+
+
+def build_dashboard_snapshot(request: Request) -> dict[str, Any]:
+    """Render counters and cards from one monitor query and one snapshot version."""
+    version = get_dashboard_snapshot_version()
+    now = time.time()
+    with _dashboard_snapshot_cache_lock:
+        cached = _dashboard_snapshot_cache.get("payload")
+        if (
+            cached
+            and int(_dashboard_snapshot_cache.get("version") or 0) == version
+            and now < float(_dashboard_snapshot_cache.get("expires_at") or 0.0)
+        ):
+            return cached
+
+    context = build_dashboard_context(request)
+    payload = {
+        "version": version,
+        "summary": context["summary"],
+        "top_html": render_template_content("index.html", {**context, "partial": "top"}),
+        "cards_html": render_template_content("index.html", {**context, "partial": "cards"}),
+    }
+    if version == get_dashboard_snapshot_version():
+        with _dashboard_snapshot_cache_lock:
+            _dashboard_snapshot_cache.update(
+                version=version,
+                expires_at=time.time() + DASHBOARD_CARDS_CACHE_TTL_SECONDS,
+                payload=payload,
+            )
+    return payload
+
+
+def build_status_wall_payload() -> dict[str, Any]:
+    payload = build_dashboard_cards_payload()
+    monitors = payload["monitors"]
+    summary = {
+        "total": len(monitors),
+        "up": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "up"),
+        "down": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "down"),
+        "unknown": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "unknown"),
+        "paused": sum(1 for monitor in monitors if not monitor.get("enabled", 1)),
+    }
+    return {
+        "version": get_dashboard_snapshot_version(),
+        "summary": summary,
+        "monitors": [
+            {
+                "id": monitor["id"],
+                "name": monitor["name"],
+                "target": monitor["target"],
+                "category": str(monitor.get("category") or "Ohne Kategorie"),
+                "status": monitor["display_status"],
+                "response_time": monitor.get("last_response_time"),
+                "last_checked_at": monitor.get("last_checked_at"),
+                "history": monitor.get("history") or [],
+            }
+            for monitor in monitors
+        ],
+    }
+
+
 def build_dashboard_cards_payload() -> dict[str, Any]:
     monitors = list_monitors(include_heavy_details=False)
     settings = get_settings()
@@ -972,6 +1047,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("add live dashboard experience and status wall", "Dashboard-Daten sind jetzt atomar synchronisiert; hinzu kommen Live-Events, Mini-Timelines, Fokusmodus, Gruppenkennzahlen, Status-Wall und optionale Sounds."),
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
@@ -1186,6 +1262,7 @@ def normalize_monitor_target(monitor_type: str, target: str) -> str:
 
 
 def invalidate_dashboard_cards_cache() -> None:
+    advance_dashboard_snapshot_version()
     with _dashboard_cards_cache_lock:
         _dashboard_cards_cache["html"] = None
         _dashboard_cards_cache["expires_at"] = 0.0
@@ -1193,6 +1270,7 @@ def invalidate_dashboard_cards_cache() -> None:
 
 
 def mark_dashboard_cards_cache_stale() -> None:
+    advance_dashboard_snapshot_version()
     with _dashboard_cards_cache_lock:
         _dashboard_cards_cache["generation"] = int(_dashboard_cards_cache.get("generation") or 0) + 1
         if _dashboard_cards_cache.get("html"):
@@ -1279,6 +1357,7 @@ async def wait_for_dashboard_cards_cache_refresh(force: bool = False) -> None:
 
 async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
     await execute_monitor_check(monitor_id)
+    mark_dashboard_cards_cache_stale()
     await ensure_dashboard_cards_cache_refresh(force=True)
 
 
@@ -1669,6 +1748,17 @@ async def dashboard(request: Request) -> HTMLResponse:
     return await asyncio.to_thread(render_template, request, "index.html", context)
 
 
+@app.get("/wall", response_class=HTMLResponse)
+async def status_wall(request: Request) -> HTMLResponse:
+    context = {
+        "request": request,
+        "settings": get_settings(),
+        "payload": build_status_wall_payload(),
+        "app_version": get_app_version_display(),
+    }
+    return await asyncio.to_thread(render_template, request, "status_wall.html", context)
+
+
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
     return await asyncio.to_thread(render_template, request, "settings.html", build_settings_context(request))
@@ -1700,6 +1790,38 @@ async def incidents_feed_partial(request: Request) -> HTMLResponse:
 async def dashboard_partial(request: Request) -> HTMLResponse:
     context = await asyncio.to_thread(build_dashboard_context, request)
     return await asyncio.to_thread(render_template, request, "index.html", {**context, "partial": True})
+
+
+@app.get("/api/dashboard/snapshot")
+async def dashboard_snapshot(request: Request) -> JSONResponse:
+    payload = await asyncio.to_thread(build_dashboard_snapshot, request)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/status-wall")
+async def status_wall_snapshot() -> JSONResponse:
+    payload = await asyncio.to_thread(build_status_wall_payload)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/live/events")
+async def dashboard_live_events(request: Request) -> StreamingResponse:
+    async def event_stream():
+        last_version = -1
+        while not await request.is_disconnected():
+            version = get_dashboard_snapshot_version()
+            if version != last_version:
+                last_version = version
+                yield f"event: snapshot\ndata: {version}\n\n"
+            else:
+                yield ": keepalive\n\n"
+            await asyncio.sleep(2)
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.get("/api/live/top", response_class=HTMLResponse)

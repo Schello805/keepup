@@ -26,6 +26,13 @@ Die App setzt auf:
 - Gruppen/Kategorien für Monitore mit Dashboard-Filter und Gruppenstatus
 - Kompakter JSON-Export und -Import für Konfiguration und aktuelle Historie
 - Mobile-First-Dashboard mit Live-Updates
+- Atomare, versionierte Dashboard-Snapshots für konsistente Karten und Zähler
+- Live-Statuswechsel per Server-Sent Events (SSE)
+- Mini-Timelines für Antwortzeiten und animierte bestätigte Statuswechsel
+- Gruppen-Dashboard mit Verfügbarkeit und langsamstem Monitor
+- Fokusmodus für einzelne Monitore
+- Vollbild-Status-Wall unter `/wall` für Tablet, Wanddisplay und Kioskmodus
+- Optionaler dezenter Browser-Sound bei bestätigtem Ausfall oder Recovery
 - Separate Einstellungsseite
 - Testversand für Telegram, ntfy und SMTP
 - In-App-Update-Prüfung
