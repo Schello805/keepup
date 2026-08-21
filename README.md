@@ -31,7 +31,7 @@ Die App setzt auf:
 - Animierte bestätigte Statuswechsel
 - Gruppen-Dashboard mit Verfügbarkeit und langsamstem Monitor
 - Fokusmodus für einzelne Monitore
-- Vollbild-Status-Wall unter `/wall` für Tablet, Wanddisplay und Kioskmodus
+- Kompakte Vollbild-Status-Wall unter `/wall` für Tablet, Wanddisplay und Kioskmodus
 - Optionaler dezenter Browser-Sound bei bestätigtem Ausfall oder Recovery
 - Im Hintergrund gebündelt vorgeladene Kartendetails für sofortiges Umdrehen
 - Nicht blockierende Snapshot-Caches: Dashboard und Status-Wall bleiben auch während eines Neuaufbaus erreichbar
