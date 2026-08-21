@@ -32,6 +32,7 @@ Die App setzt auf:
 - Gruppen-Dashboard mit Verfügbarkeit und langsamstem Monitor
 - Fokusmodus für einzelne Monitore
 - Vollbild-Status-Wall unter `/wall` mit drei wählbaren Kartengrößen für Tablet, Wanddisplay und Kioskmodus
+- Optionales heutiges Wetter für einen frei wählbaren Ort über Open-Meteo, ohne API-Schlüssel und mit lokalem 15-Minuten-Cache
 - Optionaler dezenter Browser-Sound bei bestätigtem Ausfall oder Recovery
 - Im Hintergrund gebündelt vorgeladene Kartendetails für sofortiges Umdrehen
 - Nicht blockierende Snapshot-Caches: Dashboard und Status-Wall bleiben auch während eines Neuaufbaus erreichbar

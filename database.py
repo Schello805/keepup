@@ -19,6 +19,7 @@ DEFAULT_SETTINGS = {
     "refresh_interval": 10,
     "keepup_base_url": "",
     "app_timezone": "UTC",
+    "weather_location": "",
     "default_monitor_interval": 60,
     "global_monitor_interval_override": 0,
     "down_failures_threshold": 3,

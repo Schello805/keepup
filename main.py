@@ -73,6 +73,11 @@ logging.basicConfig(
 logger = logging.getLogger("keepup")
 UPDATE_STATUS_TTL_SECONDS = 60
 UPDATE_REMOTE_TIMEOUT_SECONDS = 2.5
+WEATHER_CACHE_TTL_SECONDS = 15 * 60
+WEATHER_ERROR_CACHE_TTL_SECONDS = 60
+WEATHER_REQUEST_TIMEOUT_SECONDS = 5.0
+WEATHER_GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
+WEATHER_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 _update_status_cache: dict[str, Any] = {"expires_at": 0.0, "payload": None}
 APP_VERSION_TTL_SECONDS = 60
 DASHBOARD_CARDS_CACHE_TTL_SECONDS = 5
@@ -91,6 +96,8 @@ _status_wall_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload"
 _status_wall_cache_lock = threading.Lock()
 _status_wall_refresh_task: Optional[asyncio.Task] = None
 _changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
+_weather_cache: dict[str, Any] = {"location": "", "expires_at": 0.0, "payload": None}
+_weather_cache_lock = asyncio.Lock()
 _system_metrics_cache: dict[str, Any] = {
     "timestamp": None,
     "cpu_total": None,
@@ -449,6 +456,151 @@ def normalize_base_url(base_url: str, label: str = "KeepUp URL") -> str:
     return base_url.rstrip("/")
 
 
+def normalize_weather_location(location: str) -> str:
+    location = " ".join(str(location or "").strip().split())
+    if location and len(location) < 2:
+        raise ValueError("Wetter-Ort muss mindestens 2 Zeichen lang sein.")
+    if len(location) > 120:
+        raise ValueError("Wetter-Ort darf maximal 120 Zeichen lang sein.")
+    return location
+
+
+def weather_code_details(code: Any) -> tuple[str, str]:
+    try:
+        code = int(code)
+    except (TypeError, ValueError):
+        return "Wetterlage unbekannt", "?"
+    if code == 0:
+        return "Klar", "☀"
+    if code in {1, 2}:
+        return "Leicht bewölkt", "🌤"
+    if code == 3:
+        return "Bedeckt", "☁"
+    if code in {45, 48}:
+        return "Nebel", "🌫"
+    if code in {51, 53, 55, 56, 57}:
+        return "Nieselregen", "🌦"
+    if code in {61, 63, 65, 66, 67, 80, 81, 82}:
+        return "Regen", "🌧"
+    if code in {71, 73, 75, 77, 85, 86}:
+        return "Schnee", "🌨"
+    if code in {95, 96, 99}:
+        return "Gewitter", "⛈"
+    return "Wechselhaft", "🌥"
+
+
+def select_weather_location(location: str, results: list[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if not results:
+        return None
+    parts = [part.strip().casefold() for part in location.split(",") if part.strip()]
+    requested_name = parts[0] if parts else location.casefold()
+    qualifiers = parts[1:]
+
+    def score(place: dict[str, Any]) -> int:
+        name = str(place.get("name") or "").casefold()
+        searchable = " ".join(
+            str(place.get(key) or "").casefold()
+            for key in ("name", "admin1", "admin2", "admin3", "admin4", "country", "country_code")
+        )
+        value = 100 if name == requested_name else (40 if requested_name in name else 0)
+        for qualifier in qualifiers:
+            value += 30 if qualifier in searchable else -30
+        return value
+
+    return max(results, key=score)
+
+
+def build_weather_payload(location: str, geocoding: dict[str, Any], forecast: dict[str, Any]) -> dict[str, Any]:
+    results = geocoding.get("results") or []
+    place = select_weather_location(location, results)
+    if not place:
+        raise ValueError("Wetter-Ort wurde nicht gefunden.")
+    daily = forecast.get("daily") or {}
+    current = forecast.get("current") or {}
+    daily_codes = daily.get("weather_code") or []
+    code = current.get("weather_code")
+    if code is None and daily_codes:
+        code = daily_codes[0]
+    condition, icon = weather_code_details(code)
+
+    def first_value(key: str) -> Any:
+        values = daily.get(key) or []
+        return values[0] if values else None
+
+    display_name = str(place.get("name") or location)
+    region = str(place.get("admin1") or place.get("country_code") or "")
+    if region and region.casefold() != display_name.casefold():
+        display_name = f"{display_name}, {region}"
+    return {
+        "ok": True,
+        "location": display_name,
+        "condition": condition,
+        "icon": icon,
+        "temperature": current.get("temperature_2m"),
+        "temperature_min": first_value("temperature_2m_min"),
+        "temperature_max": first_value("temperature_2m_max"),
+        "precipitation_probability": first_value("precipitation_probability_max"),
+    }
+
+
+async def fetch_weather_today(location: str) -> dict[str, Any]:
+    headers = {"User-Agent": f"KeepUp/{__version__}"}
+    search_name = location.split(",", 1)[0].strip()
+    async with httpx.AsyncClient(timeout=WEATHER_REQUEST_TIMEOUT_SECONDS, headers=headers) as client:
+        geocoding_response = await client.get(
+            WEATHER_GEOCODING_URL,
+            params={"name": search_name, "count": 10, "language": "de", "format": "json"},
+        )
+        geocoding_response.raise_for_status()
+        geocoding = geocoding_response.json()
+        results = geocoding.get("results") or []
+        if not results:
+            raise ValueError("Wetter-Ort wurde nicht gefunden.")
+        place = select_weather_location(location, results)
+        if not place:
+            raise ValueError("Wetter-Ort wurde nicht gefunden.")
+        forecast_response = await client.get(
+            WEATHER_FORECAST_URL,
+            params={
+                "latitude": place["latitude"],
+                "longitude": place["longitude"],
+                "current": "temperature_2m,weather_code",
+                "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+                "forecast_days": 1,
+                "timezone": "auto",
+            },
+        )
+        forecast_response.raise_for_status()
+        return build_weather_payload(location, geocoding, forecast_response.json())
+
+
+async def get_cached_weather_today(location: str) -> dict[str, Any]:
+    now = time.time()
+    if (
+        _weather_cache.get("location") == location
+        and _weather_cache.get("payload") is not None
+        and now < float(_weather_cache.get("expires_at") or 0.0)
+    ):
+        return dict(_weather_cache["payload"])
+    async with _weather_cache_lock:
+        now = time.time()
+        if (
+            _weather_cache.get("location") == location
+            and _weather_cache.get("payload") is not None
+            and now < float(_weather_cache.get("expires_at") or 0.0)
+        ):
+            return dict(_weather_cache["payload"])
+        try:
+            payload = await fetch_weather_today(location)
+            ttl = WEATHER_CACHE_TTL_SECONDS
+        except Exception as exc:
+            logger.warning("weather_fetch_failed location=%s error=%s", location, exc)
+            payload = {"ok": False, "location": location, "message": "Wetter ist vorübergehend nicht verfügbar."}
+            ttl = WEATHER_ERROR_CACHE_TTL_SECONDS
+        _weather_cache.update(location=location, expires_at=now + ttl, payload=payload)
+        return dict(payload)
+
+
 def build_notification_settings_payload(
     keepup_base_url: str,
     app_timezone: str,
@@ -480,6 +632,7 @@ def build_notification_settings_payload(
     smtp_to_email: str,
     smtp_use_tls: Optional[str],
     smtp_use_ssl: Optional[str],
+    weather_location: Optional[str] = None,
 ) -> dict:
     existing_settings = get_settings()
     default_monitor_interval = int(default_monitor_interval)
@@ -515,6 +668,7 @@ def build_notification_settings_payload(
     return {
         "keepup_base_url": normalize_base_url(keepup_base_url),
         "app_timezone": normalize_timezone(app_timezone),
+        "weather_location": normalize_weather_location(weather_location) if weather_location is not None else str(existing_settings.get("weather_location") or ""),
         "default_monitor_interval": default_monitor_interval,
         "global_monitor_interval_override": global_monitor_interval_override,
         "down_failures_threshold": down_failures_threshold,
@@ -1911,6 +2065,15 @@ async def dashboard_snapshot(request: Request) -> JSONResponse:
     return JSONResponse(payload, headers={"Cache-Control": "no-store"})
 
 
+@app.get("/api/weather/today")
+async def weather_today() -> JSONResponse:
+    location = str(get_settings().get("weather_location") or "").strip()
+    if not location:
+        return JSONResponse({"ok": False, "configured": False, "message": "Kein Wetter-Ort konfiguriert."})
+    payload = await get_cached_weather_today(location)
+    return JSONResponse(payload, headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/status-wall")
 async def status_wall_snapshot(request: Request) -> JSONResponse:
     payload = peek_status_wall_payload()
@@ -2229,6 +2392,7 @@ async def update_notification_settings(
     smtp_to_email: str = Form(""),
     smtp_use_tls: Optional[str] = Form(None),
     smtp_use_ssl: Optional[str] = Form(None),
+    weather_location: Optional[str] = Form(None),
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
@@ -2262,6 +2426,7 @@ async def update_notification_settings(
             smtp_to_email,
             smtp_use_tls,
             smtp_use_ssl,
+            weather_location,
         )
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
@@ -2302,6 +2467,7 @@ async def test_telegram_settings(
     smtp_to_email: str = Form(""),
     smtp_use_tls: Optional[str] = Form(None),
     smtp_use_ssl: Optional[str] = Form(None),
+    weather_location: Optional[str] = Form(None),
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
@@ -2335,6 +2501,7 @@ async def test_telegram_settings(
             smtp_to_email,
             smtp_use_tls,
             smtp_use_ssl,
+            weather_location,
         )
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
@@ -2383,6 +2550,7 @@ async def test_ntfy_rich_settings(
     smtp_to_email: str = Form(""),
     smtp_use_tls: Optional[str] = Form(None),
     smtp_use_ssl: Optional[str] = Form(None),
+    weather_location: Optional[str] = Form(None),
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
@@ -2416,6 +2584,7 @@ async def test_ntfy_rich_settings(
             smtp_to_email,
             smtp_use_tls,
             smtp_use_ssl,
+            weather_location,
         )
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")
@@ -2464,6 +2633,7 @@ async def test_smtp_settings(
     smtp_to_email: str = Form(""),
     smtp_use_tls: Optional[str] = Form(None),
     smtp_use_ssl: Optional[str] = Form(None),
+    weather_location: Optional[str] = Form(None),
 ) -> RedirectResponse:
     try:
         payload = build_notification_settings_payload(
@@ -2497,6 +2667,7 @@ async def test_smtp_settings(
             smtp_to_email,
             smtp_use_tls,
             smtp_use_ssl,
+            weather_location,
         )
     except ValueError as exc:
         return flash_redirect("/settings", str(exc), "error")

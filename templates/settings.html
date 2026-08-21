@@ -89,14 +89,14 @@
         <section class="mt-5 grid grid-cols-1 gap-5">
             <div class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
                 <h2 class="text-lg font-semibold">Benachrichtigungen & Konfiguration</h2>
-                <p class="mt-1 text-sm text-slate-400">Hier konfigurierst du Zeitzone und Benachrichtigungskanäle (Telegram, ntfy und SMTP). Die Seite lädt nicht live neu, damit Eingaben nicht unterbrochen werden.</p>
+                <p class="mt-1 text-sm text-slate-400">Hier konfigurierst du Zeitzone, Wetter-Ort und Benachrichtigungskanäle (Telegram, ntfy und SMTP). Die Seite lädt nicht live neu, damit Eingaben nicht unterbrochen werden.</p>
                 <p class="mt-3 rounded-2xl border border-white/10 bg-slate-950/40 px-4 py-3 text-sm text-slate-300">Benachrichtigungen werden nur versendet, wenn sich der Status eines Monitors ändert, zum Beispiel von <span class="font-semibold text-rose-200">down</span> auf <span class="font-semibold text-emerald-200">up</span> oder umgekehrt.</p>
             </div>
 
             {{ render_system_status(system_metrics) }}
 
             <form action="/settings/notifications" method="post" class="space-y-4" autocomplete="off" data-lpignore="true">
-                {% call accordion_section('settings-general', 'Allgemein', 'Basis-URL und Zeitzone für UI, Logs und Benachrichtigungen.', True) %}
+                {% call accordion_section('settings-general', 'Allgemein', 'Basis-URL, Zeitzone und optionales Wetter für das Dashboard.', True) %}
                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                         <label class="space-y-2 lg:col-span-2">
                             <span class="text-sm text-slate-300">KeepUp URL {{ field_help("Adresse deiner KeepUp-Weboberfläche. Diese URL wird als Öffnen-Link in Telegram-, ntfy- und E-Mail-Benachrichtigungen verwendet.") }}</span>
@@ -110,9 +110,15 @@
                                 {% endfor %}
                             </select>
                         </label>
+                        <label class="space-y-2">
+                            <span class="text-sm text-slate-300">Wetter-Ort {{ field_help("Optionaler Ort für das heutige Wetter im Dashboard. KeepUp übermittelt diese Ortsangabe an Open-Meteo und speichert die Prognose 15 Minuten zwischen.") }}</span>
+                            <input name="weather_location" value="{{ settings.weather_location }}" maxlength="120" placeholder="z. B. Bechhofen an der Heide" class="{{ input_classes() }}">
+                            <span class="block text-xs text-slate-500">Optional. Bei mehrdeutigen Namen Ort genauer angeben, z. B. „Neustadt, Bayern“. Leer lassen, um die Wetteranzeige auszublenden.</span>
+                        </label>
                     </div>
                     <p class="mt-3 text-xs text-slate-500">Die KeepUp URL wird in Telegram-, ntfy- und E-Mail-Benachrichtigungen als direkter Link zur Weboberfläche verwendet.</p>
                     <p class="mt-2 text-xs text-slate-500">Die Zeitzone steuert die Uhrzeit im Dashboard, in Logs und in allen Benachrichtigungen.</p>
+                    <p class="mt-2 text-xs text-slate-500">Für die Wetteranzeige werden Ort und Prognose über Open-Meteo aufgelöst. Es ist kein API-Schlüssel erforderlich.</p>
                 {% endcall %}
 
                 {% call accordion_section('settings-timing', 'Zeit & Intervalle', 'Globale Steuerung für Prüfintervalle, Schwellen und Datenaufbewahrung.', True) %}
