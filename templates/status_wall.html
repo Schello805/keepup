@@ -196,7 +196,7 @@
             const enabled = !wallSoundsEnabled();
             window.localStorage.setItem("keepup-dashboard-sounds", enabled ? "1" : "0");
             syncWallSoundStatus();
-            playWallSoundSequence(enabled ? [420, 620, 820] : [820, 620, 420]);
+            playWallSoundSequence(enabled ? [820, 620, 420] : [420, 620, 820]);
         }
 
         function renderWall(payload) {

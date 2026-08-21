@@ -872,24 +872,31 @@
             window.__keepupDetailPrefetchScheduled = true;
             window.setTimeout(async () => {
                 window.__keepupDetailPrefetchScheduled = false;
-                const hasMissingDetails = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
-                    .some((card) => !window.__keepupDetailCache.has(String(card.dataset.monitorId)));
-                if (!hasMissingDetails || window.__keepupDetailBatchPromise) return;
-                window.__keepupDetailBatchPromise = fetch("/api/monitor-details", { cache: "no-store", credentials: "same-origin" })
-                    .then((response) => {
-                        if (!response.ok) throw new Error("detail_batch_failed");
-                        return response.json();
-                    })
-                    .then((payload) => {
-                        const loadedAt = Date.now();
-                        Object.entries(payload.details || {}).forEach(([id, html]) => {
-                            window.__keepupDetailCache.set(String(id), { html: String(html), loadedAt });
-                        });
-                    })
-                    .catch(() => {})
-                    .finally(() => { window.__keepupDetailBatchPromise = null; });
-                await window.__keepupDetailBatchPromise;
-            }, 500);
+                const monitorIds = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
+                    .map((card) => String(card.dataset.monitorId || ""))
+                    .filter((id) => {
+                        if (!id) return false;
+                        const cached = window.__keepupDetailCache.get(id);
+                        return !cached || Date.now() - cached.loadedAt >= 60000;
+                    });
+                if (!monitorIds.length) return;
+
+                let cursor = 0;
+                const worker = async () => {
+                    while (cursor < monitorIds.length) {
+                        const monitorId = monitorIds[cursor++];
+                        try {
+                            const html = await loadMonitorDetailHtml(monitorId);
+                            const content = document.getElementById(`card-back-content-${monitorId}`);
+                            if (content && !document.getElementById(`card-inner-${monitorId}`)?.classList.contains("is-flipped")) {
+                                content.innerHTML = html;
+                            }
+                        } catch (_) {
+                        }
+                    }
+                };
+                await Promise.all(Array.from({ length: Math.min(3, monitorIds.length) }, worker));
+            }, 0);
         }
 
         async function openMonitorDetails(monitorId) {
