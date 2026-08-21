@@ -10,7 +10,8 @@
     <style>
         body { background: radial-gradient(circle at 15% 0%, rgba(14,165,233,.16), transparent 32%), radial-gradient(circle at 90% 15%, rgba(16,185,129,.12), transparent 28%), #07111f; }
         .wall-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .wall-card { display: flex; min-height: 7.5rem; flex-direction: column; animation: wall-in .45s ease-out both; }
+        .wall-card { display: flex; min-height: 7.5rem; flex-direction: column; }
+        .wall-card-enter { animation: wall-in .45s ease-out both; }
         .wall-card[data-status="up"] { border-color: rgba(52,211,153,.52); background: linear-gradient(145deg, rgba(16,185,129,.22), rgba(6,78,59,.2)); }
         .wall-card[data-status="down"] { border-color: rgba(251,113,133,.62); background: linear-gradient(145deg, rgba(244,63,94,.3), rgba(76,5,25,.28)); }
         .wall-card[data-status="unknown"] { border-color: rgba(251,191,36,.5); background: linear-gradient(145deg, rgba(245,158,11,.22), rgba(69,26,3,.22)); }
@@ -117,6 +118,7 @@
         let wallVersion = {{ payload.version }};
         let wallPayload = {{ payload|tojson }};
         let wallRefreshTimer = null;
+        let wallCardsHaveRendered = false;
 
         function escapeText(value) {
             const node = document.createElement("div");
@@ -234,9 +236,12 @@
             const statusLongLabels = { up: "Erreichbar", down: "Ausgefallen", unknown: "Unbekannt", paused: "Pausiert" };
             const monitors = [...(payload.monitors || [])].sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9) || a.name.localeCompare(b.name, "de"));
             const grid = document.getElementById("wall-grid");
+            const animateCards = !wallCardsHaveRendered && monitors.length > 0;
             grid.innerHTML = monitors.map((monitor, index) => {
                 const history = (monitor.history || []).slice(-12).map((status) => `<i class="h-2 flex-1 rounded-full ${status === "up" ? "bg-emerald-400" : status === "down" ? "bg-rose-400" : "bg-amber-400"}"></i>`).join("");
-                return `<article data-status="${escapeText(monitor.status)}" class="wall-card min-w-0 rounded-xl border p-2 shadow-panel" style="animation-delay:${Math.min(index * 18, 260)}ms">
+                const entranceClass = animateCards ? " wall-card-enter" : "";
+                const entranceStyle = animateCards ? ` style="animation-delay:${Math.min(index * 18, 260)}ms"` : "";
+                return `<article data-status="${escapeText(monitor.status)}" class="wall-card${entranceClass} min-w-0 rounded-xl border p-2 shadow-panel"${entranceStyle}>
                     <div class="flex items-center justify-between gap-1.5"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2 w-2 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-md px-2 py-0.5 text-[9px] font-bold uppercase"><span class="wall-status-short">${escapeText(statusLabels[monitor.status] || monitor.status)}</span><span class="wall-status-long">${escapeText(statusLongLabels[monitor.status] || monitor.status)}</span></span></div>
                     <h2 class="wall-card-name mt-1 truncate text-sm font-semibold leading-tight">${escapeText(monitor.name)}</h2>
                     <p class="wall-card-target truncate text-[10px] leading-tight text-slate-400">${escapeText(monitor.target)}</p>
@@ -250,6 +255,7 @@
                     <div class="wall-history flex gap-0.5">${history}</div>
                 </article>`;
             }).join("");
+            if (monitors.length) wallCardsHaveRendered = true;
             if (monitors.length || Number(summary.total || 0) === 0) setWallState("ready");
         }
 
