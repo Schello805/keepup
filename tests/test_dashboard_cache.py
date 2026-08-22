@@ -136,7 +136,10 @@ class DashboardCacheTests(unittest.TestCase):
             {"id": 1, "name": "A", "target": "a", "category": "Web", "enabled": 1, "status": "up", "display_status": "up", "history": [], "last_response_time": 12, "last_checked_at": "now"},
             {"id": 2, "name": "B", "target": "b", "category": "Web", "enabled": 1, "status": "down", "display_status": "down", "history": [], "last_response_time": 30, "last_checked_at": "now"},
         ]
-        with patch.object(main, "list_status_wall_monitors", return_value=monitors):
+        with (
+            patch.object(main, "list_status_wall_monitors", return_value=monitors),
+            patch.object(main, "get_settings", return_value={"app_timezone": "UTC"}),
+        ):
             payload = main.build_status_wall_payload()
 
         self.assertEqual(payload["summary"]["up"], 1)
