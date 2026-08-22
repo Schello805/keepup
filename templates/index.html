@@ -114,39 +114,39 @@
 {%- endmacro %}
 
 {% macro render_monitor_detail(monitor) -%}
-    <div class="overflow-y-auto flex-1 space-y-4 pr-1 scrollbar-thin rounded-xl">
-        <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Check</dt>
+    <div class="overflow-y-auto flex-1 space-y-3 pr-1 text-xs scrollbar-thin rounded-xl">
+        <dl class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div class="rounded-xl border border-white/5 bg-slate-950/40 p-2.5">
+                <dt class="text-[10px] uppercase tracking-wide text-slate-500">Letzter Check</dt>
                 {% set _checked_parts = (monitor.last_checked_at or '').split(' ') %}
                 <dd class="mt-1 font-medium tabular-nums leading-tight">
                     {% if _checked_parts|length >= 2 %}
                         <span class="block">{{ _checked_parts[0] }}</span>
-                        <span class="block text-sm text-slate-200">{{ _checked_parts[1] }}{% if _checked_parts|length >= 3 %} {{ _checked_parts[2] }}{% endif %}</span>
+                        <span class="block text-xs text-slate-200">{{ _checked_parts[1] }}{% if _checked_parts|length >= 3 %} {{ _checked_parts[2] }}{% endif %}</span>
                     {% else %}
                         {{ monitor.last_checked_at or "-" }}
                     {% endif %}
                 </dd>
             </div>
-            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                <dt class="text-slate-500 text-xs uppercase tracking-wide">Statuswechsel</dt>
+            <div class="rounded-xl border border-white/5 bg-slate-950/40 p-2.5">
+                <dt class="text-[10px] uppercase tracking-wide text-slate-500">Statuswechsel</dt>
                 {% set _change_parts = (monitor.last_change_at or '').split(' ') %}
                 <dd class="mt-1 font-medium tabular-nums leading-tight">
                     {% if _change_parts|length >= 2 %}
                         <span class="block">{{ _change_parts[0] }}</span>
-                        <span class="block text-sm text-slate-200">{{ _change_parts[1] }}{% if _change_parts|length >= 3 %} {{ _change_parts[2] }}{% endif %}</span>
+                        <span class="block text-xs text-slate-200">{{ _change_parts[1] }}{% if _change_parts|length >= 3 %} {{ _change_parts[2] }}{% endif %}</span>
                     {% else %}
                         {{ monitor.last_change_at or "-" }}
                     {% endif %}
                 </dd>
             </div>
-            <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-                <dt class="text-slate-500 text-xs uppercase tracking-wide">Letzter Erfolg</dt>
+            <div class="rounded-xl border border-white/5 bg-slate-950/40 p-2.5">
+                <dt class="text-[10px] uppercase tracking-wide text-slate-500">Letzter Erfolg</dt>
                 {% set _success_parts = (monitor.last_success_at or '').split(' ') %}
                 <dd class="mt-1 font-medium tabular-nums leading-tight">
                     {% if _success_parts|length >= 2 %}
                         <span class="block">{{ _success_parts[0] }}</span>
-                        <span class="block text-sm text-slate-200">{{ _success_parts[1] }}{% if _success_parts|length >= 3 %} {{ _success_parts[2] }}{% endif %}</span>
+                        <span class="block text-xs text-slate-200">{{ _success_parts[1] }}{% if _success_parts|length >= 3 %} {{ _success_parts[2] }}{% endif %}</span>
                     {% else %}
                         {{ monitor.last_success_at or "-" }}
                     {% endif %}
@@ -154,24 +154,24 @@
             </div>
         </dl>
         {% if monitor.sla %}
-        <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-3">
-            <h4 class="font-medium text-slate-300 mb-2">SLA / Uptime</h4>
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+        <div class="rounded-xl border border-white/5 bg-slate-950/40 p-2.5">
+            <h4 class="mb-1.5 text-xs font-medium text-slate-300">SLA / Uptime</h4>
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div class="rounded-xl border border-white/5 bg-slate-950/50 p-2.5">
                     <div class="text-[10px] uppercase tracking-wide text-slate-500">7 Tage</div>
                     <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['7d'].uptime_pct }}%</div>
                     <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['7d'].incident_count }}</div>
                     <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['7d'].downtime_human or '0s' }}</div>
                     <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['7d'].mttr_human or '-' }}</div>
                 </div>
-                <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                <div class="rounded-xl border border-white/5 bg-slate-950/50 p-2.5">
                     <div class="text-[10px] uppercase tracking-wide text-slate-500">30 Tage</div>
                     <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['30d'].uptime_pct }}%</div>
                     <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['30d'].incident_count }}</div>
                     <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['30d'].downtime_human or '0s' }}</div>
                     <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['30d'].mttr_human or '-' }}</div>
                 </div>
-                <div class="rounded-2xl border border-white/5 bg-slate-950/50 p-3">
+                <div class="rounded-xl border border-white/5 bg-slate-950/50 p-2.5">
                     <div class="text-[10px] uppercase tracking-wide text-slate-500">90 Tage</div>
                     <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['90d'].uptime_pct }}%</div>
                     <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['90d'].incident_count }}</div>
@@ -183,17 +183,17 @@
         {% endif %}
         {% if monitor.chart_data_json and monitor.chart_data_json != "[]" %}
         <div class="mb-2">
-            <h4 class="font-medium text-slate-300 mb-2">Antwortzeiten (letzte Checks)</h4>
+            <h4 class="mb-1.5 text-xs font-medium text-slate-300">Antwortzeiten (letzte Checks)</h4>
             <div class="rounded-2xl border border-white/5 bg-slate-950/40 overflow-hidden apex-chart-container h-36 w-full" data-chart-series='{{ monitor.chart_data_json }}' data-monitor-type='{{ monitor.type }}' id="chart-{{ monitor.id }}"></div>
         </div>
         {% endif %}
 
         <div>
-            <h4 class="font-medium text-slate-300 mb-2">Technische Fehlerlogs</h4>
-            <div class="space-y-3">
+            <h4 class="mb-1.5 text-xs font-medium text-slate-300">Technische Fehlerlogs</h4>
+            <div class="space-y-2">
                 {% if monitor.logs %}
                     {% for log in monitor.logs %}
-                    <div class="rounded-2xl border border-white/5 bg-slate-950/60 p-3">
+                    <div class="rounded-xl border border-white/5 bg-slate-950/60 p-2.5">
                         <div class="flex items-center justify-between gap-3 mb-1">
                             <span class="uppercase tracking-wide text-[10px] font-semibold text-slate-400">{{ log.status }}</span>
                             <span class="text-xs text-slate-500">{{ log.checked_at }}</span>
@@ -202,7 +202,7 @@
                         <div class="mb-2 inline-flex rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">{{ log.error_category }}</div>
                         {% endif %}
                         {% if log.error_msg %}
-                        <p class="break-words text-slate-300">{{ log.error_msg }}</p>
+                        <p class="break-words text-xs text-slate-300">{{ log.error_msg }}</p>
                         {% endif %}
                     </div>
                     {% endfor %}

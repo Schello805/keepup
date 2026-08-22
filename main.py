@@ -946,7 +946,11 @@ def build_monitor_detail_context(request: Request, monitor_id: int) -> Optional[
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
     global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
-    monitors = list_monitors(monitor_ids=[monitor_id], include_heavy_details=True)
+    monitors = list_monitors(
+        monitor_ids=[monitor_id],
+        include_heavy_details=True,
+        include_uptime_rollups=False,
+    )
     if not monitors:
         return None
 
@@ -1008,7 +1012,7 @@ def build_all_monitor_detail_html(request: Request) -> dict[str, str]:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
     global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
-    monitors = list_monitors(include_heavy_details=True)
+    monitors = list_monitors(include_heavy_details=True, include_uptime_rollups=False)
     logs_by_monitor = get_recent_logs_for_monitors([int(monitor["id"]) for monitor in monitors])
     result: dict[str, str] = {}
     for monitor in monitors:

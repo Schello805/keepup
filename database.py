@@ -540,6 +540,7 @@ def get_monitor_group_summary() -> list[dict[str, Any]]:
 def list_monitors(
     monitor_ids: Optional[list[int]] = None,
     include_heavy_details: bool = False,
+    include_uptime_rollups: bool = True,
 ) -> list[dict[str, Any]]:
     with closing(get_db()) as conn:
         cursor = conn.cursor()
@@ -560,93 +561,67 @@ def list_monitors(
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
 
-        cursor.execute(
-            f"""
-            SELECT monitor_id, status, response_time, checked_at
-            FROM (
-                SELECT
-                    monitor_id,
-                    status,
-                    response_time,
-                    checked_at,
-                    id,
-                    ROW_NUMBER() OVER (
-                        PARTITION BY monitor_id
-                        ORDER BY checked_at DESC, id DESC
-                    ) AS rn
-                FROM checks
-                WHERE monitor_id IN ({placeholders})
-            )
-            WHERE rn <= ?
-            ORDER BY monitor_id, checked_at DESC
-            """,
-            (*resolved_monitor_ids, HISTORY_LIMIT),
-        )
         recent_checks_by_monitor: dict[int, list[sqlite3.Row]] = {monitor_id: [] for monitor_id in resolved_monitor_ids}
-        for row in cursor.fetchall():
-            recent_checks_by_monitor[row["monitor_id"]].append(row)
-
-        cursor.execute(
-            f"""
-            SELECT monitor_id, MAX(checked_at) AS last_success_at
-            FROM checks
-            WHERE status = 'up'
-              AND monitor_id IN ({placeholders})
-            GROUP BY monitor_id
-            """,
-            tuple(resolved_monitor_ids),
-        )
-        last_success_map = {
-            row["monitor_id"]: row["last_success_at"]
-            for row in cursor.fetchall()
-        }
-
-        cursor.execute(
-            f"""
-            SELECT monitor_id, MAX(checked_at) AS last_down_at
-            FROM checks
-            WHERE status = 'down'
-              AND monitor_id IN ({placeholders})
-            GROUP BY monitor_id
-            """,
-            tuple(resolved_monitor_ids),
-        )
-        last_down_map = {
-            row["monitor_id"]: row["last_down_at"]
-            for row in cursor.fetchall()
-        }
+        last_success_map: dict[int, Optional[str]] = {}
+        last_down_map: dict[int, Optional[str]] = {}
+        for monitor_id in resolved_monitor_ids:
+            cursor.execute(
+                """
+                SELECT monitor_id, status, response_time, checked_at
+                FROM checks
+                WHERE monitor_id = ?
+                ORDER BY checked_at DESC, id DESC
+                LIMIT ?
+                """,
+                (monitor_id, HISTORY_LIMIT),
+            )
+            recent_checks_by_monitor[monitor_id] = cursor.fetchall()
+            for status, target in (("up", last_success_map), ("down", last_down_map)):
+                cursor.execute(
+                    """
+                    SELECT checked_at
+                    FROM checks
+                    WHERE monitor_id = ? AND status = ?
+                    ORDER BY checked_at DESC, id DESC
+                    LIMIT 1
+                    """,
+                    (monitor_id, status),
+                )
+                row = cursor.fetchone()
+                target[monitor_id] = row["checked_at"] if row else None
 
         cutoff_30d = (now_dt - timedelta(days=30)).isoformat()
-        cursor.execute(
-            f"""
-            SELECT
-                monitor_id,
-                SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS up_total,
-                COUNT(*) AS checks_total,
-                SUM(CASE WHEN checked_at >= ? AND status = 'up' THEN 1 ELSE 0 END) AS up_30d,
-                SUM(CASE WHEN checked_at >= ? THEN 1 ELSE 0 END) AS checks_30d
-            FROM checks
-            WHERE monitor_id IN ({placeholders})
-            GROUP BY monitor_id
-            """,
-            (cutoff_30d, cutoff_30d, *resolved_monitor_ids),
-        )
-        uptime_rollup_map: dict[int, sqlite3.Row] = {
-            row["monitor_id"]: row
-            for row in cursor.fetchall()
-        }
+        uptime_rollup_map: dict[int, sqlite3.Row] = {}
+        if include_uptime_rollups:
+            cursor.execute(
+                f"""
+                SELECT
+                    monitor_id,
+                    SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS up_total,
+                    COUNT(*) AS checks_total,
+                    SUM(CASE WHEN checked_at >= ? AND status = 'up' THEN 1 ELSE 0 END) AS up_30d,
+                    SUM(CASE WHEN checked_at >= ? THEN 1 ELSE 0 END) AS checks_30d
+                FROM checks
+                WHERE monitor_id IN ({placeholders})
+                GROUP BY monitor_id
+                """,
+                (cutoff_30d, cutoff_30d, *resolved_monitor_ids),
+            )
+            uptime_rollup_map = {row["monitor_id"]: row for row in cursor.fetchall()}
 
         incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {}
         if include_heavy_details:
+            cutoff_90d = (now_dt - timedelta(days=90)).isoformat()
             cursor.execute(
                 f"""
                 SELECT monitor_id, started_at, ended_at
                 FROM incidents
                 WHERE monitor_id IN ({placeholders})
                   AND started_at <= ?
+                  AND (ended_at IS NULL OR ended_at >= ?)
                 ORDER BY monitor_id ASC, started_at ASC, id ASC
                 """,
-                (*resolved_monitor_ids, now_dt.isoformat()),
+                (*resolved_monitor_ids, now_dt.isoformat(), cutoff_90d),
             )
             incident_rows_by_monitor = {monitor_id: [] for monitor_id in resolved_monitor_ids}
             for row in cursor.fetchall():
