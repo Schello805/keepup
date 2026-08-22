@@ -39,6 +39,7 @@ from database import (
     list_incidents,
     list_monitor_incident_feed_options,
     list_monitor_options,
+    list_status_wall_monitors,
     get_settings,
     import_backup,
     init_db,
@@ -826,7 +827,16 @@ async def ensure_dashboard_snapshot_refresh(request: Request) -> None:
 
 def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
     if monitors is None:
-        monitors = build_dashboard_cards_payload()["monitors"]
+        monitors = list_status_wall_monitors()
+    settings = get_settings()
+    app_timezone = settings.get("app_timezone", "UTC")
+    global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
+    for monitor in monitors:
+        monitor["display_status"] = "paused" if not monitor.get("enabled", 1) else monitor["status"]
+        monitor["effective_interval"] = global_interval_override or int(monitor.get("interval") or 60)
+        last_checked_at = monitor.get("last_checked_at")
+        if last_checked_at and "T" in str(last_checked_at):
+            monitor["last_checked_at"] = format_timestamp_without_tz(monitor.get("last_checked_at"), app_timezone)
     summary = {
         "total": len(monitors),
         "up": sum(1 for monitor in monitors if monitor.get("enabled", 1) and monitor["status"] == "up"),
@@ -2050,14 +2060,14 @@ async def dashboard(request: Request) -> HTMLResponse:
 async def status_wall(request: Request) -> HTMLResponse:
     payload = peek_status_wall_payload()
     if payload is None:
-        summary = await asyncio.to_thread(get_monitor_summary)
-        payload = {
-            "version": 0,
-            "summary": summary,
-            "monitors": [],
-            "loading": True,
-        }
-    await ensure_status_wall_refresh()
+        try:
+            payload = await asyncio.wait_for(asyncio.to_thread(build_status_wall_payload), timeout=8.0)
+        except asyncio.TimeoutError:
+            logger.warning("status_wall_initial_build_timeout")
+            monitors = await asyncio.to_thread(list_status_wall_monitors, False)
+            payload = build_status_wall_payload(monitors)
+            payload["details_pending"] = True
+            await ensure_status_wall_refresh()
     context = {
         "request": request,
         "settings": get_settings(),
@@ -2137,12 +2147,15 @@ async def status_wall_snapshot(request: Request) -> JSONResponse:
     payload = peek_status_wall_payload()
     version = get_dashboard_snapshot_version()
     if payload is None or int(payload.get("version") or 0) != version:
-        await ensure_status_wall_refresh()
-        return JSONResponse(
-            {"ready": False, "version": version},
-            status_code=202,
-            headers={"Cache-Control": "no-store", "Retry-After": "1"},
-        )
+        try:
+            payload = await asyncio.wait_for(asyncio.to_thread(build_status_wall_payload), timeout=8.0)
+        except asyncio.TimeoutError:
+            await ensure_status_wall_refresh()
+            return JSONResponse(
+                {"ready": False, "version": version},
+                status_code=202,
+                headers={"Cache-Control": "no-store", "Retry-After": "1"},
+            )
     with _status_wall_cache_lock:
         expired = time.time() >= float(_status_wall_cache.get("expires_at") or 0.0)
     if expired:

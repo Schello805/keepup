@@ -136,7 +136,7 @@ class DashboardCacheTests(unittest.TestCase):
             {"id": 1, "name": "A", "target": "a", "category": "Web", "enabled": 1, "status": "up", "display_status": "up", "history": [], "last_response_time": 12, "last_checked_at": "now"},
             {"id": 2, "name": "B", "target": "b", "category": "Web", "enabled": 1, "status": "down", "display_status": "down", "history": [], "last_response_time": 30, "last_checked_at": "now"},
         ]
-        with patch.object(main, "build_dashboard_cards_payload", return_value={"monitors": monitors, "settings": {}}):
+        with patch.object(main, "list_status_wall_monitors", return_value=monitors):
             payload = main.build_status_wall_payload()
 
         self.assertEqual(payload["summary"]["up"], 1)
@@ -152,14 +152,21 @@ class DashboardCacheTests(unittest.TestCase):
         self.assertIn('"ready":false', response.body.decode())
         refresh.assert_awaited_once_with(request)
 
-    def test_cold_status_wall_returns_retry_response_immediately(self):
+    def test_cold_status_wall_builds_payload_immediately(self):
         request = SimpleNamespace()
-        with patch.object(main, "ensure_status_wall_refresh", new=AsyncMock()) as refresh:
+        payload = {"version": 0, "summary": {"total": 1}, "monitors": [{"id": 7}]}
+
+        def build_payload():
+            with main._status_wall_cache_lock:
+                main._status_wall_cache.update(version=0, expires_at=9999999999.0, payload=payload)
+            return payload
+
+        with patch.object(main, "build_status_wall_payload", side_effect=build_payload) as build:
             response = main.asyncio.run(main.status_wall_snapshot(request))
 
-        self.assertEqual(response.status_code, 202)
-        self.assertIn('"ready":false', response.body.decode())
-        refresh.assert_awaited_once_with()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('"id":7', response.body.decode())
+        build.assert_called_once_with()
 
     def test_favicon_redirects_to_logo(self):
         response = main.asyncio.run(main.favicon())

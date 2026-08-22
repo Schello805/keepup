@@ -249,7 +249,7 @@
             grid.innerHTML = monitors.map((monitor, index) => {
                 const history = (monitor.history || []).slice(-12).map((status) => `<i class="h-2 flex-1 rounded-full ${status === "up" ? "bg-emerald-400" : status === "down" ? "bg-rose-400" : "bg-amber-400"}"></i>`).join("");
                 const entranceClass = animateCards ? " wall-card-enter" : "";
-                const entranceStyle = animateCards ? ` style="animation-delay:${Math.min(index * 18, 260)}ms"` : "";
+                const entranceStyle = animateCards ? ` style="animation-delay:${Math.min(index * 45, 1800)}ms"` : "";
                 return `<article data-status="${escapeText(monitor.status)}" class="wall-card${entranceClass} min-w-0 rounded-xl border p-2 shadow-panel"${entranceStyle}>
                     <div class="flex items-center justify-between gap-1.5"><span data-status="${escapeText(monitor.status)}" class="wall-dot h-2 w-2 rounded-full"></span><span data-status="${escapeText(monitor.status)}" class="wall-status rounded-md px-2 py-0.5 text-[9px] font-bold uppercase"><span class="wall-status-short">${escapeText(statusLabels[monitor.status] || monitor.status)}</span><span class="wall-status-long">${escapeText(statusLongLabels[monitor.status] || monitor.status)}</span></span></div>
                     <h2 class="wall-card-name mt-1 truncate text-sm font-semibold leading-tight">${escapeText(monitor.name)}</h2>

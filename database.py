@@ -439,6 +439,64 @@ def get_monitor_summary() -> dict[str, int]:
         }
 
 
+def list_status_wall_monitors(include_details: bool = True) -> list[dict[str, Any]]:
+    """Return wall data without scanning the complete check history."""
+    with closing(get_db()) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT
+                id, name, target, category, type, ping_enabled, ping_mode,
+                status, enabled, last_response_time, last_checked_at, interval
+            FROM monitors
+            ORDER BY id DESC
+            """
+        )
+        monitors = [dict(row) for row in cursor.fetchall()]
+        if not include_details or not monitors:
+            for monitor in monitors:
+                monitor["history"] = []
+                monitor["uptime_30d"] = None
+            return monitors
+
+        cutoff_30d = (datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=30)).isoformat()
+        monitor_ids = [int(monitor["id"]) for monitor in monitors]
+        placeholders = ", ".join("?" for _ in monitor_ids)
+        cursor.execute(
+            f"""
+            SELECT
+                monitor_id,
+                SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) AS up_count,
+                COUNT(*) AS check_count
+            FROM checks
+            WHERE monitor_id IN ({placeholders}) AND checked_at >= ?
+            GROUP BY monitor_id
+            """,
+            (*monitor_ids, cutoff_30d),
+        )
+        uptime_rows = {int(row["monitor_id"]): row for row in cursor.fetchall()}
+
+        for monitor in monitors:
+            monitor_id = int(monitor["id"])
+            cursor.execute(
+                """
+                SELECT status
+                FROM checks
+                WHERE monitor_id = ?
+                ORDER BY checked_at DESC, id DESC
+                LIMIT 12
+                """,
+                (monitor_id,),
+            )
+            monitor["history"] = [row["status"] for row in reversed(cursor.fetchall())]
+            uptime_row = uptime_rows.get(monitor_id)
+            check_count = int(uptime_row["check_count"] or 0) if uptime_row else 0
+            up_count = int(uptime_row["up_count"] or 0) if uptime_row else 0
+            monitor["uptime_30d"] = round((up_count / check_count) * 100, 1) if check_count else None
+
+        return monitors
+
+
 def get_monitor_group_summary() -> list[dict[str, Any]]:
     with closing(get_db()) as conn:
         cursor = conn.cursor()
