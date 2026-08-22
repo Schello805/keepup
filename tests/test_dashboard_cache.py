@@ -203,6 +203,20 @@ class DashboardCacheTests(unittest.TestCase):
         with main._monitor_detail_cache_lock:
             self.assertNotIn(7, main._monitor_detail_cache)
 
+    def test_bulk_monitor_details_populate_server_cache(self):
+        monitor = {"id": 7, "interval": 60, "enabled": 1, "status": "up"}
+        with (
+            patch.object(main, "get_settings", return_value={"app_timezone": "UTC"}),
+            patch.object(main, "list_monitors", return_value=[monitor]),
+            patch.object(main, "get_recent_logs_for_monitors", return_value={7: []}),
+            patch.object(main, "render_template_content", return_value="bulk detail"),
+        ):
+            result = main.build_all_monitor_detail_html(SimpleNamespace())
+
+        self.assertEqual(result, {"7": "bulk detail"})
+        with main._monitor_detail_cache_lock:
+            self.assertEqual(main._monitor_detail_cache[7]["html"], "bulk detail")
+
 
 if __name__ == "__main__":
     unittest.main()

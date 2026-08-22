@@ -993,6 +993,8 @@ def get_monitor_detail_html(request: Request, monitor_id: int, force_refresh: bo
 
 
 def build_all_monitor_detail_html(request: Request) -> dict[str, str]:
+    with _monitor_detail_cache_lock:
+        generation = _monitor_detail_cache_generation
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
     global_interval_override = max(0, int(settings.get("global_monitor_interval_override") or 0))
@@ -1020,6 +1022,11 @@ def build_all_monitor_detail_html(request: Request) -> dict[str, str]:
                 "partial": "monitor-detail",
             },
         )
+    expires_at = time.time() + MONITOR_DETAIL_CACHE_TTL_SECONDS
+    with _monitor_detail_cache_lock:
+        if generation == _monitor_detail_cache_generation:
+            for monitor_id, html in result.items():
+                _monitor_detail_cache[int(monitor_id)] = {"html": html, "expires_at": expires_at}
     return result
 
 

@@ -846,6 +846,8 @@
 
         window.__keepupDetailCache = window.__keepupDetailCache || new Map();
         window.__keepupDetailPromises = window.__keepupDetailPromises || new Map();
+        window.__keepupDetailPrefetchPromise = window.__keepupDetailPrefetchPromise || null;
+        window.__keepupDetailPrefetchRetry = window.__keepupDetailPrefetchRetry || null;
 
         async function loadMonitorDetailHtml(monitorId, force = false) {
             const key = String(monitorId);
@@ -868,35 +870,59 @@
             finally { window.__keepupDetailPromises.delete(key); }
         }
 
-        function prefetchMonitorDetails() {
-            if (window.__keepupDetailPrefetchScheduled) return;
-            window.__keepupDetailPrefetchScheduled = true;
-            window.setTimeout(async () => {
-                window.__keepupDetailPrefetchScheduled = false;
-                const monitorIds = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
-                    .map((card) => String(card.dataset.monitorId || ""))
-                    .filter((id) => {
-                        if (!id) return false;
-                        return !window.__keepupDetailCache.has(id);
-                    });
-                if (!monitorIds.length) return;
+        function hydrateCachedMonitorDetails() {
+            document.querySelectorAll(".monitor-card[data-monitor-id]").forEach((card) => {
+                const monitorId = String(card.dataset.monitorId || "");
+                const cached = window.__keepupDetailCache.get(monitorId);
+                const content = document.getElementById(`card-back-content-${monitorId}`);
+                const inner = document.getElementById(`card-inner-${monitorId}`);
+                const loadedAt = String(cached?.loadedAt || "");
+                if (cached && content && !inner?.classList.contains("is-flipped") && content.dataset.detailLoadedAt !== loadedAt) {
+                    content.innerHTML = cached.html;
+                    content.dataset.detailLoadedAt = loadedAt;
+                }
+            });
+        }
 
-                let cursor = 0;
-                const worker = async () => {
-                    while (cursor < monitorIds.length) {
-                        const monitorId = monitorIds[cursor++];
-                        try {
-                            const html = await loadMonitorDetailHtml(monitorId);
-                            const content = document.getElementById(`card-back-content-${monitorId}`);
-                            if (content && !document.getElementById(`card-inner-${monitorId}`)?.classList.contains("is-flipped")) {
-                                content.innerHTML = html;
-                            }
-                        } catch (_) {
-                        }
-                    }
-                };
-                await worker();
-            }, 0);
+        function scheduleMonitorDetailPrefetchRetry() {
+            if (window.__keepupDetailPrefetchRetry) return;
+            window.__keepupDetailPrefetchRetry = window.setTimeout(() => {
+                window.__keepupDetailPrefetchRetry = null;
+                prefetchMonitorDetails();
+            }, 5000);
+        }
+
+        function prefetchMonitorDetails() {
+            hydrateCachedMonitorDetails();
+            if (window.__keepupDetailPrefetchPromise) return window.__keepupDetailPrefetchPromise;
+            const monitorIds = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
+                .map((card) => String(card.dataset.monitorId || ""))
+                .filter(Boolean);
+            const missingIds = monitorIds.filter((id) => !window.__keepupDetailCache.has(id));
+            if (!missingIds.length) return Promise.resolve();
+
+            const promise = (async () => {
+                try {
+                    const response = await fetch("/api/monitor-details", {
+                        cache: "no-store",
+                        credentials: "same-origin",
+                    });
+                    if (!response.ok) throw new Error(`detail_prefetch_${response.status}`);
+                    const payload = await response.json();
+                    Object.entries(payload.details || {}).forEach(([monitorId, html]) => {
+                        window.__keepupDetailCache.set(String(monitorId), { html: String(html), loadedAt: Date.now() });
+                    });
+                    hydrateCachedMonitorDetails();
+                } catch (error) {
+                    console.warn("Detaildaten konnten nicht vorgeladen werden; neuer Versuch folgt.", error);
+                    scheduleMonitorDetailPrefetchRetry();
+                }
+            })();
+            window.__keepupDetailPrefetchPromise = promise;
+            promise.finally(() => {
+                if (window.__keepupDetailPrefetchPromise === promise) window.__keepupDetailPrefetchPromise = null;
+            });
+            return promise;
         }
 
         async function openMonitorDetails(monitorId) {
