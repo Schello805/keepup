@@ -43,6 +43,29 @@ Die App setzt auf:
 - Automatische GitHub-CI für Python-Checks, Unit-Tests, Dependency-Checks und CSS-Build
 - Changelog-Seite aus den letzten GitHub-/Git-Commits mit verständlichen Änderungstexten
 
+## Live-Status-Wall
+
+Die Live-Status-Wall ist eine kompakte Vollbildansicht für Wandmonitore, Tablets und zentrale Statusbildschirme. Du öffnest sie über den Button `Status-Wall` im Dashboard oder direkt unter:
+
+```text
+http://DEINE-KEEPUP-IP:8000/wall
+```
+
+Die Status-Wall bietet:
+
+- Live-Kennzahlen für `UP`, `DOWN` und offene Zustände
+- farblich eindeutig erkennbare Monitor-Karten mit den letzten Checks
+- Gruppenübersicht für die eingerichteten Kategorien
+- drei Informationsdichten: `Kompakt`, `Standard` und `Details`
+- Vollbildmodus für einen aufgeräumten Kiosk- oder Wandbetrieb
+- optionales Tageswetter für den in den Einstellungen hinterlegten Ort
+- optionalen Browser-Sound bei bestätigten Ausfällen und Recoveries
+- flackerfreie Aktualisierung bestehender Karten ohne kompletten Seitenneuaufbau
+
+Die gewählte Kartengröße und der Soundstatus werden lokal im jeweiligen Browser gespeichert. Der Sound lässt sich direkt über das Lautsprecher-Symbol ein- und ausschalten. Ein Klick auf das KeepUp-Logo oder den Button `Dashboard` führt zurück zur normalen Dashboard-Ansicht.
+
+Für das Wetter trägst du unter `Einstellungen → Allgemein → Wetter-Ort` einen Ort ein. Die Daten stammen von Open-Meteo, benötigen keinen API-Schlüssel und werden von KeepUp 15 Minuten zwischengespeichert. Ohne eingetragenen Ort bleibt die Wetteranzeige vollständig ausgeblendet.
+
 ## Intervall-Logik
 
 KeepUp unterstützt jetzt drei Ebenen für Prüfintervalle:
