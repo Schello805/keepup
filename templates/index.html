@@ -89,10 +89,10 @@
                 {% for category in summary.categories %}
                 <button type="button" data-category-filter="{{ category.key }}" onclick="setCategoryFilter(this.dataset.categoryFilter)" class="category-filter-card min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-left transition hover:border-sky-300/30 hover:bg-white/10">
                     <span data-category-label class="block max-w-[11rem] truncate text-sm font-semibold text-slate-100">{{ category.label }}</span>
-                    <span data-category-stats class="flex items-center gap-2 text-[11px] text-slate-400">
-                        <span>{{ category.total }} gesamt</span>
-                        {% if category.down %}<span class="font-semibold text-rose-300">{{ category.down }} down</span>{% endif %}
-                        {% if category.unknown %}<span class="font-semibold text-amber-200">{{ category.unknown }} offen</span>{% endif %}
+                    <span data-category-stats class="flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] text-slate-400">
+                        <span class="shrink-0 whitespace-nowrap">{{ category.total }} gesamt</span>
+                        {% if category.down %}<span class="shrink-0 whitespace-nowrap font-semibold text-rose-300">{{ category.down }} down</span>{% endif %}
+                        {% if category.unknown %}<span class="shrink-0 whitespace-nowrap font-semibold text-amber-200">{{ category.unknown }} offen</span>{% endif %}
                     </span>
                 </button>
                 {% endfor %}
@@ -1090,11 +1090,11 @@
                 if (summary.unknown) parts.push({ text: `${summary.unknown} offen`, className: "font-semibold text-amber-200" });
                 const active = Math.max(1, summary.up + summary.down + summary.unknown);
                 parts.push({ text: `${Math.round((summary.up / active) * 100)}% verfügbar`, className: "text-emerald-200" });
-                if (summary.response >= 0) parts.push({ text: `langsamster ${Math.round(summary.response)} ms`, className: "text-slate-500" });
+                if (summary.response >= 0) parts.push({ text: `max. ${Math.round(summary.response)} ms`, className: "text-slate-500" });
                 stats.replaceChildren(...parts.map((part) => {
                     const span = document.createElement("span");
                     span.textContent = part.text;
-                    span.className = part.className;
+                    span.className = `shrink-0 whitespace-nowrap ${part.className}`;
                     return span;
                 }));
             });
