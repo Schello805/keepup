@@ -204,6 +204,14 @@ def init_db() -> None:
                 FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS monitor_categories (
+                monitor_id INTEGER NOT NULL,
+                category TEXT NOT NULL COLLATE NOCASE,
+                position INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (monitor_id, category),
+                FOREIGN KEY (monitor_id) REFERENCES monitors(id) ON DELETE CASCADE
+            );
+
             CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
@@ -241,12 +249,23 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_incidents_monitor_started
             ON incidents (monitor_id, started_at DESC, ended_at);
+
+            CREATE INDEX IF NOT EXISTS idx_monitor_categories_category
+            ON monitor_categories (category COLLATE NOCASE, monitor_id);
             """
         )
 
         _ensure_monitor_columns(cursor)
         _ensure_check_columns(cursor)
         _ensure_incident_columns(cursor)
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO monitor_categories (monitor_id, category, position)
+            SELECT id, TRIM(category), 0
+            FROM monitors
+            WHERE TRIM(COALESCE(category, '')) != ''
+            """
+        )
         _seed_default_settings(cursor)
         conn.commit()
 
@@ -379,7 +398,60 @@ def get_monitor(monitor_id: int) -> Optional[dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM monitors WHERE id = ?", (monitor_id,))
         monitor = row_to_dict(cursor.fetchone())
+        if monitor:
+            monitor["categories"] = _get_monitor_categories(cursor, [monitor_id]).get(monitor_id, [])
+            monitor["category"] = monitor["categories"][0] if monitor["categories"] else ""
     return monitor
+
+
+def _normalize_categories(categories: Optional[list[str]], legacy_category: str = "") -> list[str]:
+    values = [str(value or "").strip() for value in (categories or []) if str(value or "").strip()]
+    if legacy_category and not values:
+        values.append(legacy_category)
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        label = str(value or "").strip()
+        key = label.casefold()
+        if not label or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(label[:80])
+    return normalized
+
+
+def _get_monitor_categories(cursor: sqlite3.Cursor, monitor_ids: list[int]) -> dict[int, list[str]]:
+    result = {int(monitor_id): [] for monitor_id in monitor_ids}
+    if not monitor_ids:
+        return result
+    placeholders = ", ".join("?" for _ in monitor_ids)
+    cursor.execute(
+        f"""
+        SELECT monitor_id, category
+        FROM monitor_categories
+        WHERE monitor_id IN ({placeholders})
+        ORDER BY monitor_id, position, category COLLATE NOCASE
+        """,
+        tuple(monitor_ids),
+    )
+    for row in cursor.fetchall():
+        result[int(row["monitor_id"])].append(str(row["category"]))
+    return result
+
+
+def _replace_monitor_categories(
+    cursor: sqlite3.Cursor,
+    monitor_id: int,
+    categories: Optional[list[str]],
+    legacy_category: str = "",
+) -> list[str]:
+    normalized = _normalize_categories(categories, legacy_category)
+    cursor.execute("DELETE FROM monitor_categories WHERE monitor_id = ?", (monitor_id,))
+    cursor.executemany(
+        "INSERT INTO monitor_categories (monitor_id, category, position) VALUES (?, ?, ?)",
+        [(monitor_id, category, position) for position, category in enumerate(normalized)],
+    )
+    return normalized
 
 
 def list_monitor_options() -> list[dict[str, Any]]:
@@ -453,6 +525,10 @@ def list_status_wall_monitors(include_details: bool = True) -> list[dict[str, An
             """
         )
         monitors = [dict(row) for row in cursor.fetchall()]
+        category_map = _get_monitor_categories(cursor, [int(monitor["id"]) for monitor in monitors])
+        for monitor in monitors:
+            monitor["categories"] = category_map.get(int(monitor["id"]), [])
+            monitor["category"] = monitor["categories"][0] if monitor["categories"] else ""
         if not include_details or not monitors:
             for monitor in monitors:
                 monitor["history"] = []
@@ -504,11 +580,12 @@ def get_monitor_group_summary() -> list[dict[str, Any]]:
             """
             WITH normalized AS (
                 SELECT
-                    TRIM(category) AS raw_label,
-                    LOWER(COALESCE(NULLIF(TRIM(category), ''), '__none__')) AS key,
-                    enabled,
-                    status
-                FROM monitors
+                    COALESCE(mc.category, 'Ohne Kategorie') AS raw_label,
+                    LOWER(COALESCE(mc.category, '__none__')) AS key,
+                    m.enabled,
+                    m.status
+                FROM monitors m
+                LEFT JOIN monitor_categories mc ON mc.monitor_id = m.id
             )
             SELECT
                 CASE WHEN key = '__none__' THEN 'Ohne Kategorie' ELSE MIN(raw_label) END AS label,
@@ -557,6 +634,10 @@ def list_monitors(
             return []
 
         resolved_monitor_ids = [monitor["id"] for monitor in monitors]
+        category_map = _get_monitor_categories(cursor, resolved_monitor_ids)
+        for monitor in monitors:
+            monitor["categories"] = category_map.get(int(monitor["id"]), [])
+            monitor["category"] = monitor["categories"][0] if monitor["categories"] else ""
         placeholders = ", ".join("?" for _ in resolved_monitor_ids)
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
@@ -721,6 +802,7 @@ def create_monitor(
     expected_text: str = "",
     forbidden_text: str = "",
     enabled: bool = True,
+    categories: Optional[list[str]] = None,
 ) -> int:
     now = utc_now()
     with closing(get_db()) as conn:
@@ -752,6 +834,11 @@ def create_monitor(
             ),
         )
         monitor_id = cursor.lastrowid
+        normalized_categories = _replace_monitor_categories(cursor, int(monitor_id), categories, category)
+        cursor.execute(
+            "UPDATE monitors SET category = ? WHERE id = ?",
+            (normalized_categories[0] if normalized_categories else "", monitor_id),
+        )
         conn.commit()
     return monitor_id
 
@@ -771,10 +858,12 @@ def update_monitor(
     timeout: int,
     expected_text: str = "",
     forbidden_text: str = "",
+    categories: Optional[list[str]] = None,
 ) -> None:
     now = utc_now()
     with closing(get_db()) as conn:
-        conn.execute(
+        cursor = conn.cursor()
+        cursor.execute(
             """
             UPDATE monitors
             SET name = ?,
@@ -810,6 +899,11 @@ def update_monitor(
                 now,
                 monitor_id,
             ),
+        )
+        normalized_categories = _replace_monitor_categories(cursor, monitor_id, categories, category)
+        cursor.execute(
+            "UPDATE monitors SET category = ? WHERE id = ?",
+            (normalized_categories[0] if normalized_categories else "", monitor_id),
         )
         conn.commit()
 
@@ -1320,6 +1414,9 @@ def export_backup(include_secrets: bool = False) -> dict[str, Any]:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM monitors ORDER BY id ASC")
         monitors = [dict(row) for row in cursor.fetchall()]
+        category_map = _get_monitor_categories(cursor, [int(monitor["id"]) for monitor in monitors])
+        for monitor in monitors:
+            monitor["categories"] = category_map.get(int(monitor["id"]), [])
         cursor.execute(
             "SELECT * FROM checks WHERE checked_at >= ? ORDER BY id ASC",
             (cutoff.isoformat(),),
@@ -1372,6 +1469,7 @@ def import_backup(payload: dict[str, Any]) -> None:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM checks")
         cursor.execute("DELETE FROM incidents")
+        cursor.execute("DELETE FROM monitor_categories")
         cursor.execute("DELETE FROM monitors")
         cursor.execute("DELETE FROM settings")
         _seed_default_settings(cursor)
@@ -1422,6 +1520,15 @@ def import_backup(payload: dict[str, Any]) -> None:
                     monitor.get("created_at", utc_now()),
                     monitor.get("updated_at", utc_now()),
                 ),
+            )
+            imported_categories = _normalize_categories(
+                monitor.get("categories") if isinstance(monitor.get("categories"), list) else None,
+                str(monitor.get("category") or ""),
+            )
+            _replace_monitor_categories(cursor, int(monitor.get("id")), imported_categories)
+            cursor.execute(
+                "UPDATE monitors SET category = ? WHERE id = ?",
+                (imported_categories[0] if imported_categories else "", monitor.get("id")),
             )
 
         for check in checks:

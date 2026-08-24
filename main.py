@@ -853,6 +853,7 @@ def build_status_wall_payload(monitors: Optional[list[dict[str, Any]]] = None) -
                 "name": monitor["name"],
                 "target": monitor["target"],
                 "category": str(monitor.get("category") or "Ohne Kategorie"),
+                "categories": monitor.get("categories") or [],
                 "type": (
                     "PING + HTTP" if monitor.get("ping_mode") == "and" else "PING ODER HTTP"
                 ) if monitor.get("ping_enabled") else str(monitor.get("type") or "").upper(),
@@ -921,20 +922,24 @@ def build_dashboard_cards_payload() -> dict[str, Any]:
 def build_monitor_category_summary(monitors: list[dict[str, Any]]) -> list[dict[str, Any]]:
     categories: dict[str, dict[str, Any]] = {}
     for monitor in monitors:
-        raw_label = str(monitor.get("category") or "").strip()
-        key = raw_label.lower() if raw_label else "__none__"
-        label = raw_label or "Ohne Kategorie"
-        item = categories.setdefault(
-            key,
-            {"key": key, "label": label, "total": 0, "up": 0, "down": 0, "unknown": 0, "paused": 0},
-        )
-        item["total"] += 1
-        if not monitor.get("enabled", 1):
-            item["paused"] += 1
-        else:
-            status = str(monitor.get("status") or "unknown")
-            if status in {"up", "down", "unknown"}:
-                item[status] += 1
+        labels = monitor.get("categories") or []
+        if not isinstance(labels, list) or not labels:
+            labels = [str(monitor.get("category") or "").strip()] if monitor.get("category") else [""]
+        for raw_value in labels:
+            raw_label = str(raw_value or "").strip()
+            key = raw_label.lower() if raw_label else "__none__"
+            label = raw_label or "Ohne Kategorie"
+            item = categories.setdefault(
+                key,
+                {"key": key, "label": label, "total": 0, "up": 0, "down": 0, "unknown": 0, "paused": 0},
+            )
+            item["total"] += 1
+            if not monitor.get("enabled", 1):
+                item["paused"] += 1
+            else:
+                status = str(monitor.get("status") or "unknown")
+                if status in {"up", "down", "unknown"}:
+                    item[status] += 1
 
     return sorted(
         categories.values(),
@@ -1355,6 +1360,7 @@ def _humanize_commit_subject(subject: str) -> str:
     translations = (
         ("add live dashboard experience and status wall", "Dashboard-Daten sind jetzt atomar synchronisiert; hinzu kommen Live-Events, Mini-Timelines, Fokusmodus, Gruppenkennzahlen, Status-Wall und optionale Sounds."),
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
+        ("support multiple monitor groups", "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
         ("show monitor group badges", "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an."),
@@ -2251,6 +2257,8 @@ async def create_monitor_route(
     request: Request,
     name: str = Form(...),
     category: str = Form(""),
+    categories: list[str] = Form([]),
+    category_custom: str = Form(""),
     monitor_type: str = Form(...),
     target: str = Form(...),
     ping_target: str = Form(""),
@@ -2290,6 +2298,7 @@ async def create_monitor_route(
         timeout=max(2, timeout),
         expected_text=expected_text,
         forbidden_text=forbidden_text,
+        categories=[*categories, category_custom],
     )
     invalidate_monitor_detail_cache(monitor_id)
     created_monitor = get_monitor(monitor_id) or {}
@@ -2302,7 +2311,8 @@ async def create_monitor_route(
                 "ok": True,
                 "id": monitor_id,
                 "name": name.strip(),
-                "category": category.strip(),
+                "category": created_monitor.get("category", ""),
+                "categories": created_monitor.get("categories", []),
                 "target": target,
                 "ping_target": ping_target.strip(),
                 "monitor_type": "http" if is_combo else monitor_type,
@@ -2321,6 +2331,8 @@ async def edit_monitor_route(
     monitor_id: int,
     name: str = Form(...),
     category: str = Form(""),
+    categories: list[str] = Form([]),
+    category_custom: str = Form(""),
     monitor_type: str = Form(...),
     target: str = Form(...),
     ping_target: str = Form(""),
@@ -2365,6 +2377,7 @@ async def edit_monitor_route(
         timeout=max(2, timeout),
         expected_text=expected_text,
         forbidden_text=forbidden_text,
+        categories=[*categories, category_custom],
     )
     invalidate_monitor_detail_cache(monitor_id)
     reschedule_monitor_job(scheduler, monitor_id)
@@ -2376,7 +2389,8 @@ async def edit_monitor_route(
                 "ok": True,
                 "id": monitor_id,
                 "name": name.strip(),
-                "category": category.strip(),
+                "category": (get_monitor(monitor_id) or {}).get("category", ""),
+                "categories": (get_monitor(monitor_id) or {}).get("categories", []),
                 "target": target,
                 "ping_target": ping_target.strip(),
                 "monitor_type": "http" if is_combo else monitor_type,

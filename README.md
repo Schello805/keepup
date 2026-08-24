@@ -23,7 +23,7 @@ Die App setzt auf:
 - Bestätigte DOWN-/UP-Logik mit Schwellwerten
 - Flapping-Erkennung
 - Incident-Timeline
-- Gruppen/Kategorien für Monitore mit Dashboard-Filter und Gruppenstatus
+- Mehrere Gruppen/Kategorien pro Monitor mit Dashboard-Filter und Gruppenstatus
 - Kompakter JSON-Export und -Import für Konfiguration und aktuelle Historie
 - Mobile-First-Dashboard mit Live-Updates
 - Atomare, versionierte Dashboard-Snapshots für konsistente Karten und Zähler
@@ -168,7 +168,7 @@ In den Einstellungen kannst du:
 Der Export enthält:
 
 - Monitore
-- Monitor-Kategorien/Gruppen
+- Monitor-Kategorien/Gruppen einschließlich Mehrfachzuordnung
 - Einstellungen
 - Checks der letzten 24 Stunden
 - Incidents der letzten 24 Stunden sowie weiterhin offene Incidents

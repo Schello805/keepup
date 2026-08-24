@@ -127,6 +127,7 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
                 monitor_id = database.create_monitor(
                     name="Nextcloud",
                     category="Websites",
+                    categories=["Websites", "Docker"],
                     monitor_type="http",
                     target="https://cloud.example.test",
                     ping_enabled=False,
@@ -154,15 +155,40 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
 
                 payload = database.export_backup()
                 self.assertEqual(payload["monitors"][0]["category"], "Websites")
+                self.assertEqual(payload["monitors"][0]["categories"], ["Websites", "Docker"])
 
                 database.import_backup(payload)
                 imported_monitor = database.get_monitor(monitor_id)
                 self.assertEqual(imported_monitor["category"], "Websites")
+                self.assertEqual(imported_monitor["categories"], ["Websites", "Docker"])
 
                 groups = database.get_monitor_group_summary()
                 self.assertEqual(groups[0]["label"], "Websites")
                 self.assertEqual(groups[0]["total"], 2)
                 self.assertEqual(groups[0]["down"], 1)
+                docker_group = next(group for group in groups if group["label"] == "Docker")
+                self.assertEqual(docker_group["total"], 1)
+                self.assertEqual(docker_group["down"], 1)
+
+    def test_legacy_single_category_is_migrated(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "keepup-legacy.db"
+            with patch.object(database, "DATABASE_URL", db_path):
+                database.init_db()
+                with database.get_db() as conn:
+                    cursor = conn.execute(
+                        """
+                        INSERT INTO monitors (name, category, type, target, interval, timeout)
+                        VALUES ('Router', 'Netzwerk', 'ping', '192.168.1.1', 60, 10)
+                        """
+                    )
+                    monitor_id = int(cursor.lastrowid)
+                    conn.execute("DELETE FROM monitor_categories WHERE monitor_id = ?", (monitor_id,))
+                    conn.commit()
+
+                database.init_db()
+                monitor = database.get_monitor(monitor_id)
+                self.assertEqual(monitor["categories"], ["Netzwerk"])
 
 
 if __name__ == "__main__":

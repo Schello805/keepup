@@ -65,6 +65,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Support multiple monitor groups"),
+            "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make monitor edits update inline"),
             "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
         )

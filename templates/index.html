@@ -230,9 +230,10 @@
             {% set monitor_type_label = ('PING + HTTP' if monitor.ping_mode == 'and' else 'PING oder HTTP') if monitor.ping_enabled else monitor.type|upper %}
             {% set first_check_running = status == 'unknown' and monitor.enabled and not monitor.last_checked_at %}
             {% set cache_refresh_running = monitor.cache_refresh_running %}
-            {% set category_label = monitor.category|trim if monitor.category else '' %}
-            {% set category_key = category_label|lower if category_label else '__none__' %}
-            <article data-monitor-status="{{ status }}" data-monitor-category="{{ category_key }}" data-monitor-search="{{ (monitor.name ~ ' ' ~ category_label ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-created="{{ monitor.created_at or monitor.id }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer transition duration-500" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
+            {% set monitor_categories = monitor.categories or ([monitor.category|trim] if monitor.category else []) %}
+            {% set category_label = monitor_categories|join(' ') %}
+            {% set category_keys = monitor_categories|map('lower')|join('|') %}
+            <article data-monitor-status="{{ status }}" data-monitor-category="{{ monitor_categories[0]|lower if monitor_categories else '__none__' }}" data-monitor-categories="|{{ category_keys }}|" data-monitor-search="{{ (monitor.name ~ ' ' ~ category_label ~ ' ' ~ monitor.target ~ ' ' ~ (monitor.ping_target or ''))|lower }}" data-monitor-name="{{ monitor.name|lower }}" data-monitor-response-time="{{ monitor.last_response_time if monitor.last_response_time is not none else -1 }}" data-monitor-uptime="{{ monitor.uptime_percentage if monitor.uptime_percentage is not none else -1 }}" data-monitor-created="{{ monitor.created_at or monitor.id }}" data-monitor-status-rank="{{ 0 if status == 'down' else 1 if status == 'unknown' else 2 if status == 'paused' else 3 }}" data-monitor-order="{{ loop.index0 }}" data-monitor-id="{{ monitor.id }}" class="monitor-card perspective-1000 flex min-w-0 cursor-pointer transition duration-500" onclick="handleMonitorCardClick(event, '{{ monitor.id }}')">
                 <div id="card-inner-{{ monitor.id }}" class="relative flex min-w-0 w-full flex-1 transition-transform duration-500 preserve-3d">
                     <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border {{ card_classes }} p-3 shadow-panel card-sheen">
                         <div class="flex items-start justify-between gap-3 flex-shrink-0">
@@ -241,9 +242,9 @@
                                     <span class="inline-flex h-3 w-3 rounded-full {{ status_dot_classes(status) }}"></span>
                                     <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor_type_label }}</p>
                                 </div>
-                                {% if category_label %}
-                                <div class="mb-1.5 inline-flex max-w-full items-center rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[11px] font-semibold text-sky-100">
-                                    <span class="truncate">Gruppe: {{ category_label }}</span>
+                                {% if monitor_categories %}
+                                <div class="mb-1.5 flex max-w-full flex-wrap gap-1">
+                                    {% for category in monitor_categories %}<span class="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">{{ category }}</span>{% endfor %}
                                 </div>
                                 {% endif %}
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
@@ -369,7 +370,7 @@
                                     <span class="sr-only">{% if monitor.enabled %}Pausieren{% else %}Fortsetzen{% endif %}</span>
                                 </button>
                             </form>
-                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-category="{{ category_label }}" data-monitor-type="{{ 'ping_http_and' if monitor.ping_enabled and monitor.ping_mode == 'and' else 'ping_http_or' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                            <button type="button" data-monitor-id="{{ monitor.id }}" data-monitor-name="{{ monitor.name }}" data-monitor-category="{{ monitor.category or '' }}" data-monitor-categories='{{ monitor_categories|tojson|forceescape }}' data-monitor-type="{{ 'ping_http_and' if monitor.ping_enabled and monitor.ping_mode == 'and' else 'ping_http_or' if monitor.ping_enabled else monitor.type }}" data-monitor-target="{{ monitor.target }}" data-monitor-ping-target="{{ monitor.ping_target or '' }}" data-monitor-http-method="{{ monitor.http_method or 'GET' }}" data-monitor-retry-count="{{ monitor.retry_count if monitor.retry_count is not none else 2 }}" data-monitor-interval="{{ monitor.interval }}" data-monitor-timeout="{{ monitor.timeout }}" data-monitor-expected-text="{{ monitor.expected_text or '' }}" data-monitor-forbidden-text="{{ monitor.forbidden_text or '' }}" onclick="openEditPanel(this)" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
                                 <span class="sr-only">Bearbeiten</span>
                             </button>
@@ -578,19 +579,17 @@
                     <p class="field-help text-xs text-slate-500">Wird auf der Karte und in Benachrichtigungen angezeigt.</p>
                 </label>
                 <label class="space-y-1 sm:col-span-1 lg:col-span-2">
-                    <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
-                    <select id="new-monitor-category-select" class="{{ select_classes() }}" onchange="toggleCategoryCustomField('new')" title="Vorhandene Kategorie auswählen oder eine neue Kategorie anlegen.">
-                        <option value="">Ohne Kategorie</option>
+                    <span class="text-sm text-slate-300" title="Ein Monitor kann mehreren Gruppen gleichzeitig zugeordnet werden.">Kategorien / Gruppen</span>
+                    <select id="new-monitor-category-select" name="categories" multiple size="3" class="{{ select_classes() }} h-24" title="Eine oder mehrere vorhandene Gruppen auswählen.">
                         {% for category in summary.categories or [] %}
                             {% if category.key != "__none__" %}
                             <option value="{{ category.label }}">{{ category.label }}</option>
                             {% endif %}
                         {% endfor %}
-                        <option value="__custom__">Neue Kategorie...</option>
                     </select>
-                    <input id="new-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen." disabled>
+                    <input id="new-monitor-category-custom" name="category_custom" class="{{ input_classes() }}" placeholder="Neue Gruppe (optional)" title="Optional zusätzlich eine neue Gruppe anlegen.">
                     <input id="new-monitor-category" type="hidden" name="category" value="">
-                    <p class="field-help text-xs text-slate-500">Optional. Wähle eine vorhandene Gruppe oder lege über “Neue Kategorie...” eine neue an.</p>
+                    <p class="field-help text-xs text-slate-500">Mehrere Gruppen sind möglich. Am PC mit Strg/Cmd auswählen; mobil öffnet sich die Systemauswahl.</p>
                 </label>
                 <label class="space-y-1 sm:col-span-2 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
@@ -682,19 +681,17 @@
                     <p class="field-help text-xs text-slate-500">Wird auf der Karte und in Benachrichtigungen angezeigt.</p>
                 </label>
                 <label class="space-y-1 sm:col-span-1 lg:col-span-2">
-                    <span class="text-sm text-slate-300" title="Optionale Gruppe für Filter und Übersicht, z. B. Server, Websites, Smart Home oder Docker.">Kategorie / Gruppe</span>
-                    <select id="edit-monitor-category-select" class="{{ select_classes() }}" onchange="toggleCategoryCustomField('edit')" title="Vorhandene Kategorie auswählen oder eine neue Kategorie anlegen.">
-                        <option value="">Ohne Kategorie</option>
+                    <span class="text-sm text-slate-300" title="Ein Monitor kann mehreren Gruppen gleichzeitig zugeordnet werden.">Kategorien / Gruppen</span>
+                    <select id="edit-monitor-category-select" name="categories" multiple size="3" class="{{ select_classes() }} h-24" title="Eine oder mehrere vorhandene Gruppen auswählen.">
                         {% for category in summary.categories or [] %}
                             {% if category.key != "__none__" %}
                             <option value="{{ category.label }}">{{ category.label }}</option>
                             {% endif %}
                         {% endfor %}
-                        <option value="__custom__">Neue Kategorie...</option>
                     </select>
-                    <input id="edit-monitor-category-custom" class="{{ input_classes() }} hidden" placeholder="Neue Kategorie, z. B. Docker" title="Neue Kategorie frei eintippen." disabled>
+                    <input id="edit-monitor-category-custom" name="category_custom" class="{{ input_classes() }}" placeholder="Neue Gruppe (optional)" title="Optional zusätzlich eine neue Gruppe anlegen.">
                     <input id="edit-monitor-category" type="hidden" name="category" value="">
-                    <p class="field-help text-xs text-slate-500">Optional. Gleicher Text = gleiche Gruppe.</p>
+                    <p class="field-help text-xs text-slate-500">Am PC mit Strg/Cmd mehrere Gruppen wählen; mobil öffnet sich die Systemauswahl.</p>
                 </label>
                 <label class="space-y-1 sm:col-span-2 lg:col-span-2">
                     <span class="text-sm text-slate-300" title="Legt fest, ob KeepUp per HTTP, Ping oder kombiniert prüft.">Typ</span>
@@ -1063,18 +1060,20 @@
             cards.forEach((card) => {
                 const status = card.dataset.monitorStatus || "unknown";
                 if (Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
-                const category = card.dataset.monitorCategory || "__none__";
-                const categorySummary = categoryCounts.get(category) || { total: 0, up: 0, down: 0, unknown: 0, response: -1, slowest: "" };
-                categorySummary.total += 1;
-                if (status === "up") categorySummary.up += 1;
-                if (status === "down") categorySummary.down += 1;
-                if (status === "unknown") categorySummary.unknown += 1;
                 const response = Number(card.dataset.monitorResponseTime || -1);
-                if (Number.isFinite(response) && response > categorySummary.response) {
-                    categorySummary.response = response;
-                    categorySummary.slowest = card.dataset.monitorName || "";
-                }
-                categoryCounts.set(category, categorySummary);
+                const categories = (card.dataset.monitorCategories || "|__none__|").split("|").filter(Boolean);
+                categories.forEach((category) => {
+                    const categorySummary = categoryCounts.get(category) || { total: 0, up: 0, down: 0, unknown: 0, response: -1, slowest: "" };
+                    categorySummary.total += 1;
+                    if (status === "up") categorySummary.up += 1;
+                    if (status === "down") categorySummary.down += 1;
+                    if (status === "unknown") categorySummary.unknown += 1;
+                    if (Number.isFinite(response) && response > categorySummary.response) {
+                        categorySummary.response = response;
+                        categorySummary.slowest = card.dataset.monitorName || "";
+                    }
+                    categoryCounts.set(category, categorySummary);
+                });
             });
             document.querySelectorAll(".status-filter-card").forEach((card) => {
                 const value = counts[card.dataset.filter];
@@ -1214,7 +1213,7 @@
             });
             document.querySelectorAll(".monitor-card").forEach((card) => {
                 const matchesStatus = filter === "all" || card.dataset.monitorStatus === filter;
-                const matchesCategory = category === "all" || card.dataset.monitorCategory === category;
+                const matchesCategory = category === "all" || (card.dataset.monitorCategories || "").includes(`|${category}|`);
                 const haystack = (card.dataset.monitorSearch || "").toLowerCase();
                 const matchesSearch = !query || haystack.includes(query);
                 card.classList.toggle("is-hidden", !(matchesStatus && matchesCategory && matchesSearch));
@@ -1254,7 +1253,9 @@
 
             form.action = `/monitors/${button.dataset.monitorId}/edit`;
             document.getElementById("edit-monitor-name").value = button.dataset.monitorName || "";
-            setCategoryFormValue("edit", button.dataset.monitorCategory || "");
+            let categories = [];
+            try { categories = JSON.parse(button.dataset.monitorCategories || "[]"); } catch (_) {}
+            setCategoryFormValue("edit", categories.length ? categories : [button.dataset.monitorCategory || ""]);
             document.getElementById("edit-monitor-type").value = button.dataset.monitorType || "http";
             document.getElementById("edit-monitor-target").value = button.dataset.monitorTarget || "";
             document.getElementById("edit-monitor-ping-target").value = button.dataset.monitorPingTarget || "";
@@ -1298,12 +1299,11 @@
             const custom = document.getElementById(`${mode}-monitor-category-custom`);
             const hidden = document.getElementById(`${mode}-monitor-category`);
             if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement) || !(hidden instanceof HTMLInputElement)) return;
-            const normalized = String(value || "").trim();
-            const hasOption = [...select.options].some((option) => option.value === normalized);
-            select.value = !normalized || hasOption ? normalized : "__custom__";
-            custom.value = hasOption ? "" : normalized;
-            hidden.value = normalized;
-            toggleCategoryCustomField(mode);
+            const values = (Array.isArray(value) ? value : [value]).map((item) => String(item || "").trim()).filter(Boolean);
+            const known = new Set([...select.options].map((option) => option.value.toLowerCase()));
+            [...select.options].forEach((option) => { option.selected = values.some((item) => item.toLowerCase() === option.value.toLowerCase()); });
+            custom.value = values.find((item) => !known.has(item.toLowerCase())) || "";
+            hidden.value = values[0] || "";
         }
 
         function syncCategoryFormValue(mode) {
@@ -1311,36 +1311,25 @@
             const custom = document.getElementById(`${mode}-monitor-category-custom`);
             const hidden = document.getElementById(`${mode}-monitor-category`);
             if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement) || !(hidden instanceof HTMLInputElement)) return "";
-            hidden.value = select.value === "__custom__" ? custom.value.trim() : select.value;
+            const selected = [...select.selectedOptions].map((option) => option.value.trim()).filter(Boolean);
+            hidden.value = selected[0] || custom.value.trim();
             return hidden.value;
         }
 
         function rememberCategoryOption(value) {
-            const label = String(value || "").trim();
-            if (!label) return;
+            const labels = (Array.isArray(value) ? value : [value]).map((item) => String(item || "").trim()).filter(Boolean);
             ["new", "edit"].forEach((mode) => {
                 const select = document.getElementById(`${mode}-monitor-category-select`);
                 if (!(select instanceof HTMLSelectElement)) return;
-                const exists = [...select.options].some((option) => option.value.toLowerCase() === label.toLowerCase());
-                if (exists) return;
-                const option = document.createElement("option");
-                option.value = label;
-                option.textContent = label;
-                const customOption = [...select.options].find((item) => item.value === "__custom__");
-                select.insertBefore(option, customOption || null);
+                labels.forEach((label) => {
+                    if ([...select.options].some((option) => option.value.toLowerCase() === label.toLowerCase())) return;
+                    select.add(new Option(label, label));
+                });
             });
         }
 
         function toggleCategoryCustomField(mode) {
-            const select = document.getElementById(`${mode}-monitor-category-select`);
-            const custom = document.getElementById(`${mode}-monitor-category-custom`);
-            if (!(select instanceof HTMLSelectElement) || !(custom instanceof HTMLInputElement)) return;
-            const isCustom = select.value === "__custom__";
-            custom.classList.toggle("hidden", !isCustom);
-            custom.disabled = !isCustom;
-            custom.toggleAttribute("required", isCustom);
             syncCategoryFormValue(mode);
-            if (isCustom) custom.focus();
         }
 
         function dismissToast() {
@@ -1731,9 +1720,9 @@
         function pendingMonitorReflectsCard(pending, card) {
             if (!(card instanceof HTMLElement)) return false;
             const monitor = pending.monitor || {};
-            const expectedCategory = normalizeCategoryKey(monitor.category);
+            const expectedCategories = (monitor.categories || [monitor.category]).filter(Boolean).map(normalizeCategoryKey);
             const expectedName = String(monitor.name || "").trim().toLowerCase();
-            const categoryMatches = (card.dataset.monitorCategory || "__none__") === expectedCategory;
+            const categoryMatches = expectedCategories.every((category) => (card.dataset.monitorCategories || "").includes(`|${category}|`));
             const nameMatches = !expectedName || (card.dataset.monitorName || "") === expectedName;
             return categoryMatches && nameMatches;
         }
@@ -1786,16 +1775,19 @@
             const previousStatusRank = existing?.dataset.monitorStatusRank || "1";
             if (existing) existing.remove();
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
-            const categoryLabel = String(monitor.category || "").trim();
-            const categoryKey = categoryLabel ? categoryLabel.toLowerCase() : "__none__";
-            const categoryBadge = categoryLabel
-                ? `<div class="mb-1.5 inline-flex max-w-full items-center rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[11px] font-semibold text-sky-100"><span class="truncate">Gruppe: ${escapeHtml(categoryLabel)}</span></div>`
+            const categoryLabels = (monitor.categories || [monitor.category]).map((item) => String(item || "").trim()).filter(Boolean);
+            const categoryLabel = categoryLabels.join(" ");
+            const categoryKey = categoryLabels[0]?.toLowerCase() || "__none__";
+            const categoryKeys = categoryLabels.map((item) => item.toLowerCase());
+            const categoryBadge = categoryLabels.length
+                ? `<div class="mb-1.5 flex max-w-full flex-wrap gap-1">${categoryLabels.map((item) => `<span class="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">${escapeHtml(item)}</span>`).join("")}</div>`
                 : "";
             const spinnerTitle = options.spinnerTitle || "Erster Check läuft";
             const spinnerMessage = options.spinnerMessage || "Warte auf erste Rückmeldung...";
             const card = document.createElement("article");
             card.dataset.monitorStatus = previousStatus;
             card.dataset.monitorCategory = categoryKey;
+            card.dataset.monitorCategories = `|${categoryKeys.join("|") || "__none__"}|`;
             card.dataset.monitorSearch = `${monitor.name || ""} ${categoryLabel} ${monitor.target || ""} ${monitor.ping_target || ""}`.toLowerCase();
             card.dataset.monitorName = String(monitor.name || "").toLowerCase();
             card.dataset.monitorResponseTime = "-1";
@@ -1888,7 +1880,7 @@
                             return;
                         }
                         closeAddMonitorPanel();
-                        rememberCategoryOption(data.category);
+                        rememberCategoryOption(data.categories || data.category);
                         form.reset();
                         togglePingTargetField("new");
                         setCategoryFormValue("new", "");
@@ -1937,7 +1929,7 @@
                         return;
                     }
                     closeEditPanel();
-                    rememberCategoryOption(data.category);
+                    rememberCategoryOption(data.categories || data.category);
                     showToast(data.message || "Monitor wurde aktualisiert.", "success");
                     addPendingMonitorCard(data, {
                         keepPosition: true,

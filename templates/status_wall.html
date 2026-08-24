@@ -233,10 +233,13 @@
 
             const groups = new Map();
             (payload.monitors || []).forEach((monitor) => {
-                const group = groups.get(monitor.category) || { total: 0, down: 0 };
-                group.total += 1;
-                if (monitor.status === "down") group.down += 1;
-                groups.set(monitor.category, group);
+                const categories = monitor.categories?.length ? monitor.categories : [monitor.category];
+                categories.forEach((category) => {
+                    const group = groups.get(category) || { total: 0, down: 0 };
+                    group.total += 1;
+                    if (monitor.status === "down") group.down += 1;
+                    groups.set(category, group);
+                });
             });
             document.getElementById("wall-groups").innerHTML = [...groups.entries()].map(([name, item]) => `<span class="rounded-full border ${item.down ? "border-rose-400/30 bg-rose-500/10 text-rose-100" : "border-white/10 bg-white/5 text-slate-300"} px-2 py-1 text-[10px] font-semibold">${escapeText(name)} · ${item.total}${item.down ? ` · ${item.down} down` : ""}</span>`).join("");
 
