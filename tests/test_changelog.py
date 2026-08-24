@@ -77,6 +77,10 @@ class ChangelogTests(unittest.TestCase):
             "Kartendetails starten beim Öffnen zuverlässig neu, zeigen währenddessen einen Ladebalken und beschränken die Auswertung auf sieben Tage.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Speed up initial dashboard loading"),
+            "Das Dashboard liefert zuerst eine kompakte Oberfläche aus, lädt Karten nur einmal aus dem Snapshot und verwendet ein deutlich kleineres Logo.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make monitor edits update inline"),
             "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
         )

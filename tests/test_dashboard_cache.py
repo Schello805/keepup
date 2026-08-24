@@ -155,6 +155,21 @@ class DashboardCacheTests(unittest.TestCase):
         self.assertIn('"ready":false', response.body.decode())
         refresh.assert_awaited_once_with(request)
 
+    def test_dashboard_starts_only_snapshot_refresh(self):
+        request = SimpleNamespace()
+        context = {"summary": {}, "settings": {}}
+        with (
+            patch.object(main, "build_dashboard_shell_context", return_value=context),
+            patch.object(main, "ensure_dashboard_snapshot_refresh", new=AsyncMock()) as snapshot_refresh,
+            patch.object(main, "ensure_dashboard_cards_cache_refresh", new=AsyncMock()) as cards_refresh,
+            patch.object(main, "render_template", return_value="dashboard"),
+        ):
+            response = main.asyncio.run(main.dashboard(request))
+
+        self.assertEqual(response, "dashboard")
+        snapshot_refresh.assert_awaited_once_with(request)
+        cards_refresh.assert_not_awaited()
+
     def test_cold_status_wall_builds_payload_immediately(self):
         request = SimpleNamespace()
         payload = {"version": 0, "summary": {"total": 1}, "monitors": [{"id": 7}]}

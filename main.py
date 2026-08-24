@@ -1363,6 +1363,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("support multiple monitor groups", "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden."),
         ("make detail preloading non-blocking", "Kartendetails werden jetzt gedrosselt im Hintergrund vorgeladen, ohne das Dashboard oder den Raspberry Pi durch einen großen Sammelabruf auszubremsen."),
         ("fix card detail loading", "Kartendetails starten beim Öffnen zuverlässig neu, zeigen währenddessen einen Ladebalken und beschränken die Auswertung auf sieben Tage."),
+        ("speed up initial dashboard loading", "Das Dashboard liefert zuerst eine kompakte Oberfläche aus, lädt Karten nur einmal aus dem Snapshot und verwendet ein deutlich kleineres Logo."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
         ("show monitor group badges", "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an."),
@@ -2055,15 +2056,6 @@ async def run_update(request: Request) -> JSONResponse:
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
     context = build_dashboard_shell_context(request)
-    context["initial_cards_html"] = peek_dashboard_cards_html()
-    context["cold_start_loading"] = context["initial_cards_html"] is None
-    if context["cold_start_loading"]:
-        cold_start_payload = await asyncio.to_thread(build_dashboard_cards_payload)
-        for monitor in cold_start_payload["monitors"]:
-            if monitor.get("enabled", 1):
-                monitor["cache_refresh_running"] = True
-        context["cold_start_monitors"] = cold_start_payload["monitors"]
-    await ensure_dashboard_cards_cache_refresh(force=False)
     await ensure_dashboard_snapshot_refresh(request)
     return await asyncio.to_thread(render_template, request, "index.html", context)
 

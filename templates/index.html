@@ -760,24 +760,13 @@
             </div>
         </section>
         <section id="monitor-cards-shell" class="mt-5">
-            {% if initial_cards_html %}
-                {{ initial_cards_html | safe }}
-            {% else %}
-                <section id="dashboard-cold-start-shell" class="space-y-4">
-                    {% if cold_start_loading %}
-                    <div id="dashboard-cold-start-hint" class="rounded-3xl border border-sky-400/20 bg-sky-500/10 px-4 py-3 shadow-panel">
-                        <div class="flex items-center gap-3 text-sm text-slate-200">
-                            <span class="h-4 w-4 rounded-full border-2 border-sky-200/30 border-t-sky-200 animate-spin"></span>
-                            <div>
-                                <span class="font-semibold text-sky-100">Dashboard wird aktualisiert.</span>
-                                <span class="text-slate-300">Die Karten sind schon sichtbar; einzelne Werte werden gleich live nachgeladen.</span>
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                    {{ render_monitor_cards(cold_start_monitors or []) }}
-                </section>
-            {% endif %}
+            <div id="dashboard-cold-start-shell" class="flex min-h-[14rem] items-center justify-center rounded-3xl border border-sky-400/15 bg-sky-500/5 px-5 text-center">
+                <div>
+                    <span class="mx-auto block h-8 w-8 rounded-full border-4 border-sky-200/20 border-t-sky-300 animate-spin"></span>
+                    <p class="mt-4 text-sm font-semibold text-sky-100">Monitore werden geladen</p>
+                    <p class="mt-1 text-xs text-slate-400">Der aktuelle Kartenstand erscheint gleich.</p>
+                </div>
+            </div>
         </section>
         {% endif %}
 {% if not partial %}
