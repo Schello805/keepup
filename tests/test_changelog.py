@@ -81,6 +81,10 @@ class ChangelogTests(unittest.TestCase):
             "Das Dashboard liefert zuerst eine kompakte Oberfläche aus, lädt Karten nur einmal aus dem Snapshot und verwendet ein deutlich kleineres Logo.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Remove first request database stalls"),
+            "Der erste Seitenaufruf blockiert nicht mehr an wiederholter SQLite-WAL-Konfiguration oder langsamen Git-Abfragen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make monitor edits update inline"),
             "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
         )

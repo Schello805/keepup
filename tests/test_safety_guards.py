@@ -18,6 +18,13 @@ class ChunkedUpload:
 
 
 class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
+    def test_wal_mode_is_only_configured_during_database_initialization(self):
+        source = (Path(__file__).parents[1] / "database.py").read_text(encoding="utf-8")
+        get_db_source = source.split("def get_db()", 1)[1].split("def init_db()", 1)[0]
+        init_db_source = source.split("def init_db()", 1)[1].split("def _ensure_monitor_columns", 1)[0]
+        self.assertNotIn("journal_mode", get_db_source.lower())
+        self.assertIn("pragma journal_mode = wal", init_db_source.lower())
+
     def test_dashboard_does_not_use_bulk_detail_prefetch(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('fetch("/api/monitor-details"', template)

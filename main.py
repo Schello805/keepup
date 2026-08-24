@@ -1347,7 +1347,7 @@ def _run_git_command(args: list[str]) -> Optional[str]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=3,
+            timeout=1,
         )
         return (result.stdout or "").strip() or None
     except Exception:
@@ -1364,6 +1364,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("make detail preloading non-blocking", "Kartendetails werden jetzt gedrosselt im Hintergrund vorgeladen, ohne das Dashboard oder den Raspberry Pi durch einen großen Sammelabruf auszubremsen."),
         ("fix card detail loading", "Kartendetails starten beim Öffnen zuverlässig neu, zeigen währenddessen einen Ladebalken und beschränken die Auswertung auf sieben Tage."),
         ("speed up initial dashboard loading", "Das Dashboard liefert zuerst eine kompakte Oberfläche aus, lädt Karten nur einmal aus dem Snapshot und verwendet ein deutlich kleineres Logo."),
+        ("remove first request database stalls", "Der erste Seitenaufruf blockiert nicht mehr an wiederholter SQLite-WAL-Konfiguration oder langsamen Git-Abfragen."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
         ("show monitor group badges", "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an."),
