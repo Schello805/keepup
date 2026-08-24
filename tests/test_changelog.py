@@ -73,6 +73,10 @@ class ChangelogTests(unittest.TestCase):
             "Kartendetails werden jetzt gedrosselt im Hintergrund vorgeladen, ohne das Dashboard oder den Raspberry Pi durch einen großen Sammelabruf auszubremsen.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Fix card detail loading"),
+            "Kartendetails starten beim Öffnen zuverlässig neu, zeigen währenddessen einen Ladebalken und beschränken die Auswertung auf sieben Tage.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make monitor edits update inline"),
             "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
         )

@@ -22,6 +22,13 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('fetch("/api/monitor-details"', template)
 
+    def test_card_click_restarts_stale_detail_request_with_loading_bar(self):
+        template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn("window.__keepupDetailControllers.get(key).abort()", template)
+        self.assertIn("detail-loading-bar", template)
+        self.assertIn("loadMonitorDetailHtml(monitorId, Boolean(cached", template)
+        self.assertIn(", true);", template)
+
     def test_blank_secret_fields_keep_existing_values(self):
         with patch(
             "main.get_settings",

@@ -692,7 +692,7 @@ def list_monitors(
 
         incident_rows_by_monitor: dict[int, list[sqlite3.Row]] = {}
         if include_heavy_details:
-            cutoff_90d = (now_dt - timedelta(days=90)).isoformat()
+            cutoff_7d = (now_dt - timedelta(days=7)).isoformat()
             cursor.execute(
                 f"""
                 SELECT monitor_id, started_at, ended_at
@@ -702,7 +702,7 @@ def list_monitors(
                   AND (ended_at IS NULL OR ended_at >= ?)
                 ORDER BY monitor_id ASC, started_at ASC, id ASC
                 """,
-                (*resolved_monitor_ids, now_dt.isoformat(), cutoff_90d),
+                (*resolved_monitor_ids, now_dt.isoformat(), cutoff_7d),
             )
             incident_rows_by_monitor = {monitor_id: [] for monitor_id in resolved_monitor_ids}
             for row in cursor.fetchall():
@@ -736,8 +736,6 @@ def list_monitors(
                 ])
                 monitor["sla"] = {
                     "7d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 7, now_dt),
-                    "30d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 30, now_dt),
-                    "90d": _compute_sla_window_from_rows(incident_rows_by_monitor.get(monitor["id"], []), 90, now_dt),
                 }
 
     return monitors
@@ -964,12 +962,13 @@ def get_recent_logs(monitor_id: int, limit: int = 8) -> list[dict[str, Any]]:
         return [dict(row) for row in cursor.fetchall()]
 
 
-def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8) -> dict[int, list[dict[str, Any]]]:
+def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8, window_days: int = 7) -> dict[int, list[dict[str, Any]]]:
     if not monitor_ids:
         return {}
 
     placeholders = ", ".join("?" for _ in monitor_ids)
     grouped_logs: dict[int, list[dict[str, Any]]] = {monitor_id: [] for monitor_id in monitor_ids}
+    cutoff = (datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=max(1, window_days))).isoformat()
 
     with closing(get_db()) as conn:
         cursor = conn.cursor()
@@ -990,12 +989,12 @@ def get_recent_logs_for_monitors(monitor_ids: list[int], limit: int = 8) -> dict
                         ORDER BY checked_at DESC, id DESC
                     ) AS rn
                 FROM checks
-                WHERE monitor_id IN ({placeholders})
+                WHERE monitor_id IN ({placeholders}) AND checked_at >= ?
             )
             WHERE rn <= ?
             ORDER BY monitor_id ASC, checked_at DESC, id DESC
             """,
-            (*monitor_ids, limit),
+            (*monitor_ids, cutoff, limit),
         )
         for row in cursor.fetchall():
             grouped_logs[row["monitor_id"]].append(dict(row))

@@ -1362,6 +1362,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
         ("support multiple monitor groups", "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden."),
         ("make detail preloading non-blocking", "Kartendetails werden jetzt gedrosselt im Hintergrund vorgeladen, ohne das Dashboard oder den Raspberry Pi durch einen großen Sammelabruf auszubremsen."),
+        ("fix card detail loading", "Kartendetails starten beim Öffnen zuverlässig neu, zeigen währenddessen einen Ladebalken und beschränken die Auswertung auf sieben Tage."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
         ("show monitor group badges", "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an."),

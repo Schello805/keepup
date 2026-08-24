@@ -158,27 +158,13 @@
         {% if monitor.sla %}
         <div class="rounded-xl border border-white/5 bg-slate-950/40 p-2.5">
             <h4 class="mb-1.5 text-xs font-medium text-slate-300">SLA / Uptime</h4>
-            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div class="grid grid-cols-1 gap-2">
                 <div class="rounded-xl border border-white/5 bg-slate-950/50 p-2.5">
                     <div class="text-[10px] uppercase tracking-wide text-slate-500">7 Tage</div>
                     <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['7d'].uptime_pct }}%</div>
                     <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['7d'].incident_count }}</div>
                     <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['7d'].downtime_human or '0s' }}</div>
                     <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['7d'].mttr_human or '-' }}</div>
-                </div>
-                <div class="rounded-xl border border-white/5 bg-slate-950/50 p-2.5">
-                    <div class="text-[10px] uppercase tracking-wide text-slate-500">30 Tage</div>
-                    <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['30d'].uptime_pct }}%</div>
-                    <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['30d'].incident_count }}</div>
-                    <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['30d'].downtime_human or '0s' }}</div>
-                    <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['30d'].mttr_human or '-' }}</div>
-                </div>
-                <div class="rounded-xl border border-white/5 bg-slate-950/50 p-2.5">
-                    <div class="text-[10px] uppercase tracking-wide text-slate-500">90 Tage</div>
-                    <div class="mt-1 text-sm font-semibold tabular-nums">{{ monitor.sla['90d'].uptime_pct }}%</div>
-                    <div class="mt-1 text-xs text-slate-400">Incidents: {{ monitor.sla['90d'].incident_count }}</div>
-                    <div class="text-xs text-slate-400">Downtime: {{ monitor.sla['90d'].downtime_human or '0s' }}</div>
-                    <div class="text-xs text-slate-400">MTTR: {{ monitor.sla['90d'].mttr_human or '-' }}</div>
                 </div>
             </div>
         </div>
@@ -527,6 +513,13 @@
             0%, 100% { transform: scaleY(0.55); opacity: 0.5; }
             50% { transform: scaleY(1); opacity: 1; }
         }
+        @keyframes detail-loading-slide {
+            from { transform: translateX(-120%); }
+            to { transform: translateX(320%); }
+        }
+        .detail-loading-bar {
+            animation: detail-loading-slide 1.15s ease-in-out infinite;
+        }
     </style>
 </head>
 <body class="min-h-screen text-slate-100">
@@ -845,19 +838,27 @@
 
         window.__keepupDetailCache = window.__keepupDetailCache || new Map();
         window.__keepupDetailPromises = window.__keepupDetailPromises || new Map();
+        window.__keepupDetailControllers = window.__keepupDetailControllers || new Map();
         window.__keepupDetailPrefetchPromise = window.__keepupDetailPrefetchPromise || null;
         window.__keepupDetailPrefetchRetry = window.__keepupDetailPrefetchRetry || null;
 
-        async function loadMonitorDetailHtml(monitorId, force = false) {
+        async function loadMonitorDetailHtml(monitorId, force = false, priority = false) {
             const key = String(monitorId);
             const cached = window.__keepupDetailCache.get(key);
             if (!force && cached && Date.now() - cached.loadedAt < 60000) return cached.html;
-            if (window.__keepupDetailPromises.has(key)) return window.__keepupDetailPromises.get(key);
+            if (window.__keepupDetailPromises.has(key) && !priority) return window.__keepupDetailPromises.get(key);
+            if (priority && window.__keepupDetailControllers.has(key)) {
+                window.__keepupDetailControllers.get(key).abort();
+                window.__keepupDetailPromises.delete(key);
+            }
+            const controller = new AbortController();
+            const timeoutId = window.setTimeout(() => controller.abort(), priority ? 10000 : 8000);
             const promise = (async () => {
                 const refreshQuery = force ? "?refresh=true" : "";
                 const response = await fetch(`/api/monitors/${encodeURIComponent(key)}/details${refreshQuery}`, {
                     headers: { "HX-Request": "true" },
                     credentials: "same-origin",
+                    signal: controller.signal,
                 });
                 if (!response.ok) throw new Error("detail_load_failed");
                 const html = await response.text();
@@ -865,8 +866,13 @@
                 return html;
             })();
             window.__keepupDetailPromises.set(key, promise);
+            window.__keepupDetailControllers.set(key, controller);
             try { return await promise; }
-            finally { window.__keepupDetailPromises.delete(key); }
+            finally {
+                window.clearTimeout(timeoutId);
+                if (window.__keepupDetailPromises.get(key) === promise) window.__keepupDetailPromises.delete(key);
+                if (window.__keepupDetailControllers.get(key) === controller) window.__keepupDetailControllers.delete(key);
+            }
         }
 
         function hydrateCachedMonitorDetails() {
@@ -943,15 +949,12 @@
                 renderCharts(content).catch((error) => console.warn("Detail chart skipped", error));
             } else if (content) {
                 content.innerHTML = `
-                    <div class="space-y-4">
-                        <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
-                            <div class="h-4 w-32 rounded-lg bg-white/10"></div>
-                            <div class="mt-3 h-20 rounded-2xl bg-white/5"></div>
+                    <div class="flex h-full min-h-[15rem] flex-col items-center justify-center rounded-2xl border border-sky-300/15 bg-slate-950/40 px-5 text-center">
+                        <p class="text-sm font-semibold text-slate-200">Details der letzten 7 Tage werden geladen</p>
+                        <div class="mt-4 h-2 w-full max-w-[16rem] overflow-hidden rounded-full bg-white/10">
+                            <span class="detail-loading-bar block h-full w-1/3 rounded-full bg-sky-400"></span>
                         </div>
-                        <div class="rounded-2xl border border-white/5 bg-slate-950/40 p-4 animate-pulse">
-                            <div class="h-4 w-28 rounded-lg bg-white/10"></div>
-                            <div class="mt-3 h-28 rounded-2xl bg-white/5"></div>
-                        </div>
+                        <p class="mt-3 text-xs text-slate-500">Der Monitor bleibt währenddessen weiter bedienbar.</p>
                     </div>
                 `;
             }
@@ -959,7 +962,7 @@
             inner.classList.add("is-flipped");
 
             try {
-                const html = await loadMonitorDetailHtml(monitorId, Boolean(cached && Date.now() - cached.loadedAt >= 60000));
+                const html = await loadMonitorDetailHtml(monitorId, Boolean(cached && Date.now() - cached.loadedAt >= 60000), true);
                 if (content && (!cached || html !== cached.html)) {
                     content.innerHTML = html;
                     // Charts are optional. A charting error must never hide the loaded detail data.
@@ -971,7 +974,7 @@
                 if (content) {
                     content.innerHTML = `
                         <div class="rounded-2xl border border-rose-400/20 bg-rose-500/10 p-4 text-sm text-rose-100">
-                            Detaildaten konnten nicht geladen werden.
+                            Detaildaten konnten nicht geladen werden. Karte bitte schließen und erneut öffnen.
                         </div>
                     `;
                 }
