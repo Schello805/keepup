@@ -1361,6 +1361,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add live dashboard experience and status wall", "Dashboard-Daten sind jetzt atomar synchronisiert; hinzu kommen Live-Events, Mini-Timelines, Fokusmodus, Gruppenkennzahlen, Status-Wall und optionale Sounds."),
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
         ("support multiple monitor groups", "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden."),
+        ("make detail preloading non-blocking", "Kartendetails werden jetzt gedrosselt im Hintergrund vorgeladen, ohne das Dashboard oder den Raspberry Pi durch einen großen Sammelabruf auszubremsen."),
         ("make monitor edits update inline", "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert."),
         ("use real category dropdowns", "Kategorie-Felder nutzen echte Dropdowns mit Option für neue Gruppen."),
         ("show monitor group badges", "Monitor-Karten zeigen die zugehörige Gruppe deutlicher als Badge an."),

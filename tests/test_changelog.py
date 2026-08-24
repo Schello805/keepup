@@ -69,6 +69,10 @@ class ChangelogTests(unittest.TestCase):
             "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden.",
         )
         self.assertEqual(
+            _humanize_commit_subject("Make detail preloading non-blocking"),
+            "Kartendetails werden jetzt gedrosselt im Hintergrund vorgeladen, ohne das Dashboard oder den Raspberry Pi durch einen großen Sammelabruf auszubremsen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Make monitor edits update inline"),
             "Bearbeitete Monitore werden direkt im Dashboard mit Ladeanzeige aktualisiert.",
         )

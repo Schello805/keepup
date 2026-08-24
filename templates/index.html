@@ -885,35 +885,43 @@
 
         function scheduleMonitorDetailPrefetchRetry() {
             if (window.__keepupDetailPrefetchRetry) return;
+            const delay = Math.min(60000, Math.max(15000, Number(window.__keepupDetailPrefetchRetryDelay || 15000)));
+            window.__keepupDetailPrefetchRetryDelay = Math.min(60000, delay * 2);
             window.__keepupDetailPrefetchRetry = window.setTimeout(() => {
                 window.__keepupDetailPrefetchRetry = null;
                 prefetchMonitorDetails();
-            }, 5000);
+            }, delay);
         }
 
         function prefetchMonitorDetails() {
             hydrateCachedMonitorDetails();
             if (window.__keepupDetailPrefetchPromise) return window.__keepupDetailPrefetchPromise;
             const monitorIds = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
+                .sort((left, right) => left.getBoundingClientRect().top - right.getBoundingClientRect().top)
                 .map((card) => String(card.dataset.monitorId || ""))
                 .filter(Boolean);
             const missingIds = monitorIds.filter((id) => !window.__keepupDetailCache.has(id));
             if (!missingIds.length) return Promise.resolve();
 
             const promise = (async () => {
-                try {
-                    const response = await fetch("/api/monitor-details", {
-                        cache: "no-store",
-                        credentials: "same-origin",
-                    });
-                    if (!response.ok) throw new Error(`detail_prefetch_${response.status}`);
-                    const payload = await response.json();
-                    Object.entries(payload.details || {}).forEach(([monitorId, html]) => {
-                        window.__keepupDetailCache.set(String(monitorId), { html: String(html), loadedAt: Date.now() });
-                    });
-                    hydrateCachedMonitorDetails();
-                } catch (error) {
-                    console.warn("Detaildaten konnten nicht vorgeladen werden; neuer Versuch folgt.", error);
+                let nextIndex = 0;
+                let failed = false;
+                const worker = async () => {
+                    while (nextIndex < missingIds.length) {
+                        const monitorId = missingIds[nextIndex++];
+                        try {
+                            await loadMonitorDetailHtml(monitorId);
+                            hydrateCachedMonitorDetails();
+                            window.__keepupDetailPrefetchRetryDelay = 15000;
+                        } catch (error) {
+                            failed = true;
+                            if (!isTransientNetworkError(error)) console.warn("Detaildaten konnten nicht vorgeladen werden.", error);
+                            break;
+                        }
+                    }
+                };
+                await Promise.all([worker(), worker()]);
+                if (failed) {
                     scheduleMonitorDetailPrefetchRetry();
                 }
             })();

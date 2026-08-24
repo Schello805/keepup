@@ -18,6 +18,10 @@ class ChunkedUpload:
 
 
 class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
+    def test_dashboard_does_not_use_bulk_detail_prefetch(self):
+        template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertNotIn('fetch("/api/monitor-details"', template)
+
     def test_blank_secret_fields_keep_existing_values(self):
         with patch(
             "main.get_settings",
