@@ -15,7 +15,7 @@ from keepup_observability import RequestTimingMiddleware
 
 class ArchitectureTests(unittest.TestCase):
     def test_system_endpoints_are_registered_from_dedicated_router(self):
-        paths = {route.path for route in main.app.routes}
+        paths = {path for route in main.app.routes if (path := getattr(route, "path", None))}
         self.assertIn("/health", paths)
         self.assertIn("/ready", paths)
 
