@@ -418,6 +418,7 @@
     <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="stylesheet" href="/static/keepup.css">
     <script src="/static/htmx.min.js"></script>
+    <script src="/static/dashboard-core.js"></script>
     <style>
         :root { color-scheme: dark; }
         html {
@@ -805,16 +806,16 @@
         }
 
         function getStatusFilter() {
-            const filter = (window.localStorage.getItem("keepup-monitor-status-filter") || "all").trim().toLowerCase();
+            const filter = window.KeepUpDashboard.read("status", "all").trim().toLowerCase();
             return ["all", "up", "down", "unknown", "paused"].includes(filter) ? filter : "all";
         }
 
         function getSearchQuery() {
-            return (window.localStorage.getItem("keepup-monitor-search") || "").trim().toLowerCase();
+            return window.KeepUpDashboard.read("search").trim().toLowerCase();
         }
 
         function getCategoryFilter() {
-            return (window.localStorage.getItem("keepup-monitor-category-filter") || "all").trim().toLowerCase() || "all";
+            return window.KeepUpDashboard.read("category", "all").trim().toLowerCase() || "all";
         }
 
         function getOpenDetails() {
@@ -1001,24 +1002,24 @@
 
         function setStatusFilter(filter) {
             const next = (filter || "all").toLowerCase();
-            window.localStorage.setItem("keepup-monitor-status-filter", next);
+            window.KeepUpDashboard.write("status", next);
             applyMonitorFilters();
         }
 
         function setSearchQuery(query) {
-            window.localStorage.setItem("keepup-monitor-search", (query || "").trim());
+            window.KeepUpDashboard.write("search", (query || "").trim());
             applyMonitorFilters();
         }
 
         function setCategoryFilter(category) {
-            window.localStorage.setItem("keepup-monitor-category-filter", (category || "all").trim().toLowerCase() || "all");
+            window.KeepUpDashboard.write("category", (category || "all").trim().toLowerCase() || "all");
             applyMonitorFilters();
         }
 
         function clearDashboardFilters() {
-            window.localStorage.setItem("keepup-monitor-status-filter", "all");
-            window.localStorage.setItem("keepup-monitor-category-filter", "all");
-            window.localStorage.setItem("keepup-monitor-search", "");
+            window.KeepUpDashboard.write("status", "all");
+            window.KeepUpDashboard.write("category", "all");
+            window.KeepUpDashboard.write("search", "");
             applyMonitorFilters();
         }
 
@@ -1035,7 +1036,7 @@
             if (!shell || !chips) return;
             const status = getStatusFilter();
             const category = getCategoryFilter();
-            const query = (window.localStorage.getItem("keepup-monitor-search") || "").trim();
+            const query = window.KeepUpDashboard.read("search").trim();
             const statusLabels = { up: "Status: UP", down: "Status: DOWN", unknown: "Status: UNKNOWN", paused: "Status: pausiert" };
             const labels = [];
             if (status !== "all") labels.push(statusLabels[status] || `Status: ${status}`);
@@ -1104,12 +1105,12 @@
         }
 
         function getSortOrder() {
-            const order = window.localStorage.getItem("keepup-monitor-sort") || "name-asc";
+            const order = window.KeepUpDashboard.read("sort", "name-asc");
             return order === "all" ? "name-asc" : order;
         }
 
         function setSortOrder(order) {
-            window.localStorage.setItem("keepup-monitor-sort", order || "name-asc");
+            window.KeepUpDashboard.write("sort", order || "name-asc");
             applyMonitorFilters();
         }
 
@@ -1127,7 +1128,7 @@
         function syncSearchInput() {
             const input = document.getElementById("monitor-search-input");
             if (!input) return;
-            const query = window.localStorage.getItem("keepup-monitor-search") || "";
+            const query = window.KeepUpDashboard.read("search");
             if (input.value !== query) {
                 input.value = query;
             }
@@ -1485,12 +1486,11 @@
         }
 
         function isTransientNetworkError(error) {
-            const message = String(error?.message || error || "").toLowerCase();
-            return error instanceof TypeError || message.includes("network") || message.includes("failed to fetch");
+            return window.KeepUpDashboard.isTransientNetworkError(error);
         }
 
         function dashboardSoundsEnabled() {
-            return window.localStorage.getItem("keepup-dashboard-sounds") === "1";
+            return window.KeepUpDashboard.read("sounds") === "1";
         }
 
         function syncDashboardSoundButton() {
@@ -1503,7 +1503,7 @@
 
         function toggleDashboardSounds() {
             const enabled = !dashboardSoundsEnabled();
-            window.localStorage.setItem("keepup-dashboard-sounds", enabled ? "1" : "0");
+            window.KeepUpDashboard.write("sounds", enabled ? "1" : "0");
             syncDashboardSoundButton();
             playSoundSequence(enabled ? [420, 620, 820] : [820, 620, 420], true);
         }
@@ -1707,14 +1707,11 @@
         }
 
         function escapeHtml(value) {
-            const div = document.createElement("div");
-            div.textContent = value == null ? "" : String(value);
-            return div.innerHTML;
+            return window.KeepUpDashboard.escapeHtml(value);
         }
 
         function normalizeCategoryKey(value) {
-            const label = String(value || "").trim();
-            return label ? label.toLowerCase() : "__none__";
+            return window.KeepUpDashboard.normalizeCategoryKey(value);
         }
 
         function pendingMonitorReflectsCard(pending, card) {

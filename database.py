@@ -7,10 +7,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
+from keepup_migrations import CURRENT_SCHEMA_VERSION, apply_schema_migrations
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = BASE_DIR / "keepup.db"
-CURRENT_SCHEMA_VERSION = 1
 HISTORY_LIMIT = 30
 BACKUP_HISTORY_HOURS = 24
 SECRET_SETTING_KEYS = {"telegram_bot_token", "smtp_password", "ntfy_token", "ntfy_password"}
@@ -275,10 +276,7 @@ def init_db() -> None:
             """
         )
         _seed_default_settings(cursor)
-        cursor.execute(
-            "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
-            (CURRENT_SCHEMA_VERSION, utc_now()),
-        )
+        apply_schema_migrations(cursor, utc_now())
         conn.commit()
 
 

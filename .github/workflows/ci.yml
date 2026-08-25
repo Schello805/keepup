@@ -44,6 +44,9 @@ jobs:
       - name: Run unit tests
         run: python -m unittest discover -s tests
 
+      - name: Enforce performance budgets
+        run: python -m unittest discover -s tests -p 'test_performance.py'
+
   frontend:
     name: Frontend build and audit
     runs-on: ubuntu-latest
@@ -63,6 +66,9 @@ jobs:
 
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Check dashboard JavaScript
+        run: node --check static/dashboard-core.js
 
       - name: Build CSS
         run: npm run build:css

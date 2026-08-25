@@ -28,8 +28,6 @@ import httpx
 
 from database import (
     cleanup_old_checks,
-    create_monitor,
-    delete_monitor,
     export_backup,
     get_db,
     get_monitor,
@@ -44,8 +42,6 @@ from database import (
     import_backup,
     init_db,
     list_monitors,
-    set_monitor_enabled,
-    update_monitor,
     update_settings,
 )
 from monitor import (
@@ -77,6 +73,7 @@ from keepup_system import build_system_metrics
 from keepup_models import HealthResponse, ReadinessResponse
 from keepup_observability import RequestTimingMiddleware
 from keepup_cache import DashboardCacheStore
+from keepup_repository import MonitorRepository
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -101,6 +98,7 @@ MAX_IMPORT_BYTES = max(1, int(os.environ.get("KEEPUP_MAX_IMPORT_MB", "25"))) * 1
 IMPORT_READ_CHUNK_BYTES = 1024 * 1024
 _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
 _dashboard_cache = DashboardCacheStore()
+monitor_repository = MonitorRepository()
 # Compatibility aliases keep extensions and existing tests stable during the refactor.
 _dashboard_cards_cache = _dashboard_cache.cards
 _dashboard_cards_cache_lock = _dashboard_cache.cards_lock
@@ -1149,6 +1147,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("add architecture boundaries and performance budgets", "Monitor-Zugriffe laufen jetzt über eine klare Repository-Grenze, Datenbankmigrationen werden schrittweise angewendet und automatische Performance-Budgets schützen schnelle Cache- und Frontend-Pfade."),
         ("refactor core architecture", "Die Kernlogik ist jetzt klar in Module für Caches, Formatierung, Systemmetriken, API-Modelle und Performance-Messung aufgeteilt. Datenbankänderungen werden versioniert und HTMX wird lokal ausgeliefert."),
         ("add live dashboard experience and status wall", "Dashboard-Daten sind jetzt atomar synchronisiert; hinzu kommen Live-Events, Mini-Timelines, Fokusmodus, Gruppenkennzahlen, Status-Wall und optionale Sounds."),
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
@@ -2072,7 +2071,7 @@ async def create_monitor_route(
                 status_code=400,
             )
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
-    monitor_id = create_monitor(
+    monitor_id = monitor_repository.create(
         name=name,
         category=category,
         monitor_type="http" if is_combo else monitor_type,
@@ -2089,7 +2088,7 @@ async def create_monitor_route(
         categories=[*categories, category_custom],
     )
     invalidate_monitor_detail_cache(monitor_id)
-    created_monitor = get_monitor(monitor_id) or {}
+    created_monitor = monitor_repository.get(monitor_id) or {}
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
     asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
@@ -2131,7 +2130,7 @@ async def edit_monitor_route(
     expected_text: str = Form(""),
     forbidden_text: str = Form(""),
 ) -> Response:
-    monitor = get_monitor(monitor_id)
+    monitor = monitor_repository.get(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
     if monitor_type not in {"http", "ping", "ping_http", "ping_http_or", "ping_http_and"}:
@@ -2150,7 +2149,7 @@ async def edit_monitor_route(
             )
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
 
-    update_monitor(
+    monitor_repository.update(
         monitor_id=monitor_id,
         name=name,
         category=category,
@@ -2177,8 +2176,8 @@ async def edit_monitor_route(
                 "ok": True,
                 "id": monitor_id,
                 "name": name.strip(),
-                "category": (get_monitor(monitor_id) or {}).get("category", ""),
-                "categories": (get_monitor(monitor_id) or {}).get("categories", []),
+                "category": (monitor_repository.get(monitor_id) or {}).get("category", ""),
+                "categories": (monitor_repository.get(monitor_id) or {}).get("categories", []),
                 "target": target,
                 "ping_target": ping_target.strip(),
                 "monitor_type": "http" if is_combo else monitor_type,
@@ -2194,11 +2193,11 @@ async def edit_monitor_route(
 
 @app.post("/monitors/{monitor_id}/toggle")
 async def toggle_monitor_route(monitor_id: int, request: Request):
-    monitor = get_monitor(monitor_id)
+    monitor = monitor_repository.get(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
     is_enabled = not bool(monitor.get("enabled", 1))
-    set_monitor_enabled(monitor_id, is_enabled)
+    monitor_repository.set_enabled(monitor_id, is_enabled)
     invalidate_monitor_detail_cache(monitor_id)
     reschedule_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()
@@ -2212,7 +2211,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 
 @app.post("/monitors/{monitor_id}/delete")
 async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
-    delete_monitor(monitor_id)
+    monitor_repository.delete(monitor_id)
     invalidate_monitor_detail_cache(monitor_id)
     remove_monitor_job(scheduler, monitor_id)
     mark_dashboard_cards_cache_stale()

@@ -93,6 +93,10 @@ Wichtig:
   Gemeinsame Datums-, Zeit- und Größenformatierung
 - `keepup_models.py`
   Typisierte API-Antwortmodelle für Health- und Readiness-Endpunkte
+- `keepup_repository.py`
+  Abgrenzung der Monitor-Lese- und Schreibzugriffe von HTTP-Routen und UI-Logik
+- `keepup_migrations.py`
+  Sequenzieller, idempotenter Runner für versionierte Datenbankmigrationen
 - `keepup_observability.py`
   Laufzeitmessung mit `Server-Timing` und Warnungen bei langsamen Requests
 - `keepup_system.py`
@@ -109,6 +113,8 @@ Wichtig:
   Install-, Update- und Service-Hilfsskripte
 
 Jede HTTP-Antwort enthält einen `Server-Timing`-Header mit der serverseitigen Laufzeit. Requests ab 750 ms protokolliert KeepUp zusätzlich als `slow_request` im Service-Log. So lassen sich Engpässe gezielt mit `journalctl -u keepup.service` untersuchen, ohne dauerhaft ausführliches Debug-Logging einzuschalten.
+
+Dashboard-Basisfunktionen wie Browserzustand, Netzwerkfehler-Erkennung und sicheres HTML-Escaping liegen in `static/dashboard-core.js`. Die CI prüft dieses Modul syntaktisch. Zusätzlich schützen Integrationstests den vollständigen Monitor-Lebenszyklus und feste Performance-Budgets die Cache- und Ladepfade vor unbemerkten Regressionen.
 
 ## Lokale Entwicklung
 
