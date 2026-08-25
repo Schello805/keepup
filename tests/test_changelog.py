@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Modularize navigation and add performance budgets"),
+            "Dashboard, Status-Wall, Einstellungen, Incidents und Changelog sind jetzt in einem eigenen Navigationsmodul organisiert. Automatische Zeitbudgets sichern schnelle Seitenwechsel auch mit 40 Monitoren ab.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Serve dashboard shell from cache"),
             "Der Dashboard-Seitenrahmen kommt jetzt direkt aus dem vorhandenen Snapshot und wartet beim Seitenwechsel weder auf Datenbankauswertungen noch auf Git-Metadaten.",
         )

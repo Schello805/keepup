@@ -75,6 +75,16 @@ from keepup_cache import DashboardCacheStore
 from keepup_repository import MonitorRepository
 from keepup_monitor_service import MonitorService
 from keepup_routes_system import configure_system_routes, health, readiness, router as system_router
+from keepup_routes_navigation import (
+    NavigationDependencies,
+    configure_navigation_routes,
+    dashboard,
+    incidents_page,
+    changelog_page,
+    router as navigation_router,
+    settings_page,
+    status_wall,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1160,6 +1170,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("modularize navigation and add performance budgets", "Dashboard, Status-Wall, Einstellungen, Incidents und Changelog sind jetzt in einem eigenen Navigationsmodul organisiert. Automatische Zeitbudgets sichern schnelle Seitenwechsel auch mit 40 Monitoren ab."),
         ("serve dashboard shell from cache", "Der Dashboard-Seitenrahmen kommt jetzt direkt aus dem vorhandenen Snapshot und wartet beim Seitenwechsel weder auf Datenbankauswertungen noch auf Git-Metadaten."),
         ("streamline dashboard and incident navigation", "Dashboard und Incidents wechseln jetzt ohne blockierenden Historienaufbau. Neue Incident-Einträge erscheinen zuerst, ältere Daten folgen im Hintergrund; Detaildaten werden gestaffelt vorgeladen."),
         ("move active filter to lower corner", "Der aktive Filter sitzt jetzt unten rechts und bleibt auf Smartphones mit ausreichend Abstand über der Navigation erreichbar."),
@@ -1780,6 +1791,26 @@ def render_template(request: Request, name: str, context: dict[str, Any]) -> HTM
     return HTMLResponse(content)
 
 
+configure_navigation_routes(
+    NavigationDependencies(
+        build_dashboard_shell_context=lambda *args, **kwargs: build_dashboard_shell_context(*args, **kwargs),
+        ensure_dashboard_snapshot_refresh=lambda request: ensure_dashboard_snapshot_refresh(request),
+        peek_status_wall_payload=lambda: peek_status_wall_payload(),
+        build_status_wall_payload=lambda *args, **kwargs: build_status_wall_payload(*args, **kwargs),
+        list_status_wall_monitors=lambda include_details: list_status_wall_monitors(include_details),
+        ensure_status_wall_refresh=lambda: ensure_status_wall_refresh(),
+        get_settings=lambda: get_settings(),
+        get_app_version_display=lambda: get_app_version_display(),
+        build_settings_context=lambda request: build_settings_context(request),
+        build_incidents_shell_context=lambda request: build_incidents_shell_context(request),
+        build_changelog_context=lambda request: build_changelog_context(request),
+        render_template=lambda request, name, context: render_template(request, name, context),
+        logger=logger,
+    )
+)
+app.include_router(navigation_router)
+
+
 @app.get("/api/update/status")
 async def update_status() -> JSONResponse:
     payload = await get_cached_update_status_payload()
@@ -1849,56 +1880,10 @@ async def run_update(request: Request) -> JSONResponse:
     )
 
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request) -> HTMLResponse:
-    context = await asyncio.to_thread(build_dashboard_shell_context, request, cached_only=True)
-    await ensure_dashboard_snapshot_refresh(request)
-    return await asyncio.to_thread(render_template, request, "index.html", context)
-
-
-@app.get("/wall", response_class=HTMLResponse)
-async def status_wall(request: Request) -> HTMLResponse:
-    payload = peek_status_wall_payload()
-    if payload is None:
-        try:
-            payload = await asyncio.wait_for(asyncio.to_thread(build_status_wall_payload), timeout=8.0)
-        except asyncio.TimeoutError:
-            logger.warning("status_wall_initial_build_timeout")
-            monitors = await asyncio.to_thread(list_status_wall_monitors, False)
-            payload = build_status_wall_payload(monitors)
-            payload["details_pending"] = True
-            await ensure_status_wall_refresh()
-    context = {
-        "request": request,
-        "settings": get_settings(),
-        "payload": payload,
-        "app_version": get_app_version_display(),
-    }
-    return await asyncio.to_thread(render_template, request, "status_wall.html", context)
-
-
-@app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request) -> HTMLResponse:
-    context = await asyncio.to_thread(build_settings_context, request)
-    return await asyncio.to_thread(render_template, request, "settings.html", context)
-
-
 @app.get("/api/settings/system-status", response_class=HTMLResponse)
 async def settings_system_status_partial(request: Request) -> HTMLResponse:
     context = await asyncio.to_thread(build_settings_system_status_context, request)
     return await asyncio.to_thread(render_template, request, "settings.html", {**context, "partial": "system-status"})
-
-
-@app.get("/incidents", response_class=HTMLResponse)
-async def incidents_page(request: Request) -> HTMLResponse:
-    context = await asyncio.to_thread(build_incidents_shell_context, request)
-    return await asyncio.to_thread(render_template, request, "incidents.html", context)
-
-
-@app.get("/changelog", response_class=HTMLResponse)
-async def changelog_page(request: Request) -> HTMLResponse:
-    context = await asyncio.to_thread(build_changelog_context, request)
-    return await asyncio.to_thread(render_template, request, "changelog.html", context)
 
 
 @app.get("/api/incidents/feed", response_class=HTMLResponse)

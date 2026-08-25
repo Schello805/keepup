@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 import database
 from keepup_routes_system import router as system_router
+from keepup_routes_navigation import router as navigation_router
 from keepup_cache import DashboardCacheStore
 from keepup_formatting import format_duration_compact, format_timestamp
 from keepup_observability import RequestTimingMiddleware
@@ -18,6 +19,10 @@ class ArchitectureTests(unittest.TestCase):
         paths = {route.path for route in system_router.routes}
         self.assertIn("/health", paths)
         self.assertIn("/ready", paths)
+
+    def test_navigation_pages_are_registered_from_dedicated_router(self):
+        paths = {route.path for route in navigation_router.routes}
+        self.assertEqual(paths, {"/", "/wall", "/settings", "/incidents", "/changelog"})
 
     def test_dashboard_cache_store_versions_and_resets_all_views(self):
         cache = DashboardCacheStore()
