@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Move active filter to lower corner"),
+            "Der aktive Filter sitzt jetzt unten rechts und bleibt auf Smartphones mit ausreichend Abstand über der Navigation erreichbar.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Polish filter and light theme contrast"),
             "Der schwebende Filter kommt jetzt ohne äußeren Rahmen aus. Gleichzeitig sind Kennzahlen, Gruppen und Ansichtssteuerung der hellen Status-Wall deutlich besser lesbar.",
         )

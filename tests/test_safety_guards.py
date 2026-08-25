@@ -32,8 +32,8 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
     def test_active_filter_hint_is_a_floating_dashboard_button(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn('id="active-dashboard-filters" type="button"', template)
-        self.assertIn("fixed right-0 top-1/2", template)
-        self.assertIn("-translate-y-1/2", template)
+        self.assertIn("fixed bottom-24 right-0", template)
+        self.assertIn("sm:bottom-6", template)
         self.assertIn("outline-none", template)
         self.assertIn("focus-visible:ring-inset", template)
         filter_button = template.split('id="active-dashboard-filters"', 1)[1].split(">", 1)[0]
