@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Show active filters as floating button"),
+            "Aktive Dashboard-Filter erscheinen jetzt platzsparend als schwebender Button und lassen sich mit einem Klick vollständig löschen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Add architecture boundaries and performance budgets"),
             "Monitor-Zugriffe laufen jetzt über eine klare Repository-Grenze, Datenbankmigrationen werden schrittweise angewendet und automatische Performance-Budgets schützen schnelle Cache- und Frontend-Pfade.",
         )

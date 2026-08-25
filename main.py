@@ -1147,6 +1147,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("show active filters as floating button", "Aktive Dashboard-Filter erscheinen jetzt platzsparend als schwebender Button und lassen sich mit einem Klick vollständig löschen."),
         ("add architecture boundaries and performance budgets", "Monitor-Zugriffe laufen jetzt über eine klare Repository-Grenze, Datenbankmigrationen werden schrittweise angewendet und automatische Performance-Budgets schützen schnelle Cache- und Frontend-Pfade."),
         ("refactor core architecture", "Die Kernlogik ist jetzt klar in Module für Caches, Formatierung, Systemmetriken, API-Modelle und Performance-Messung aufgeteilt. Datenbankänderungen werden versioniert und HTMX wird lokal ausgeliefert."),
         ("add live dashboard experience and status wall", "Dashboard-Daten sind jetzt atomar synchronisiert; hinzu kommen Live-Events, Mini-Timelines, Fokusmodus, Gruppenkennzahlen, Status-Wall und optionale Sounds."),

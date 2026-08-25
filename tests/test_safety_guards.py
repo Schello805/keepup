@@ -29,6 +29,12 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('fetch("/api/monitor-details"', template)
 
+    def test_active_filter_hint_is_a_floating_dashboard_button(self):
+        template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="active-dashboard-filters" type="button"', template)
+        self.assertIn("fixed bottom-[6.5rem] left-1/2", template)
+        self.assertIn('onclick="clearDashboardFilters()"', template)
+
     def test_card_click_restarts_stale_detail_request_with_loading_bar(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn("window.__keepupDetailControllers.get(key).abort()", template)

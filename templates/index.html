@@ -99,15 +99,15 @@
             </div>
         </div>
         {% endif %}
-        <div id="active-dashboard-filters" class="hidden flex-col items-stretch justify-between gap-2 rounded-2xl border border-sky-300/30 bg-sky-500/10 px-3 py-2 text-sm shadow-panel sm:flex-row sm:items-center sm:gap-3">
-            <div class="flex min-w-0 flex-wrap items-center gap-2">
-                <span class="shrink-0 font-semibold text-sky-100">Aktive Filter</span>
-                <div id="active-dashboard-filter-chips" class="flex min-w-0 flex-wrap gap-1.5"></div>
-            </div>
-            <button type="button" onclick="clearDashboardFilters()" class="shrink-0 rounded-xl border border-sky-200/30 bg-slate-950/35 px-3 py-1.5 text-xs font-semibold text-sky-100 transition hover:bg-slate-950/50">
-                Filter löschen
-            </button>
-        </div>
+        <button id="active-dashboard-filters" type="button" onclick="clearDashboardFilters()" title="Aktive Filter löschen" aria-label="Aktive Dashboard-Filter löschen" class="fixed bottom-[6.5rem] left-1/2 z-50 hidden max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-sky-300/40 bg-slate-950/90 px-2.5 py-2 text-sm shadow-2xl shadow-slate-950/50 backdrop-blur-xl transition hover:border-sky-200/60 hover:bg-slate-900/95 sm:bottom-6">
+            <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-sky-400/15 text-sky-200" aria-hidden="true">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 5h16M7 12h10m-6 7h2" />
+                </svg>
+            </span>
+            <span id="active-dashboard-filter-chips" class="flex min-w-0 items-center gap-1.5 overflow-hidden"></span>
+            <span class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/5 text-slate-300" aria-hidden="true">×</span>
+        </button>
     </div>
 {%- endmacro %}
 
@@ -1044,7 +1044,7 @@
             if (query) labels.push(`Suche: ${query}`);
             chips.replaceChildren(...labels.map((label) => {
                 const chip = document.createElement("span");
-                chip.className = "max-w-full truncate rounded-full border border-sky-200/20 bg-slate-950/40 px-2.5 py-1 text-xs font-medium text-sky-100";
+                chip.className = "max-w-[9rem] truncate rounded-full bg-sky-400/10 px-2 py-1 text-xs font-medium text-sky-100 sm:max-w-[14rem]";
                 chip.textContent = label;
                 return chip;
             }));
