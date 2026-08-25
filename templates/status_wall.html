@@ -40,10 +40,15 @@
         body[data-wall-theme="light"] #wall-weather { border-color: rgba(14,165,233,.25); background: rgba(14,165,233,.1); }
         body[data-wall-theme="light"] #wall-weather .text-slate-300,
         body[data-wall-theme="light"] #wall-groups .text-slate-300 { color: #334155; }
+        body[data-wall-theme="light"] #wall-summary .text-emerald-200 { color: #047857; }
+        body[data-wall-theme="light"] #wall-summary .text-rose-200,
+        body[data-wall-theme="light"] #wall-groups .text-rose-100 { color: #be123c; }
+        body[data-wall-theme="light"] #wall-summary .text-amber-200 { color: #a16207; }
         body[data-wall-theme="light"] .wall-theme-button { color: #334155; }
         body[data-wall-theme="light"] #wall-sound-status.text-emerald-200 { color: #047857; }
         body[data-wall-theme="light"] .wall-size-button { color: #475569; }
         body[data-wall-theme="light"] .wall-size-button[aria-pressed="true"] { color: #075985; }
+        body[data-wall-theme="light"] #wall-size-controls { border-color: rgba(15,23,42,.14); background: rgba(255,255,255,.72); }
         body[data-wall-theme="light"] .wall-card { box-shadow: 0 12px 30px rgba(15,23,42,.09); }
         body[data-wall-theme="light"] .wall-card[data-status="up"] { background: linear-gradient(145deg, rgba(209,250,229,.95), rgba(236,253,245,.96)); }
         body[data-wall-theme="light"] .wall-card[data-status="down"] { background: linear-gradient(145deg, rgba(255,228,230,.96), rgba(255,241,242,.96)); }
@@ -134,7 +139,7 @@
                 <section id="wall-groups" class="flex min-w-0 flex-wrap gap-1.5"></section>
                 <div class="flex shrink-0 items-center gap-2">
                     <span class="text-[9px] font-semibold uppercase tracking-[.16em] text-slate-500">Ansicht</span>
-                    <div class="grid grid-cols-3 rounded-xl border border-white/10 bg-slate-950/60 p-1" aria-label="Kartengröße">
+                    <div id="wall-size-controls" class="grid grid-cols-3 rounded-xl border border-white/10 bg-slate-950/60 p-1" aria-label="Kartengröße">
                         <button type="button" data-wall-size-option="small" class="wall-size-button min-w-[4.5rem] rounded-lg border border-transparent px-2 py-1.5 text-[10px] font-semibold text-slate-400" aria-pressed="false">Kompakt</button>
                         <button type="button" data-wall-size-option="medium" class="wall-size-button min-w-[4.5rem] rounded-lg border border-transparent px-2 py-1.5 text-[10px] font-semibold text-slate-400" aria-pressed="true">Standard</button>
                         <button type="button" data-wall-size-option="large" class="wall-size-button min-w-[4.5rem] rounded-lg border border-transparent px-2 py-1.5 text-[10px] font-semibold text-slate-400" aria-pressed="false">Details</button>

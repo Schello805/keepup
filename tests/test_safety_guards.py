@@ -36,6 +36,8 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("-translate-y-1/2", template)
         self.assertIn("outline-none", template)
         self.assertIn("focus-visible:ring-inset", template)
+        filter_button = template.split('id="active-dashboard-filters"', 1)[1].split(">", 1)[0]
+        self.assertNotIn(" border ", filter_button)
         self.assertIn('document.body.appendChild(shell)', template)
         self.assertIn('document.body.appendChild(nextFilter)', template)
         self.assertIn('onclick="clearDashboardFilters()"', template)
@@ -46,6 +48,8 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('["system", "light", "dark"]', template)
         self.assertIn('window.matchMedia("(prefers-color-scheme: dark)")', template)
         self.assertIn('body[data-wall-theme="light"]', template)
+        self.assertIn('#wall-summary .text-emerald-200', template)
+        self.assertIn('id="wall-size-controls"', template)
         self.assertIn('window.localStorage.setItem("keepupWallTheme", selected)', template)
 
     def test_card_click_restarts_stale_detail_request_with_loading_bar(self):
