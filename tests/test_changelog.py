@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Streamline dashboard and incident navigation"),
+            "Dashboard und Incidents wechseln jetzt ohne blockierenden Historienaufbau. Neue Incident-Einträge erscheinen zuerst, ältere Daten folgen im Hintergrund; Detaildaten werden gestaffelt vorgeladen.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Move active filter to lower corner"),
             "Der aktive Filter sitzt jetzt unten rechts und bleibt auf Smartphones mit ausreichend Abstand über der Navigation erreichbar.",
         )

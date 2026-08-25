@@ -894,6 +894,8 @@
             if (window.__keepupDetailPrefetchPromise) return window.__keepupDetailPrefetchPromise;
             const monitorIds = [...document.querySelectorAll(".monitor-card[data-monitor-id]")]
                 .sort((left, right) => left.getBoundingClientRect().top - right.getBoundingClientRect().top)
+                .filter((card) => !card.classList.contains("is-hidden"))
+                .slice(0, 6)
                 .map((card) => String(card.dataset.monitorId || ""))
                 .filter(Boolean);
             const missingIds = monitorIds.filter((id) => !window.__keepupDetailCache.has(id));

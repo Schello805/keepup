@@ -204,7 +204,6 @@
     <title>{{ settings.app_name }} Incidents</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="stylesheet" href="/static/keepup.css">
-    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <style>
         :root { color-scheme: dark; }
         html {
@@ -283,12 +282,36 @@
             </form>
 
             <section id="incident-feed-shell">
-                {{ render_incident_feed(feed_items, selected_item, pagination) }}
+                {% if feed_items is defined %}
+                    {{ render_incident_feed(feed_items, selected_item, pagination) }}
+                {% else %}
+                    {{ render_incident_feed_loading() }}
+                {% endif %}
             </section>
         </section>
     </main>
 
     {{ render_footer("https://github.com/Schello805/keepup", app_version, active_page, changelog_preview) }}
+    {% if incident_feed_url is defined %}
+    <script>
+        async function loadIncidentFeed() {
+            const shell = document.getElementById("incident-feed-shell");
+            if (!shell) return;
+            const fullUrl = {{ incident_feed_url | tojson }};
+            const separator = fullUrl.includes("?") ? "&" : "?";
+            try {
+                const quickResponse = await fetch(`${fullUrl}${separator}quick=1`, { credentials: "same-origin" });
+                if (quickResponse.ok) shell.innerHTML = await quickResponse.text();
+                const fullResponse = await fetch(fullUrl, { credentials: "same-origin" });
+                if (!fullResponse.ok) throw new Error(`HTTP ${fullResponse.status}`);
+                shell.innerHTML = await fullResponse.text();
+            } catch (_error) {
+                window.setTimeout(loadIncidentFeed, 3000);
+            }
+        }
+        loadIncidentFeed();
+    </script>
+    {% endif %}
 </body>
 </html>
 {% endif %}

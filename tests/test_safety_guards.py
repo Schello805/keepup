@@ -28,6 +28,7 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
     def test_dashboard_does_not_use_bulk_detail_prefetch(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertNotIn('fetch("/api/monitor-details"', template)
+        self.assertIn('.slice(0, 6)', template)
 
     def test_active_filter_hint_is_a_floating_dashboard_button(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")

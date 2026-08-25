@@ -886,13 +886,13 @@ def build_settings_system_status_context(request: Request) -> dict:
     }
 
 
-def build_incidents_context(request: Request) -> dict:
+def build_incidents_context(request: Request, *, quick: bool = False) -> dict:
     settings = get_settings()
     app_timezone = settings.get("app_timezone", "UTC")
     monitors = list_monitor_incident_feed_options()
     monitor_id, status, since_days, item_raw, page = parse_incident_filters(request)
 
-    incidents = list_incidents(monitor_id=monitor_id, status=status, since_days=since_days)
+    incidents = list_incidents(monitor_id=monitor_id, status=status, since_days=since_days, limit=20 if quick else 200)
 
     base_query: dict[str, str] = {}
     if monitor_id is not None:
@@ -976,7 +976,7 @@ def build_incidents_context(request: Request) -> dict:
     else:
         cutoff_dt = None
 
-    for monitor in monitors:
+    for monitor in ([] if quick else monitors):
         if monitor_id is not None and int(monitor.get("id")) != monitor_id:
             continue
 
@@ -1148,6 +1148,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("streamline dashboard and incident navigation", "Dashboard und Incidents wechseln jetzt ohne blockierenden Historienaufbau. Neue Incident-Einträge erscheinen zuerst, ältere Daten folgen im Hintergrund; Detaildaten werden gestaffelt vorgeladen."),
         ("move active filter to lower corner", "Der aktive Filter sitzt jetzt unten rechts und bleibt auf Smartphones mit ausreichend Abstand über der Navigation erreichbar."),
         ("polish filter and light theme contrast", "Der schwebende Filter kommt jetzt ohne äußeren Rahmen aus. Gleichzeitig sind Kennzahlen, Gruppen und Ansichtssteuerung der hellen Status-Wall deutlich besser lesbar."),
         ("add status wall theme modes", "Die Live-Status-Wall bietet jetzt systemgesteuertes, helles und dunkles Farbschema. Die Auswahl bleibt lokal im Browser gespeichert."),
@@ -1837,7 +1838,7 @@ async def run_update(request: Request) -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    context = build_dashboard_shell_context(request)
+    context = await asyncio.to_thread(build_dashboard_shell_context, request)
     await ensure_dashboard_snapshot_refresh(request)
     return await asyncio.to_thread(render_template, request, "index.html", context)
 
@@ -1876,7 +1877,8 @@ async def settings_system_status_partial(request: Request) -> HTMLResponse:
 
 @app.get("/incidents", response_class=HTMLResponse)
 async def incidents_page(request: Request) -> HTMLResponse:
-    return await asyncio.to_thread(render_template, request, "incidents.html", build_incidents_context(request))
+    context = await asyncio.to_thread(build_incidents_shell_context, request)
+    return await asyncio.to_thread(render_template, request, "incidents.html", context)
 
 
 @app.get("/changelog", response_class=HTMLResponse)
@@ -1886,7 +1888,7 @@ async def changelog_page(request: Request) -> HTMLResponse:
 
 @app.get("/api/incidents/feed", response_class=HTMLResponse)
 async def incidents_feed_partial(request: Request) -> HTMLResponse:
-    context = await asyncio.to_thread(build_incidents_context, request)
+    context = await asyncio.to_thread(build_incidents_context, request, quick=request.query_params.get("quick") == "1")
     return await asyncio.to_thread(render_template, request, "incidents.html", {**context, "partial": "feed"})
 
 
