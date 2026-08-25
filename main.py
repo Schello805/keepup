@@ -1147,6 +1147,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("move floating filter button to screen edge", "Der schwebende Filterbutton sitzt jetzt platzsparend mittig am rechten Bildschirmrand."),
         ("extract system router and dashboard sorting", "Health- und Bereitschaftsprüfungen liegen jetzt in einem eigenen FastAPI-Router; die Karten-Sortierung wurde aus dem HTML-Template in ein geprüftes JavaScript-Modul verschoben."),
         ("show active filters as floating button", "Aktive Dashboard-Filter erscheinen jetzt platzsparend als schwebender Button und lassen sich mit einem Klick vollständig löschen."),
         ("add architecture boundaries and performance budgets", "Monitor-Zugriffe laufen jetzt über eine klare Repository-Grenze, Datenbankmigrationen werden schrittweise angewendet und automatische Performance-Budgets schützen schnelle Cache- und Frontend-Pfade."),

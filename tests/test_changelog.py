@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Move floating filter button to screen edge"),
+            "Der schwebende Filterbutton sitzt jetzt platzsparend mittig am rechten Bildschirmrand.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Extract system router and dashboard sorting"),
             "Health- und Bereitschaftsprüfungen liegen jetzt in einem eigenen FastAPI-Router; die Karten-Sortierung wurde aus dem HTML-Template in ein geprüftes JavaScript-Modul verschoben.",
         )
