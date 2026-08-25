@@ -839,22 +839,34 @@ def build_all_monitor_detail_html(request: Request) -> dict[str, str]:
     return result
 
 
-def build_dashboard_shell_context(request: Request) -> dict:
+def build_dashboard_shell_context(request: Request, *, cached_only: bool = False) -> dict:
     settings = get_settings()
-    summary = get_monitor_summary()
+    snapshot = peek_dashboard_snapshot() if cached_only else None
+    cached_summary = snapshot.get("summary") if isinstance(snapshot, dict) else None
+    summary = dict(cached_summary) if isinstance(cached_summary, dict) else (
+        {"total": 0, "up": 0, "down": 0, "unknown": 0, "paused": 0, "categories": []}
+        if cached_only
+        else get_monitor_summary()
+    )
     app_timezone = settings.get("app_timezone", "UTC")
     overall_status = "All systems operational" if summary["down"] == 0 else f"{summary['down']} issue(s) detected"
     overall_tone = "ok" if summary["down"] == 0 else "problem"
     summary["overall_status"] = overall_status
     summary["overall_tone"] = overall_tone
     summary["last_updated_at"] = format_timestamp(datetime.now(timezone.utc).replace(microsecond=0).isoformat(), app_timezone)
-    summary["categories"] = get_monitor_group_summary()
+    if not cached_only:
+        summary["categories"] = get_monitor_group_summary()
+
+    cached_changelog = _changelog_cache.get("items")
+    changelog_preview = list(cached_changelog)[:3] if cached_only and isinstance(cached_changelog, list) else get_changelog_items(limit=3)
+    cached_version = _app_version_cache.get("value")
+    app_version = str(cached_version) if cached_only and cached_version else (str(__version__) if cached_only else get_app_version_display())
 
     return {
         "request": request,
         "settings": settings,
-        "app_version": get_app_version_display(),
-        "changelog_preview": get_changelog_items(limit=3),
+        "app_version": app_version,
+        "changelog_preview": changelog_preview,
         "active_page": "dashboard",
         "toast": get_toast(request),
         "summary": summary,
@@ -1148,6 +1160,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("serve dashboard shell from cache", "Der Dashboard-Seitenrahmen kommt jetzt direkt aus dem vorhandenen Snapshot und wartet beim Seitenwechsel weder auf Datenbankauswertungen noch auf Git-Metadaten."),
         ("streamline dashboard and incident navigation", "Dashboard und Incidents wechseln jetzt ohne blockierenden Historienaufbau. Neue Incident-Einträge erscheinen zuerst, ältere Daten folgen im Hintergrund; Detaildaten werden gestaffelt vorgeladen."),
         ("move active filter to lower corner", "Der aktive Filter sitzt jetzt unten rechts und bleibt auf Smartphones mit ausreichend Abstand über der Navigation erreichbar."),
         ("polish filter and light theme contrast", "Der schwebende Filter kommt jetzt ohne äußeren Rahmen aus. Gleichzeitig sind Kennzahlen, Gruppen und Ansichtssteuerung der hellen Status-Wall deutlich besser lesbar."),
@@ -1838,7 +1851,7 @@ async def run_update(request: Request) -> JSONResponse:
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request) -> HTMLResponse:
-    context = await asyncio.to_thread(build_dashboard_shell_context, request)
+    context = await asyncio.to_thread(build_dashboard_shell_context, request, cached_only=True)
     await ensure_dashboard_snapshot_refresh(request)
     return await asyncio.to_thread(render_template, request, "index.html", context)
 
@@ -1866,7 +1879,8 @@ async def status_wall(request: Request) -> HTMLResponse:
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request) -> HTMLResponse:
-    return await asyncio.to_thread(render_template, request, "settings.html", build_settings_context(request))
+    context = await asyncio.to_thread(build_settings_context, request)
+    return await asyncio.to_thread(render_template, request, "settings.html", context)
 
 
 @app.get("/api/settings/system-status", response_class=HTMLResponse)
@@ -1883,7 +1897,8 @@ async def incidents_page(request: Request) -> HTMLResponse:
 
 @app.get("/changelog", response_class=HTMLResponse)
 async def changelog_page(request: Request) -> HTMLResponse:
-    return await asyncio.to_thread(render_template, request, "changelog.html", build_changelog_context(request))
+    context = await asyncio.to_thread(build_changelog_context, request)
+    return await asyncio.to_thread(render_template, request, "changelog.html", context)
 
 
 @app.get("/api/incidents/feed", response_class=HTMLResponse)

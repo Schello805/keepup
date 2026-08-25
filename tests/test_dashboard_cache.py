@@ -170,6 +170,28 @@ class DashboardCacheTests(unittest.TestCase):
         snapshot_refresh.assert_awaited_once_with(request)
         cards_refresh.assert_not_awaited()
 
+    def test_cached_dashboard_shell_avoids_database_summaries_and_git_commands(self):
+        request = SimpleNamespace(query_params={})
+        snapshot = {
+            "summary": {"total": 2, "up": 1, "down": 1, "unknown": 0, "paused": 0, "categories": []}
+        }
+        with (
+            patch.object(main, "get_settings", return_value={"app_timezone": "UTC"}),
+            patch.object(main, "peek_dashboard_snapshot", return_value=snapshot),
+            patch.object(main, "get_monitor_summary") as monitor_summary,
+            patch.object(main, "get_monitor_group_summary") as group_summary,
+            patch.object(main, "get_changelog_items") as changelog,
+            patch.object(main, "get_app_version_display") as app_version,
+            patch.object(main, "get_toast", return_value=None),
+        ):
+            context = main.build_dashboard_shell_context(request, cached_only=True)
+
+        self.assertEqual(context["summary"]["down"], 1)
+        monitor_summary.assert_not_called()
+        group_summary.assert_not_called()
+        changelog.assert_not_called()
+        app_version.assert_not_called()
+
     def test_cold_status_wall_builds_payload_immediately(self):
         request = SimpleNamespace()
         payload = {"version": 0, "summary": {"total": 1}, "monitors": [{"id": 7}]}
