@@ -34,6 +34,8 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="active-dashboard-filters" type="button"', template)
         self.assertIn("fixed right-0 top-1/2", template)
         self.assertIn("-translate-y-1/2", template)
+        self.assertIn("outline-none", template)
+        self.assertIn("focus-visible:ring-inset", template)
         self.assertIn('document.body.appendChild(shell)', template)
         self.assertIn('document.body.appendChild(nextFilter)', template)
         self.assertIn('onclick="clearDashboardFilters()"', template)

@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Refine active filter focus style"),
+            "Der aktive Filter verwendet jetzt statt des eckigen Browserrahmens einen dezenten, abgerundeten Fokusindikator im KeepUp-Design.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Pin active filter to viewport edge"),
             "Der aktive Dashboard-Filter sitzt jetzt zuverlässig direkt am rechten Bildschirmrand und bleibt dort auch bei automatischen Aktualisierungen.",
         )
