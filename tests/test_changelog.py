@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Add status wall theme modes"),
+            "Die Live-Status-Wall bietet jetzt systemgesteuertes, helles und dunkles Farbschema. Die Auswahl bleibt lokal im Browser gespeichert.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Refine active filter focus style"),
             "Der aktive Filter verwendet jetzt statt des eckigen Browserrahmens einen dezenten, abgerundeten Fokusindikator im KeepUp-Design.",
         )

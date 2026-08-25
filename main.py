@@ -1148,6 +1148,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("add status wall theme modes", "Die Live-Status-Wall bietet jetzt systemgesteuertes, helles und dunkles Farbschema. Die Auswahl bleibt lokal im Browser gespeichert."),
         ("refine active filter focus style", "Der aktive Filter verwendet jetzt statt des eckigen Browserrahmens einen dezenten, abgerundeten Fokusindikator im KeepUp-Design."),
         ("pin active filter to viewport edge", "Der aktive Dashboard-Filter sitzt jetzt zuverlässig direkt am rechten Bildschirmrand und bleibt dort auch bei automatischen Aktualisierungen."),
         ("centralize monitor lifecycle and dashboard sounds", "Monitor-Aktionen koordinieren Datenbank, Scheduler, Cache und Hintergrundchecks jetzt über einen eigenen Service. Die Dashboard-Sounds wurden zusätzlich aus dem HTML-Template ausgelagert."),

@@ -40,6 +40,14 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('document.body.appendChild(nextFilter)', template)
         self.assertIn('onclick="clearDashboardFilters()"', template)
 
+    def test_status_wall_supports_system_light_and_dark_themes(self):
+        template = (Path(__file__).parents[1] / "templates" / "status_wall.html").read_text(encoding="utf-8")
+        self.assertIn('id="wall-theme-toggle"', template)
+        self.assertIn('["system", "light", "dark"]', template)
+        self.assertIn('window.matchMedia("(prefers-color-scheme: dark)")', template)
+        self.assertIn('body[data-wall-theme="light"]', template)
+        self.assertIn('window.localStorage.setItem("keepupWallTheme", selected)', template)
+
     def test_card_click_restarts_stale_detail_request_with_loading_bar(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn("window.__keepupDetailControllers.get(key).abort()", template)

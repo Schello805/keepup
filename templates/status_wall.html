@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <meta name="theme-color" content="#07111f">
+    <meta name="theme-color" content="#07111f" id="wall-theme-color">
     <title>{{ settings.app_name }} Status-Wall</title>
     <link rel="icon" type="image/png" href="/static/logo.png">
     <link rel="stylesheet" href="/static/keepup.css">
@@ -30,7 +30,32 @@
         .wall-weather-details { display: none; }
         .wall-status-long { display: none; }
         .wall-size-button[aria-pressed="true"] { border-color: rgba(56,189,248,.6); background: rgba(14,165,233,.22); color: #e0f2fe; }
+        .wall-theme-button { color: #cbd5e1; }
         .wall-spinner { animation: wall-spin .9s linear infinite; }
+        body[data-wall-theme="light"] { color: #0f172a; background: radial-gradient(circle at 15% 0%, rgba(14,165,233,.13), transparent 32%), radial-gradient(circle at 90% 15%, rgba(16,185,129,.1), transparent 28%), #eef5f7; }
+        body[data-wall-theme="light"] header { border-color: rgba(14,116,144,.2); background: rgba(248,250,252,.92); box-shadow: 0 18px 45px rgba(15,23,42,.12); }
+        body[data-wall-theme="light"] header > :last-child { border-color: rgba(15,23,42,.1); background: rgba(226,232,240,.45); }
+        body[data-wall-theme="light"] header button:not(.wall-size-button),
+        body[data-wall-theme="light"] header time { border-color: rgba(15,23,42,.14); background: rgba(255,255,255,.72); color: #334155; }
+        body[data-wall-theme="light"] #wall-weather { border-color: rgba(14,165,233,.25); background: rgba(14,165,233,.1); }
+        body[data-wall-theme="light"] #wall-weather .text-slate-300,
+        body[data-wall-theme="light"] #wall-groups .text-slate-300 { color: #334155; }
+        body[data-wall-theme="light"] .wall-theme-button { color: #334155; }
+        body[data-wall-theme="light"] #wall-sound-status.text-emerald-200 { color: #047857; }
+        body[data-wall-theme="light"] .wall-size-button { color: #475569; }
+        body[data-wall-theme="light"] .wall-size-button[aria-pressed="true"] { color: #075985; }
+        body[data-wall-theme="light"] .wall-card { box-shadow: 0 12px 30px rgba(15,23,42,.09); }
+        body[data-wall-theme="light"] .wall-card[data-status="up"] { background: linear-gradient(145deg, rgba(209,250,229,.95), rgba(236,253,245,.96)); }
+        body[data-wall-theme="light"] .wall-card[data-status="down"] { background: linear-gradient(145deg, rgba(255,228,230,.96), rgba(255,241,242,.96)); }
+        body[data-wall-theme="light"] .wall-card[data-status="unknown"] { background: linear-gradient(145deg, rgba(254,243,199,.96), rgba(255,251,235,.96)); }
+        body[data-wall-theme="light"] .wall-card[data-status="paused"] { background: rgba(248,250,252,.94); }
+        body[data-wall-theme="light"] .wall-card-name { color: #0f172a; }
+        body[data-wall-theme="light"] .wall-card-target { color: #475569; }
+        body[data-wall-theme="light"] .wall-card-category { color: #64748b; }
+        body[data-wall-theme="light"] .wall-card-details > div { background: rgba(255,255,255,.55); }
+        body[data-wall-theme="light"] #wall-loading .text-slate-100,
+        body[data-wall-theme="light"] #wall-error .text-slate-300 { color: #334155; }
+        body[data-wall-theme="light"] #wall-loading .text-slate-400 { color: #64748b; }
         @media (min-width: 720px) {
             .wall-header-main { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; }
             .wall-header-center { justify-self: center; white-space: nowrap; }
@@ -94,6 +119,9 @@
                     <time id="wall-clock" class="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-semibold tabular-nums"></time>
                 </div>
                 <div class="wall-header-menu flex flex-wrap items-center gap-1.5">
+                    <button type="button" id="wall-theme-toggle" onclick="cycleWallTheme()" class="wall-theme-button inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2 transition hover:bg-white/10" aria-label="Farbschema: System" title="Farbschema: System">
+                        <span data-theme-icon aria-hidden="true">◐</span><span data-theme-label class="hidden text-[10px] font-semibold xl:inline">System</span>
+                    </button>
                     <button type="button" id="wall-sound-status" onclick="toggleWallSound()" class="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-slate-400 transition hover:bg-white/10" aria-pressed="false" aria-label="Sound einschalten" title="Sound einschalten">
                         <svg data-sound-icon="on" class="hidden h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4V5Zm4.5 3.5a5 5 0 0 1 0 7M18 6a8 8 0 0 1 0 12"/></svg>
                         <svg data-sound-icon="off" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5 6 9H3v6h3l5 4V5Zm4 5 5 5m0-5-5 5"/></svg>
@@ -128,6 +156,7 @@
         let wallPayload = {{ payload|tojson }};
         let wallRefreshTimer = null;
         let wallCardsHaveRendered = false;
+        const wallThemeMedia = window.matchMedia("(prefers-color-scheme: dark)");
 
         function escapeText(value) {
             const node = document.createElement("div");
@@ -156,6 +185,44 @@
             } catch (_) {
                 return "medium";
             }
+        }
+
+        function getSavedWallTheme() {
+            try {
+                const saved = window.localStorage.getItem("keepupWallTheme");
+                return ["system", "light", "dark"].includes(saved) ? saved : "system";
+            } catch (_) {
+                return "system";
+            }
+        }
+
+        function setWallTheme(mode, persist = true) {
+            const selected = ["system", "light", "dark"].includes(mode) ? mode : "system";
+            const resolved = selected === "system" ? (wallThemeMedia.matches ? "dark" : "light") : selected;
+            document.body.dataset.wallThemeMode = selected;
+            document.body.dataset.wallTheme = resolved;
+            document.documentElement.style.colorScheme = resolved;
+            document.getElementById("wall-theme-color")?.setAttribute("content", resolved === "dark" ? "#07111f" : "#eef5f7");
+            const button = document.getElementById("wall-theme-toggle");
+            const labels = { system: "System", light: "Hell", dark: "Dunkel" };
+            const icons = { system: "◐", light: "☀", dark: "☾" };
+            if (button) {
+                button.setAttribute("aria-label", `Farbschema: ${labels[selected]}`);
+                button.title = `Farbschema: ${labels[selected]}`;
+                const label = button.querySelector("[data-theme-label]");
+                const icon = button.querySelector("[data-theme-icon]");
+                if (label) label.textContent = labels[selected];
+                if (icon) icon.textContent = icons[selected];
+            }
+            if (persist) {
+                try { window.localStorage.setItem("keepupWallTheme", selected); } catch (_) {}
+            }
+        }
+
+        function cycleWallTheme() {
+            const current = document.body.dataset.wallThemeMode || "system";
+            const modes = ["system", "light", "dark"];
+            setWallTheme(modes[(modes.indexOf(current) + 1) % modes.length]);
         }
 
         function syncWallSoundStatus() {
@@ -351,10 +418,15 @@
         }
 
         function updateClock() { document.getElementById("wall-clock").textContent = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date()); }
+        setWallTheme(getSavedWallTheme(), false);
         setWallSize(getSavedWallSize(), false);
         syncWallSoundStatus();
+        wallThemeMedia.addEventListener?.("change", () => {
+            if ((document.body.dataset.wallThemeMode || "system") === "system") setWallTheme("system", false);
+        });
         window.addEventListener("storage", (event) => {
             if (event.key === "keepup-dashboard-sounds") syncWallSoundStatus();
+            if (event.key === "keepupWallTheme") setWallTheme(getSavedWallTheme(), false);
         });
         document.querySelectorAll("[data-wall-size-option]").forEach((button) => {
             button.addEventListener("click", () => setWallSize(button.dataset.wallSizeOption));
