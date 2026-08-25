@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Refactor core architecture"),
+            "Die Kernlogik ist jetzt klar in Module für Caches, Formatierung, Systemmetriken, API-Modelle und Performance-Messung aufgeteilt. Datenbankänderungen werden versioniert und HTMX wird lokal ausgeliefert.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Fix changelog page theme"),
             "Die Änderungsseite nutzt jetzt wieder das dunkle KeepUp-Design.",
         )

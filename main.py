@@ -63,6 +63,20 @@ from monitor import (
 )
 
 from keepup_version import __version__
+from keepup_formatting import (
+    days_since,
+    format_duration_compact,
+    format_duration_short,
+    format_timestamp,
+    format_timestamp_without_tz,
+    get_timezone_or_utc,
+    outage_hours_between,
+    parse_iso_datetime,
+)
+from keepup_system import build_system_metrics
+from keepup_models import HealthResponse, ReadinessResponse
+from keepup_observability import RequestTimingMiddleware
+from keepup_cache import DashboardCacheStore
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -86,16 +100,16 @@ MONITOR_DETAIL_CACHE_TTL_SECONDS = 120
 MAX_IMPORT_BYTES = max(1, int(os.environ.get("KEEPUP_MAX_IMPORT_MB", "25"))) * 1024 * 1024
 IMPORT_READ_CHUNK_BYTES = 1024 * 1024
 _app_version_cache: dict[str, Any] = {"expires_at": 0.0, "value": None}
-_dashboard_cards_cache: dict[str, Any] = {"expires_at": 0.0, "html": None, "generation": 0}
-_dashboard_cards_cache_lock = threading.Lock()
+_dashboard_cache = DashboardCacheStore()
+# Compatibility aliases keep extensions and existing tests stable during the refactor.
+_dashboard_cards_cache = _dashboard_cache.cards
+_dashboard_cards_cache_lock = _dashboard_cache.cards_lock
 _dashboard_cards_refresh_task: Optional[asyncio.Task] = None
-_dashboard_snapshot_version = 1
-_dashboard_snapshot_version_lock = threading.Lock()
-_dashboard_snapshot_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload": None}
-_dashboard_snapshot_cache_lock = threading.Lock()
+_dashboard_snapshot_cache = _dashboard_cache.snapshot
+_dashboard_snapshot_cache_lock = _dashboard_cache.snapshot_lock
 _dashboard_snapshot_refresh_task: Optional[asyncio.Task] = None
-_status_wall_cache: dict[str, Any] = {"version": 0, "expires_at": 0.0, "payload": None}
-_status_wall_cache_lock = threading.Lock()
+_status_wall_cache = _dashboard_cache.status_wall
+_status_wall_cache_lock = _dashboard_cache.status_wall_lock
 _status_wall_refresh_task: Optional[asyncio.Task] = None
 _monitor_detail_cache: dict[int, dict[str, Any]] = {}
 _monitor_detail_cache_lock = threading.Lock()
@@ -103,13 +117,6 @@ _monitor_detail_cache_generation = 0
 _changelog_cache: dict[str, Any] = {"expires_at": 0.0, "items": None}
 _weather_cache: dict[str, Any] = {"location": "", "expires_at": 0.0, "payload": None}
 _weather_cache_lock = asyncio.Lock()
-_system_metrics_cache: dict[str, Any] = {
-    "timestamp": None,
-    "cpu_total": None,
-    "cpu_idle": None,
-    "bytes_sent": None,
-    "bytes_recv": None,
-}
 APP_TIMEZONE_OPTIONS = [
     "UTC",
     "Europe/Berlin",
@@ -138,218 +145,6 @@ def get_toast(request: Request) -> Optional[dict]:
     if tone not in {"success", "info", "warning", "error"}:
         tone = "success"
     return {"message": message, "tone": tone}
-
-
-def get_timezone_or_utc(timezone_name: str) -> ZoneInfo:
-    try:
-        return ZoneInfo(timezone_name)
-    except ZoneInfoNotFoundError:
-        return ZoneInfo("UTC")
-
-
-def format_timestamp(timestamp: Optional[str], timezone_name: str) -> Optional[str]:
-    if not timestamp:
-        return None
-    try:
-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except ValueError:
-        return timestamp
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S")
-
-
-def format_timestamp_without_tz(timestamp: Optional[str], timezone_name: str) -> Optional[str]:
-    if not timestamp:
-        return None
-    try:
-        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except ValueError:
-        return timestamp
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(get_timezone_or_utc(timezone_name)).strftime("%d.%m.%Y %H:%M:%S")
-
-
-def days_since(timestamp: Optional[str]) -> Optional[int]:
-    dt = parse_iso_datetime(timestamp)
-    if dt is None:
-        return None
-    return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 86400))
-
-
-def outage_hours_between(success_at: Optional[str], down_at: Optional[str]) -> Optional[str]:
-    success_dt = parse_iso_datetime(success_at)
-    down_dt = parse_iso_datetime(down_at)
-    if success_dt is None or down_dt is None:
-        return None
-    delta_seconds = int(round((down_dt - success_dt).total_seconds()))
-    if delta_seconds <= 0:
-        return None
-    return format_duration_compact(delta_seconds)
-
-
-def format_duration_compact(seconds: Optional[int]) -> Optional[str]:
-    if seconds is None:
-        return None
-    seconds = max(0, int(seconds))
-    minutes, _sec = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    if days:
-        return f"{days} Tage {hours} Std." if hours else f"{days} Tage"
-    if hours:
-        return f"{hours} Std. {minutes} Min." if minutes else f"{hours} Std."
-    if minutes:
-        return f"{minutes} Min."
-    return f"{seconds} Sek."
-
-
-def format_duration_short(seconds: Optional[int]) -> Optional[str]:
-    if seconds is None:
-        return None
-    seconds = max(0, int(seconds))
-    minutes, sec = divmod(seconds, 60)
-    hours, minutes = divmod(minutes, 60)
-    days, hours = divmod(hours, 24)
-    if days:
-        return f"{days}d {hours}h"
-    if hours:
-        return f"{hours}h {minutes}m"
-    if minutes:
-        return f"{minutes}m {sec}s"
-    return f"{sec}s"
-
-
-def parse_iso_datetime(timestamp: Optional[str]) -> Optional[datetime]:
-    if not timestamp:
-        return None
-    try:
-        dt = datetime.fromisoformat(str(timestamp).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
-def format_bytes_compact(num_bytes: Optional[float]) -> str:
-    if num_bytes is None:
-        return "-"
-    value = float(num_bytes)
-    units = ["B", "KB", "MB", "GB", "TB"]
-    for unit in units:
-        if value < 1024 or unit == units[-1]:
-            return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} {unit}"
-        value /= 1024.0
-    return "-"
-
-
-def _read_linux_cpu_times() -> tuple[Optional[int], Optional[int]]:
-    try:
-        with open("/proc/stat", "r", encoding="utf-8") as fh:
-            first = fh.readline().strip().split()
-        if not first or first[0] != "cpu":
-            return None, None
-        values = [int(value) for value in first[1:]]
-        total = sum(values)
-        idle = values[3] + (values[4] if len(values) > 4 else 0)
-        return total, idle
-    except Exception:
-        return None, None
-
-
-def _read_linux_memory() -> tuple[Optional[int], Optional[int], Optional[float]]:
-    try:
-        meminfo: dict[str, int] = {}
-        with open("/proc/meminfo", "r", encoding="utf-8") as fh:
-            for line in fh:
-                key, rest = line.split(":", 1)
-                meminfo[key] = int(rest.strip().split()[0]) * 1024
-        total = meminfo.get("MemTotal")
-        available = meminfo.get("MemAvailable")
-        if total is None or available is None:
-            return None, None, None
-        used = max(0, total - available)
-        percent = (used / total) * 100 if total else None
-        return used, total, percent
-    except Exception:
-        return None, None, None
-
-
-def _read_linux_net_bytes() -> tuple[Optional[int], Optional[int]]:
-    try:
-        recv_total = 0
-        sent_total = 0
-        with open("/proc/net/dev", "r", encoding="utf-8") as fh:
-            for line in fh.readlines()[2:]:
-                iface, data = line.split(":", 1)
-                iface = iface.strip()
-                if iface == "lo":
-                    continue
-                fields = data.split()
-                recv_total += int(fields[0])
-                sent_total += int(fields[8])
-        return sent_total, recv_total
-    except Exception:
-        return None, None
-
-
-def build_system_metrics() -> dict[str, Any]:
-    now = time.time()
-    cpu_total, cpu_idle = _read_linux_cpu_times()
-    memory_used, memory_total, memory_percent = _read_linux_memory()
-    bytes_sent, bytes_recv = _read_linux_net_bytes()
-
-    previous_timestamp = _system_metrics_cache.get("timestamp")
-    previous_cpu_total = _system_metrics_cache.get("cpu_total")
-    previous_cpu_idle = _system_metrics_cache.get("cpu_idle")
-    previous_sent = _system_metrics_cache.get("bytes_sent")
-    previous_recv = _system_metrics_cache.get("bytes_recv")
-
-    cpu_percent: Optional[float] = None
-    if (
-        cpu_total is not None
-        and cpu_idle is not None
-        and previous_cpu_total is not None
-        and previous_cpu_idle is not None
-        and cpu_total > int(previous_cpu_total)
-    ):
-        total_delta = cpu_total - int(previous_cpu_total)
-        idle_delta = cpu_idle - int(previous_cpu_idle)
-        if total_delta > 0:
-            cpu_percent = max(0.0, min(100.0, (1 - (idle_delta / total_delta)) * 100))
-
-    upload_rate: Optional[float] = None
-    download_rate: Optional[float] = None
-    if (
-        previous_timestamp is not None
-        and previous_sent is not None
-        and previous_recv is not None
-        and bytes_sent is not None
-        and bytes_recv is not None
-        and now > float(previous_timestamp)
-    ):
-        elapsed = max(0.001, now - float(previous_timestamp))
-        upload_rate = max(0.0, (bytes_sent - float(previous_sent)) / elapsed)
-        download_rate = max(0.0, (bytes_recv - float(previous_recv)) / elapsed)
-
-    _system_metrics_cache["timestamp"] = now
-    _system_metrics_cache["cpu_total"] = cpu_total
-    _system_metrics_cache["cpu_idle"] = cpu_idle
-    _system_metrics_cache["bytes_sent"] = bytes_sent
-    _system_metrics_cache["bytes_recv"] = bytes_recv
-
-    return {
-        "cpu_percent": round(cpu_percent, 1) if cpu_percent is not None else None,
-        "memory_percent": round(memory_percent, 1) if memory_percent is not None else None,
-        "memory_used": format_bytes_compact(memory_used),
-        "memory_total": format_bytes_compact(memory_total),
-        "net_sent_total": format_bytes_compact(bytes_sent),
-        "net_recv_total": format_bytes_compact(bytes_recv),
-        "net_upload_rate": format_bytes_compact(upload_rate) + "/s" if upload_rate is not None else "-",
-        "net_download_rate": format_bytes_compact(download_rate) + "/s" if download_rate is not None else "-",
-    }
 
 
 def get_incident_burst_bucket(timestamp: Optional[str]) -> Optional[str]:
@@ -757,15 +552,11 @@ def build_dashboard_context(request: Request) -> dict:
 
 
 def get_dashboard_snapshot_version() -> int:
-    with _dashboard_snapshot_version_lock:
-        return _dashboard_snapshot_version
+    return _dashboard_cache.version()
 
 
 def advance_dashboard_snapshot_version() -> int:
-    global _dashboard_snapshot_version
-    with _dashboard_snapshot_version_lock:
-        _dashboard_snapshot_version += 1
-        return _dashboard_snapshot_version
+    return _dashboard_cache.advance_version()
 
 
 def build_dashboard_snapshot(request: Request) -> dict[str, Any]:
@@ -1358,6 +1149,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("refactor core architecture", "Die Kernlogik ist jetzt klar in Module für Caches, Formatierung, Systemmetriken, API-Modelle und Performance-Messung aufgeteilt. Datenbankänderungen werden versioniert und HTMX wird lokal ausgeliefert."),
         ("add live dashboard experience and status wall", "Dashboard-Daten sind jetzt atomar synchronisiert; hinzu kommen Live-Events, Mini-Timelines, Fokusmodus, Gruppenkennzahlen, Status-Wall und optionale Sounds."),
         ("add monitor groups and category filters", "Monitore können jetzt in Gruppen/Kategorien organisiert und gefiltert werden."),
         ("support multiple monitor groups", "Monitore können jetzt mehreren Gruppen gleichzeitig zugeordnet und über jede dieser Gruppen gefiltert werden."),
@@ -1935,6 +1727,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="KeepUp", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
+app.add_middleware(RequestTimingMiddleware, slow_request_seconds=0.75)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -1950,12 +1743,12 @@ def render_template(request: Request, name: str, context: dict[str, Any]) -> HTM
     return HTMLResponse(content)
 
 
-@app.get("/health")
+@app.get("/health", response_model=HealthResponse)
 async def health() -> JSONResponse:
     return JSONResponse({"status": "ok"})
 
 
-@app.get("/ready")
+@app.get("/ready", response_model=ReadinessResponse)
 async def readiness() -> JSONResponse:
     db_ok = True
     db_error: Optional[str] = None

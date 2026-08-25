@@ -10,6 +10,7 @@ from typing import Any, Optional
 
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = BASE_DIR / "keepup.db"
+CURRENT_SCHEMA_VERSION = 1
 HISTORY_LIMIT = 30
 BACKUP_HISTORY_HOURS = 24
 SECRET_SETTING_KEYS = {"telegram_bot_token", "smtp_password", "ntfy_token", "ntfy_password"}
@@ -219,6 +220,11 @@ def init_db() -> None:
                 value TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS incidents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 monitor_id INTEGER NOT NULL,
@@ -269,7 +275,17 @@ def init_db() -> None:
             """
         )
         _seed_default_settings(cursor)
+        cursor.execute(
+            "INSERT OR IGNORE INTO schema_migrations (version, applied_at) VALUES (?, ?)",
+            (CURRENT_SCHEMA_VERSION, utc_now()),
+        )
         conn.commit()
+
+
+def get_schema_version() -> int:
+    with closing(get_db()) as conn:
+        row = conn.execute("SELECT MAX(version) AS version FROM schema_migrations").fetchone()
+        return int(row["version"] or 0) if row else 0
 
 
 def _ensure_monitor_columns(cursor: sqlite3.Cursor) -> None:

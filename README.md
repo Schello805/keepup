@@ -86,7 +86,17 @@ Wichtig:
 ## Projektstruktur
 
 - `main.py`
-  FastAPI-App, Routen, HTML-Rendering, Settings-Logik
+  FastAPI-App, Routen, HTML-Rendering und Orchestrierung
+- `keepup_cache.py`
+  Zentraler, threadsicherer Cache für Dashboard, Snapshot und Status-Wall
+- `keepup_formatting.py`
+  Gemeinsame Datums-, Zeit- und Größenformatierung
+- `keepup_models.py`
+  Typisierte API-Antwortmodelle für Health- und Readiness-Endpunkte
+- `keepup_observability.py`
+  Laufzeitmessung mit `Server-Timing` und Warnungen bei langsamen Requests
+- `keepup_system.py`
+  Gecachte CPU-, RAM- und Netzwerkmetriken des Hosts
 - `monitor.py`
   Check-Logik, Scheduler-Anbindung, Notifications
 - `database.py`
@@ -94,9 +104,11 @@ Wichtig:
 - `templates/`
   Jinja2-Templates für Dashboard, Settings und Incidents
 - `static/`
-  Statische Assets wie Logo/Favicon
+  Lokale statische Assets wie Logo, Favicon, CSS und HTMX
 - `scripts/`
   Install-, Update- und Service-Hilfsskripte
+
+Jede HTTP-Antwort enthält einen `Server-Timing`-Header mit der serverseitigen Laufzeit. Requests ab 750 ms protokolliert KeepUp zusätzlich als `slow_request` im Service-Log. So lassen sich Engpässe gezielt mit `journalctl -u keepup.service` untersuchen, ohne dauerhaft ausführliches Debug-Logging einzuschalten.
 
 ## Lokale Entwicklung
 
