@@ -32,8 +32,10 @@ class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
     def test_active_filter_hint_is_a_floating_dashboard_button(self):
         template = (Path(__file__).parents[1] / "templates" / "index.html").read_text(encoding="utf-8")
         self.assertIn('id="active-dashboard-filters" type="button"', template)
-        self.assertIn("fixed right-3 top-1/2", template)
+        self.assertIn("fixed right-0 top-1/2", template)
         self.assertIn("-translate-y-1/2", template)
+        self.assertIn('document.body.appendChild(shell)', template)
+        self.assertIn('document.body.appendChild(nextFilter)', template)
         self.assertIn('onclick="clearDashboardFilters()"', template)
 
     def test_card_click_restarts_stale_detail_request_with_loading_bar(self):

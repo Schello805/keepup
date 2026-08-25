@@ -1148,6 +1148,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("pin active filter to viewport edge", "Der aktive Dashboard-Filter sitzt jetzt zuverlässig direkt am rechten Bildschirmrand und bleibt dort auch bei automatischen Aktualisierungen."),
         ("centralize monitor lifecycle and dashboard sounds", "Monitor-Aktionen koordinieren Datenbank, Scheduler, Cache und Hintergrundchecks jetzt über einen eigenen Service. Die Dashboard-Sounds wurden zusätzlich aus dem HTML-Template ausgelagert."),
         ("move floating filter button to screen edge", "Der schwebende Filterbutton sitzt jetzt platzsparend mittig am rechten Bildschirmrand."),
         ("extract system router and dashboard sorting", "Health- und Bereitschaftsprüfungen liegen jetzt in einem eigenen FastAPI-Router; die Karten-Sortierung wurde aus dem HTML-Template in ein geprüftes JavaScript-Modul verschoben."),
