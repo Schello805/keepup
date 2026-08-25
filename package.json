@@ -1,7 +1,7 @@
 {
   "name": "keepup",
   "private": true,
-  "version": "1.0.134",
+  "version": "1.0.135",
   "scripts": {
     "build:css": "tailwindcss -i ./static/tailwind-input.css -o ./static/keepup.css --minify"
   },

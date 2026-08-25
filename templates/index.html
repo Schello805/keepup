@@ -1144,47 +1144,7 @@
         }
 
         function compareMonitorCards(a, b, order) {
-            const numeric = (card, key) => Number(card.dataset[key] || -1);
-            const text = (card, key) => String(card.dataset[key] || "");
-            const metric = (card, key, fallback) => {
-                const value = Number(card.dataset[key]);
-                return Number.isFinite(value) && value >= 0 ? value : fallback;
-            };
-            const createdTime = (card) => {
-                const raw = card.dataset.monitorCreated || "";
-                const parsed = Date.parse(raw);
-                if (Number.isFinite(parsed)) return parsed;
-                const id = Number(card.dataset.monitorId || 0);
-                return Number.isFinite(id) ? id : 0;
-            };
-            if (order === "all") return numeric(a, "monitorOrder") - numeric(b, "monitorOrder");
-            if (order === "name-asc") {
-                return text(a, "monitorName").localeCompare(text(b, "monitorName"), "de");
-            }
-            if (order === "name-desc") {
-                return text(b, "monitorName").localeCompare(text(a, "monitorName"), "de");
-            }
-            if (order === "response-desc") {
-                return metric(b, "monitorResponseTime", -1) - metric(a, "monitorResponseTime", -1);
-            }
-            if (order === "response-asc") {
-                return metric(a, "monitorResponseTime", Number.MAX_SAFE_INTEGER) - metric(b, "monitorResponseTime", Number.MAX_SAFE_INTEGER);
-            }
-            if (order === "uptime-desc") {
-                return metric(b, "monitorUptime", -1) - metric(a, "monitorUptime", -1);
-            }
-            if (order === "uptime-asc") {
-                return metric(a, "monitorUptime", Number.MAX_SAFE_INTEGER) - metric(b, "monitorUptime", Number.MAX_SAFE_INTEGER);
-            }
-            if (order === "created-desc") {
-                return createdTime(b) - createdTime(a);
-            }
-            if (order === "created-asc") {
-                return createdTime(a) - createdTime(b);
-            }
-            const statusDiff = numeric(a, "monitorStatusRank") - numeric(b, "monitorStatusRank");
-            if (statusDiff !== 0) return statusDiff;
-            return text(a, "monitorName").localeCompare(text(b, "monitorName"), "de");
+            return window.KeepUpDashboard.compareMonitorCards(a, b, order);
         }
 
         function sortMonitorCards() {

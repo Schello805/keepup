@@ -7,12 +7,18 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import database
+import main
 from keepup_cache import DashboardCacheStore
 from keepup_formatting import format_duration_compact, format_timestamp
 from keepup_observability import RequestTimingMiddleware
 
 
 class ArchitectureTests(unittest.TestCase):
+    def test_system_endpoints_are_registered_from_dedicated_router(self):
+        paths = {route.path for route in main.app.routes}
+        self.assertIn("/health", paths)
+        self.assertIn("/ready", paths)
+
     def test_dashboard_cache_store_versions_and_resets_all_views(self):
         cache = DashboardCacheStore()
         cache.cards.update(expires_at=10.0, html="cards", generation=3)
@@ -60,6 +66,8 @@ class ArchitectureTests(unittest.TestCase):
         self.assertIn('src="/static/htmx.min.js"', template)
         self.assertNotIn("unpkg.com/htmx", template)
         self.assertTrue((project_root / "static" / "htmx.min.js").is_file())
+        core = (project_root / "static" / "dashboard-core.js").read_text(encoding="utf-8")
+        self.assertIn("compareMonitorCards", core)
 
 
 if __name__ == "__main__":

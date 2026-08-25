@@ -70,10 +70,10 @@ from keepup_formatting import (
     parse_iso_datetime,
 )
 from keepup_system import build_system_metrics
-from keepup_models import HealthResponse, ReadinessResponse
 from keepup_observability import RequestTimingMiddleware
 from keepup_cache import DashboardCacheStore
 from keepup_repository import MonitorRepository
+from keepup_routes_system import configure_system_routes, health, readiness, router as system_router
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -1147,6 +1147,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("extract system router and dashboard sorting", "Health- und Bereitschaftsprüfungen liegen jetzt in einem eigenen FastAPI-Router; die Karten-Sortierung wurde aus dem HTML-Template in ein geprüftes JavaScript-Modul verschoben."),
         ("show active filters as floating button", "Aktive Dashboard-Filter erscheinen jetzt platzsparend als schwebender Button und lassen sich mit einem Klick vollständig löschen."),
         ("add architecture boundaries and performance budgets", "Monitor-Zugriffe laufen jetzt über eine klare Repository-Grenze, Datenbankmigrationen werden schrittweise angewendet und automatische Performance-Budgets schützen schnelle Cache- und Frontend-Pfade."),
         ("refactor core architecture", "Die Kernlogik ist jetzt klar in Module für Caches, Formatierung, Systemmetriken, API-Modelle und Performance-Messung aufgeteilt. Datenbankänderungen werden versioniert und HTMX wird lokal ausgeliefert."),
@@ -1728,6 +1729,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="KeepUp", lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 app.add_middleware(RequestTimingMiddleware, slow_request_seconds=0.75)
+configure_system_routes(get_db, scheduler)
+app.include_router(system_router)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -1741,41 +1744,6 @@ def render_template(request: Request, name: str, context: dict[str, Any]) -> HTM
     template = templates.env.get_template(name)
     content = template.render(**context)
     return HTMLResponse(content)
-
-
-@app.get("/health", response_model=HealthResponse)
-async def health() -> JSONResponse:
-    return JSONResponse({"status": "ok"})
-
-
-@app.get("/ready", response_model=ReadinessResponse)
-async def readiness() -> JSONResponse:
-    db_ok = True
-    db_error: Optional[str] = None
-    try:
-        conn = get_db()
-        try:
-            conn.execute("SELECT 1")
-        finally:
-            conn.close()
-    except Exception as exc:
-        db_ok = False
-        db_error = str(exc)
-
-    scheduler_running = bool(getattr(scheduler, "running", False))
-    job_count = 0
-    try:
-        job_count = len(scheduler.get_jobs())
-    except Exception:
-        job_count = 0
-
-    ready = db_ok and scheduler_running
-    payload = {
-        "ready": ready,
-        "db": {"ok": db_ok, "error": db_error},
-        "scheduler": {"running": scheduler_running, "jobs": job_count},
-    }
-    return JSONResponse(payload, status_code=200 if ready else 503)
 
 
 @app.get("/api/update/status")
