@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import database
-import main
+from keepup_routes_system import router as system_router
 from keepup_cache import DashboardCacheStore
 from keepup_formatting import format_duration_compact, format_timestamp
 from keepup_observability import RequestTimingMiddleware
@@ -15,7 +15,7 @@ from keepup_observability import RequestTimingMiddleware
 
 class ArchitectureTests(unittest.TestCase):
     def test_system_endpoints_are_registered_from_dedicated_router(self):
-        paths = {path for route in main.app.routes if (path := getattr(route, "path", None))}
+        paths = {route.path for route in system_router.routes}
         self.assertIn("/health", paths)
         self.assertIn("/ready", paths)
 
