@@ -68,6 +68,7 @@ class ArchitectureTests(unittest.TestCase):
         self.assertTrue((project_root / "static" / "htmx.min.js").is_file())
         core = (project_root / "static" / "dashboard-core.js").read_text(encoding="utf-8")
         self.assertIn("compareMonitorCards", core)
+        self.assertIn("playSoundSequence", core)
 
 
 if __name__ == "__main__":

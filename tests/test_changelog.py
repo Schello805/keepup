@@ -53,6 +53,10 @@ class ChangelogTests(unittest.TestCase):
 
     def test_recent_changelog_subjects_are_humanized(self):
         self.assertEqual(
+            _humanize_commit_subject("Centralize monitor lifecycle and dashboard sounds"),
+            "Monitor-Aktionen koordinieren Datenbank, Scheduler, Cache und Hintergrundchecks jetzt über einen eigenen Service. Die Dashboard-Sounds wurden zusätzlich aus dem HTML-Template ausgelagert.",
+        )
+        self.assertEqual(
             _humanize_commit_subject("Move floating filter button to screen edge"),
             "Der schwebende Filterbutton sitzt jetzt platzsparend mittig am rechten Bildschirmrand.",
         )

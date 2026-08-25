@@ -73,6 +73,7 @@ from keepup_system import build_system_metrics
 from keepup_observability import RequestTimingMiddleware
 from keepup_cache import DashboardCacheStore
 from keepup_repository import MonitorRepository
+from keepup_monitor_service import MonitorService
 from keepup_routes_system import configure_system_routes, health, readiness, router as system_router
 
 
@@ -1147,6 +1148,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("centralize monitor lifecycle and dashboard sounds", "Monitor-Aktionen koordinieren Datenbank, Scheduler, Cache und Hintergrundchecks jetzt über einen eigenen Service. Die Dashboard-Sounds wurden zusätzlich aus dem HTML-Template ausgelagert."),
         ("move floating filter button to screen edge", "Der schwebende Filterbutton sitzt jetzt platzsparend mittig am rechten Bildschirmrand."),
         ("extract system router and dashboard sorting", "Health- und Bereitschaftsprüfungen liegen jetzt in einem eigenen FastAPI-Router; die Karten-Sortierung wurde aus dem HTML-Template in ein geprüftes JavaScript-Modul verschoben."),
         ("show active filters as floating button", "Aktive Dashboard-Filter erscheinen jetzt platzsparend als schwebender Button und lassen sich mit einem Klick vollständig löschen."),
@@ -1474,6 +1476,18 @@ async def execute_monitor_check_and_refresh_cards(monitor_id: int) -> None:
 
 async def refresh_dashboard_cards_cache() -> None:
     await ensure_dashboard_cards_cache_refresh(force=True)
+
+
+monitor_service = MonitorService(
+    repository=monitor_repository,
+    invalidate_detail=invalidate_monitor_detail_cache,
+    mark_dashboard_stale=mark_dashboard_cards_cache_stale,
+    reschedule_job=lambda monitor_id: reschedule_monitor_job(scheduler, monitor_id),
+    remove_job=lambda monitor_id: remove_monitor_job(scheduler, monitor_id),
+    check_and_refresh=lambda monitor_id: execute_monitor_check_and_refresh_cards(monitor_id),
+    refresh_dashboard=lambda: refresh_dashboard_cards_cache(),
+    execute_check=lambda monitor_id: execute_monitor_check(monitor_id),
+)
 
 
 def handle_scheduler_job_executed(event: Any) -> None:
@@ -2041,7 +2055,7 @@ async def create_monitor_route(
                 status_code=400,
             )
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
-    monitor_id = monitor_repository.create(
+    created_monitor = monitor_service.create(
         name=name,
         category=category,
         monitor_type="http" if is_combo else monitor_type,
@@ -2057,11 +2071,7 @@ async def create_monitor_route(
         forbidden_text=forbidden_text,
         categories=[*categories, category_custom],
     )
-    invalidate_monitor_detail_cache(monitor_id)
-    created_monitor = monitor_repository.get(monitor_id) or {}
-    reschedule_monitor_job(scheduler, monitor_id)
-    mark_dashboard_cards_cache_stale()
-    asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
+    monitor_id = int(created_monitor["id"])
     if "application/json" in accept:
         return JSONResponse(
             {
@@ -2119,7 +2129,7 @@ async def edit_monitor_route(
             )
         return flash_redirect("/", "Für PING/HTTP-Kombi bitte eine gültige HTTP-URL oder ein Ping-Ziel angeben.", "error")
 
-    monitor_repository.update(
+    updated_monitor = monitor_service.update(
         monitor_id=monitor_id,
         name=name,
         category=category,
@@ -2136,18 +2146,14 @@ async def edit_monitor_route(
         forbidden_text=forbidden_text,
         categories=[*categories, category_custom],
     )
-    invalidate_monitor_detail_cache(monitor_id)
-    reschedule_monitor_job(scheduler, monitor_id)
-    mark_dashboard_cards_cache_stale()
-    asyncio.create_task(execute_monitor_check_and_refresh_cards(monitor_id))
     if "application/json" in accept:
         return JSONResponse(
             {
                 "ok": True,
                 "id": monitor_id,
                 "name": name.strip(),
-                "category": (monitor_repository.get(monitor_id) or {}).get("category", ""),
-                "categories": (monitor_repository.get(monitor_id) or {}).get("categories", []),
+                "category": updated_monitor.get("category", ""),
+                "categories": updated_monitor.get("categories", []),
                 "target": target,
                 "ping_target": ping_target.strip(),
                 "monitor_type": "http" if is_combo else monitor_type,
@@ -2166,12 +2172,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
     monitor = monitor_repository.get(monitor_id)
     if not monitor:
         raise HTTPException(status_code=404, detail="Monitor not found")
-    is_enabled = not bool(monitor.get("enabled", 1))
-    monitor_repository.set_enabled(monitor_id, is_enabled)
-    invalidate_monitor_detail_cache(monitor_id)
-    reschedule_monitor_job(scheduler, monitor_id)
-    mark_dashboard_cards_cache_stale()
-    asyncio.create_task(refresh_dashboard_cards_cache())
+    is_enabled = monitor_service.toggle(monitor_id)
     message = "Monitor wurde fortgesetzt." if is_enabled else "Monitor wurde pausiert."
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
@@ -2181,11 +2182,7 @@ async def toggle_monitor_route(monitor_id: int, request: Request):
 
 @app.post("/monitors/{monitor_id}/delete")
 async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
-    monitor_repository.delete(monitor_id)
-    invalidate_monitor_detail_cache(monitor_id)
-    remove_monitor_job(scheduler, monitor_id)
-    mark_dashboard_cards_cache_stale()
-    asyncio.create_task(refresh_dashboard_cards_cache())
+    monitor_service.delete(monitor_id)
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
         return JSONResponse({"ok": True, "id": monitor_id, "message": "Monitor wurde gelöscht."})
@@ -2194,10 +2191,7 @@ async def delete_monitor_route(monitor_id: int, request: Request) -> Response:
 
 @app.post("/monitors/{monitor_id}/run")
 async def run_monitor_route(monitor_id: int, request: Request):
-    result = await execute_monitor_check(monitor_id)
-    invalidate_monitor_detail_cache(monitor_id)
-    mark_dashboard_cards_cache_stale()
-    asyncio.create_task(refresh_dashboard_cards_cache())
+    result = await monitor_service.run(monitor_id)
     accept = (request.headers.get("accept") or "").lower()
     if "application/json" in accept:
         return JSONResponse(
