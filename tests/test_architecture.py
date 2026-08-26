@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -48,6 +49,31 @@ class ArchitectureTests(unittest.TestCase):
                 with database.get_db() as conn:
                     count = conn.execute("SELECT COUNT(*) FROM schema_migrations").fetchone()[0]
                 self.assertEqual(count, 1)
+
+    def test_check_retention_cleans_down_monitors_in_small_batches(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "keepup.db"
+            with patch.object(database, "DATABASE_URL", db_path):
+                database.init_db()
+                old = (datetime.now(timezone.utc) - timedelta(days=30)).replace(microsecond=0).isoformat()
+                recent = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+                with database.get_db() as conn:
+                    monitor_id = conn.execute(
+                        "INSERT INTO monitors (name, type, target, status) VALUES (?, ?, ?, ?)",
+                        ("Down target", "ping", "127.0.0.2", "down"),
+                    ).lastrowid
+                    conn.executemany(
+                        "INSERT INTO checks (monitor_id, status, checked_at) VALUES (?, ?, ?)",
+                        [(monitor_id, "down", old), (monitor_id, "down", old), (monitor_id, "down", recent)],
+                    )
+                    conn.commit()
+
+                deleted = database.cleanup_old_checks(days=7, batch_size=100)
+
+                with database.get_db() as conn:
+                    remaining = conn.execute("SELECT checked_at FROM checks ORDER BY id").fetchall()
+                self.assertEqual(deleted, 2)
+                self.assertEqual([row["checked_at"] for row in remaining], [recent])
 
     def test_request_timing_middleware_adds_server_timing_header(self):
         app = FastAPI()

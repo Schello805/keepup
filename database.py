@@ -943,23 +943,41 @@ def delete_monitor(monitor_id: int) -> None:
         conn.commit()
 
 
-def cleanup_old_checks(days: Optional[int] = None) -> None:
+def cleanup_old_checks(days: Optional[int] = None, batch_size: int = 10_000) -> int:
     if days is None:
         try:
             settings = get_settings()
             days = max(1, int(settings.get("retention_days", DEFAULT_SETTINGS["retention_days"])))
         except Exception:
             days = int(DEFAULT_SETTINGS["retention_days"])
+    cutoff = (datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=days)).isoformat()
+    batch_size = max(100, int(batch_size))
+    deleted_total = 0
+    last_id = 0
     with closing(get_db()) as conn:
-        conn.execute(
-            '''
-            DELETE FROM checks 
-            WHERE checked_at < datetime('now', ?) 
-              AND monitor_id NOT IN (SELECT id FROM monitors WHERE status = 'down')
-            ''',
-            (f"-{days} days",)
-        )
-        conn.commit()
+        while True:
+            row = conn.execute(
+                """
+                SELECT MAX(id) AS batch_end
+                FROM (
+                    SELECT id FROM checks WHERE id > ? ORDER BY id LIMIT ?
+                )
+                """,
+                (last_id, batch_size),
+            ).fetchone()
+            batch_end = int(row["batch_end"] or 0) if row else 0
+            if not batch_end:
+                break
+            cursor = conn.execute(
+                "DELETE FROM checks WHERE id > ? AND id <= ? AND checked_at < ?",
+                (last_id, batch_end, cutoff),
+            )
+            deleted_total += max(0, int(cursor.rowcount or 0))
+            conn.commit()
+            last_id = batch_end
+        conn.execute("PRAGMA optimize")
+        conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+    return deleted_total
 
 
 def get_recent_logs(monitor_id: int, limit: int = 8) -> list[dict[str, Any]]:

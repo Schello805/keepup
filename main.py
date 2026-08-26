@@ -1257,6 +1257,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("simplify telegram notification icons", "Telegram-Benachrichtigungen nutzen weniger und ruhigere Icons."),
         ("clarify monitor failure reasons", "Benachrichtigungen nennen bei HTTP-Ausfällen jetzt den konkreten Grund, etwa eine Zeitüberschreitung beim Verbindungsaufbau oder beim Lesen der Serverantwort."),
         ("refresh browser update proof before starting", "Der Update-Button erneuert seine Freigabe direkt vor dem Start und funktioniert dadurch auch nach längerer geöffneter Seite ohne Neuladen."),
+        ("repair automatic check retention cleanup", "Alte Prüfergebnisse werden jetzt direkt nach dem Start und danach regelmäßig blockschonend bereinigt. Dadurch bleiben Datenbank und Seiten auch bei vielen Monitoren schnell."),
         ("improve backups, card details, and dashboard responsiveness", "Backups, Kartendetails und Dashboard-Reaktionszeit wurden verbessert."),
         ("repair corrupted system python caches during setup", "Das Setup kann beschädigte Python-Cache-Dateien besser bereinigen."),
         ("recover damaged python environments during updates", "Updates können beschädigte Python-Umgebungen besser wiederherstellen."),
@@ -1743,6 +1744,22 @@ async def get_cached_update_status_payload() -> dict[str, Any]:
     return payload
 
 
+async def run_database_cleanup() -> None:
+    started_at = time.perf_counter()
+    try:
+        deleted = await asyncio.to_thread(cleanup_old_checks)
+        if deleted:
+            advance_dashboard_snapshot_version()
+            mark_dashboard_cards_cache_stale()
+        logger.info(
+            "database_cleanup_done deleted=%s duration_ms=%.1f",
+            deleted,
+            (time.perf_counter() - started_at) * 1000,
+        )
+    except Exception:
+        logger.exception("database_cleanup_failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("startup")
@@ -1750,7 +1767,7 @@ async def lifespan(app: FastAPI):
     await init_monitor_runtime()
     asyncio.create_task(ensure_dashboard_cards_cache_refresh(force=True))
     scheduler.add_job(
-        lambda: asyncio.Task(asyncio.to_thread(cleanup_old_checks)),
+        run_database_cleanup,
         "interval",
         hours=12,
         id="db-cleanup",
@@ -1759,6 +1776,7 @@ async def lifespan(app: FastAPI):
     reschedule_monitor_jobs(scheduler)
     scheduler.add_listener(handle_scheduler_job_executed, EVENT_JOB_EXECUTED)
     scheduler.start()
+    asyncio.create_task(run_database_cleanup())
     async def _run_initial_checks() -> None:
         try:
             await run_all_checks_once()
