@@ -29,6 +29,7 @@ import httpx
 from database import (
     cleanup_old_checks,
     export_backup,
+    get_database_metrics,
     get_db,
     get_monitor,
     get_monitor_group_summary,
@@ -895,6 +896,7 @@ def build_settings_context(request: Request) -> dict:
         "app_version": get_app_version_display(),
         "changelog_preview": get_changelog_items(limit=3),
         "system_metrics": build_system_metrics(),
+        "database_metrics": get_database_metrics(),
         "timezone_options": timezone_options,
         "active_page": "settings",
         "toast": get_toast(request),
@@ -905,6 +907,7 @@ def build_settings_system_status_context(request: Request) -> dict:
     return {
         "request": request,
         "system_metrics": build_system_metrics(),
+        "database_metrics": get_database_metrics(),
     }
 
 
@@ -1170,6 +1173,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("show database health in system status", "Der Systemstatus zeigt jetzt Datenbankgröße, WAL-Datei, wiederverwendbaren Speicher, Aufbewahrungsdauer und SQLite-Erreichbarkeit an."),
         ("prevent database cleanup lock contention", "Die Datenbankbereinigung nutzt jetzt passende Incident-Indizes, gibt Schreibzugriffe zwischen Löschblöcken frei und meldet ihren Fortschritt."),
         ("modularize navigation and add performance budgets", "Dashboard, Status-Wall, Einstellungen, Incidents und Changelog sind jetzt in einem eigenen Navigationsmodul organisiert. Automatische Zeitbudgets sichern schnelle Seitenwechsel auch mit 40 Monitoren ab."),
         ("serve dashboard shell from cache", "Der Dashboard-Seitenrahmen kommt jetzt direkt aus dem vorhandenen Snapshot und wartet beim Seitenwechsel weder auf Datenbankauswertungen noch auf Git-Metadaten."),

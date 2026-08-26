@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from keepup_migrations import CURRENT_SCHEMA_VERSION, apply_schema_migrations
+from keepup_formatting import format_bytes_compact
 
 
 logger = logging.getLogger("keepup.database")
@@ -18,6 +19,7 @@ DATABASE_URL = BASE_DIR / "keepup.db"
 HISTORY_LIMIT = 30
 BACKUP_HISTORY_HOURS = 24
 SECRET_SETTING_KEYS = {"telegram_bot_token", "smtp_password", "ntfy_token", "ntfy_password"}
+_database_metrics_cache: dict[str, Any] = {"key": None, "expires_at": 0.0, "value": None}
 
 DEFAULT_SETTINGS = {
     "app_name": "KeepUp",
@@ -287,6 +289,50 @@ def init_db() -> None:
         _seed_default_settings(cursor)
         apply_schema_migrations(cursor, utc_now())
         conn.commit()
+
+
+def get_database_metrics(cache_seconds: int = 30) -> dict[str, Any]:
+    """Return cheap SQLite health metrics without scanning application tables."""
+    now = time.monotonic()
+    cache_key = str(DATABASE_URL)
+    cached_value = _database_metrics_cache.get("value")
+    if (
+        _database_metrics_cache.get("key") == cache_key
+        and now < float(_database_metrics_cache.get("expires_at") or 0.0)
+        and isinstance(cached_value, dict)
+    ):
+        return dict(cached_value)
+
+    wal_path = Path(f"{DATABASE_URL}-wal")
+    metrics: dict[str, Any] = {
+        "ok": False,
+        "database_size": format_bytes_compact(DATABASE_URL.stat().st_size if DATABASE_URL.exists() else 0),
+        "wal_size": format_bytes_compact(wal_path.stat().st_size if wal_path.exists() else 0),
+        "reusable_size": "-",
+        "retention_days": int(DEFAULT_SETTINGS["retention_days"]),
+        "journal_mode": "-",
+    }
+    try:
+        with closing(get_db()) as conn:
+            page_size = int(conn.execute("PRAGMA page_size").fetchone()[0])
+            free_pages = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
+            journal_mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).upper()
+            retention_row = conn.execute(
+                "SELECT value FROM settings WHERE key = ?",
+                ("retention_days",),
+            ).fetchone()
+        if retention_row:
+            metrics["retention_days"] = max(1, int(retention_row[0]))
+        metrics.update(
+            ok=True,
+            reusable_size=format_bytes_compact(page_size * free_pages),
+            journal_mode=journal_mode,
+        )
+    except Exception as exc:
+        logger.warning("database_metrics_failed error=%s", exc)
+
+    _database_metrics_cache.update(key=cache_key, expires_at=now + max(1, cache_seconds), value=dict(metrics))
+    return metrics
 
 
 def get_schema_version() -> int:

@@ -86,6 +86,19 @@ class ArchitectureTests(unittest.TestCase):
                 self.assertIn("idx_incidents_start_check", indexes)
                 self.assertIn("idx_incidents_end_check", indexes)
 
+    def test_database_metrics_do_not_scan_application_tables(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "keepup.db"
+            with patch.object(database, "DATABASE_URL", db_path):
+                database.init_db()
+                database.update_settings({"retention_days": 14})
+                metrics = database.get_database_metrics(cache_seconds=1)
+
+                self.assertTrue(metrics["ok"])
+                self.assertEqual(metrics["retention_days"], 14)
+                self.assertEqual(metrics["journal_mode"], "WAL")
+                self.assertNotEqual(metrics["database_size"], "-")
+
     def test_request_timing_middleware_adds_server_timing_header(self):
         app = FastAPI()
         app.add_middleware(RequestTimingMiddleware, slow_request_seconds=10)
