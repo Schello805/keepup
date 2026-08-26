@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
 import sqlite3
 import time
 from contextlib import closing
@@ -306,26 +307,44 @@ def get_database_metrics(cache_seconds: int = 30) -> dict[str, Any]:
     wal_path = Path(f"{DATABASE_URL}-wal")
     metrics: dict[str, Any] = {
         "ok": False,
+        "engine": f"SQLite {sqlite3.sqlite_version}",
         "database_size": format_bytes_compact(DATABASE_URL.stat().st_size if DATABASE_URL.exists() else 0),
         "wal_size": format_bytes_compact(wal_path.stat().st_size if wal_path.exists() else 0),
+        "active_size": "-",
         "reusable_size": "-",
+        "reusable_percent": None,
+        "response_time_ms": None,
+        "disk_free": "-",
+        "disk_used_percent": None,
         "retention_days": int(DEFAULT_SETTINGS["retention_days"]),
         "journal_mode": "-",
     }
     try:
+        query_started_at = time.perf_counter()
         with closing(get_db()) as conn:
             page_size = int(conn.execute("PRAGMA page_size").fetchone()[0])
+            page_count = int(conn.execute("PRAGMA page_count").fetchone()[0])
             free_pages = int(conn.execute("PRAGMA freelist_count").fetchone()[0])
             journal_mode = str(conn.execute("PRAGMA journal_mode").fetchone()[0]).upper()
             retention_row = conn.execute(
                 "SELECT value FROM settings WHERE key = ?",
                 ("retention_days",),
             ).fetchone()
+        response_time_ms = (time.perf_counter() - query_started_at) * 1000
+        allocated_bytes = page_size * page_count
+        reusable_bytes = page_size * free_pages
+        active_bytes = max(0, allocated_bytes - reusable_bytes)
+        disk_usage = shutil.disk_usage(DATABASE_URL.parent)
         if retention_row:
             metrics["retention_days"] = max(1, int(retention_row[0]))
         metrics.update(
             ok=True,
-            reusable_size=format_bytes_compact(page_size * free_pages),
+            active_size=format_bytes_compact(active_bytes),
+            reusable_size=format_bytes_compact(reusable_bytes),
+            reusable_percent=round((reusable_bytes / allocated_bytes) * 100, 1) if allocated_bytes else 0.0,
+            response_time_ms=round(response_time_ms, 1),
+            disk_free=format_bytes_compact(disk_usage.free),
+            disk_used_percent=round((disk_usage.used / disk_usage.total) * 100, 1) if disk_usage.total else None,
             journal_mode=journal_mode,
         )
     except Exception as exc:

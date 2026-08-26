@@ -1,6 +1,6 @@
 {% from "_shared.html" import render_page_header, btn_classes, input_classes, select_classes, checkbox_classes, render_toast, accordion_section, render_footer %}
 
-{% macro render_system_status(system_metrics, database_metrics={"ok": false, "database_size": "-", "wal_size": "-", "reusable_size": "-", "journal_mode": "-", "retention_days": "-"}) -%}
+{% macro render_system_status(system_metrics, database_metrics={"ok": false, "engine": "SQLite", "database_size": "-", "active_size": "-", "wal_size": "-", "reusable_size": "-", "reusable_percent": none, "response_time_ms": none, "disk_free": "-", "disk_used_percent": none, "journal_mode": "-", "retention_days": "-"}) -%}
 <section id="settings-system-status" hx-get="/api/settings/system-status" hx-trigger="every 5s" hx-swap="outerHTML" class="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-panel">
     <div class="flex items-center justify-between gap-3">
         <div>
@@ -32,9 +32,12 @@
                     {{ "Bereit" if database_metrics.ok else "Nicht erreichbar" }}
                 </span>
             </div>
-            <p class="mt-2 text-2xl font-semibold text-cyan-100">{{ database_metrics.database_size }}</p>
-            <p class="mt-1 text-sm text-slate-300">WAL: {{ database_metrics.wal_size }} · frei: {{ database_metrics.reusable_size }}</p>
-            <p class="mt-2 text-xs text-slate-400">{{ database_metrics.journal_mode }} · Checks {{ database_metrics.retention_days }} Tage aufbewahren</p>
+            <p class="mt-2 text-lg font-semibold text-cyan-100">{{ database_metrics.engine }}</p>
+            <p class="mt-1 text-sm text-slate-300">Antwort: {{ database_metrics.response_time_ms if database_metrics.response_time_ms is not none else "-" }} ms · {{ database_metrics.journal_mode }}</p>
+            <p class="mt-2 text-xs text-slate-300">Aktive Daten: {{ database_metrics.active_size }} · Datei: {{ database_metrics.database_size }}</p>
+            <p class="mt-1 text-xs text-slate-400">Wiederverwendbar: {{ database_metrics.reusable_size }}{% if database_metrics.reusable_percent is not none %} ({{ database_metrics.reusable_percent }} %){% endif %} · WAL: {{ database_metrics.wal_size }}</p>
+            <p class="mt-1 text-xs text-slate-400">Datenträger: {{ database_metrics.disk_free }} frei{% if database_metrics.disk_used_percent is not none %} · {{ database_metrics.disk_used_percent }} % belegt{% endif %}</p>
+            <p class="mt-1 text-xs text-slate-500">Checks werden {{ database_metrics.retention_days }} Tage aufbewahrt.</p>
         </div>
     </div>
 </section>

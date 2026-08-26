@@ -97,6 +97,11 @@ class ArchitectureTests(unittest.TestCase):
                 self.assertTrue(metrics["ok"])
                 self.assertEqual(metrics["retention_days"], 14)
                 self.assertEqual(metrics["journal_mode"], "WAL")
+                self.assertRegex(metrics["engine"], r"^SQLite \d+")
+                self.assertIsNotNone(metrics["response_time_ms"])
+                self.assertIsNotNone(metrics["reusable_percent"])
+                self.assertNotEqual(metrics["active_size"], "-")
+                self.assertNotEqual(metrics["disk_free"], "-")
                 self.assertNotEqual(metrics["database_size"], "-")
 
     def test_request_timing_middleware_adds_server_timing_header(self):
