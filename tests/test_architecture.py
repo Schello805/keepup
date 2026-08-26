@@ -75,6 +75,17 @@ class ArchitectureTests(unittest.TestCase):
                 self.assertEqual(deleted, 2)
                 self.assertEqual([row["checked_at"] for row in remaining], [recent])
 
+    def test_incident_check_foreign_keys_are_indexed_for_cleanup(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "keepup.db"
+            with patch.object(database, "DATABASE_URL", db_path):
+                database.init_db()
+                with database.get_db() as conn:
+                    indexes = {row["name"] for row in conn.execute("PRAGMA index_list('incidents')")}
+
+                self.assertIn("idx_incidents_start_check", indexes)
+                self.assertIn("idx_incidents_end_check", indexes)
+
     def test_request_timing_middleware_adds_server_timing_header(self):
         app = FastAPI()
         app.add_middleware(RequestTimingMiddleware, slow_request_seconds=10)

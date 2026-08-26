@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
+import time
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -10,6 +12,7 @@ from typing import Any, Optional
 from keepup_migrations import CURRENT_SCHEMA_VERSION, apply_schema_migrations
 
 
+logger = logging.getLogger("keepup.database")
 BASE_DIR = Path(__file__).resolve().parent
 DATABASE_URL = BASE_DIR / "keepup.db"
 HISTORY_LIMIT = 30
@@ -258,6 +261,12 @@ def init_db() -> None:
 
             CREATE INDEX IF NOT EXISTS idx_incidents_monitor_started
             ON incidents (monitor_id, started_at DESC, ended_at);
+
+            CREATE INDEX IF NOT EXISTS idx_incidents_start_check
+            ON incidents (start_check_id);
+
+            CREATE INDEX IF NOT EXISTS idx_incidents_end_check
+            ON incidents (end_check_id);
 
             CREATE INDEX IF NOT EXISTS idx_monitor_categories_category
             ON monitor_categories (category COLLATE NOCASE, monitor_id);
@@ -953,6 +962,8 @@ def cleanup_old_checks(days: Optional[int] = None, batch_size: int = 10_000) -> 
     cutoff = (datetime.now(timezone.utc).replace(microsecond=0) - timedelta(days=days)).isoformat()
     batch_size = max(100, int(batch_size))
     deleted_total = 0
+    scanned_total = 0
+    next_progress_log = 100_000
     last_id = 0
     with closing(get_db()) as conn:
         while True:
@@ -974,7 +985,18 @@ def cleanup_old_checks(days: Optional[int] = None, batch_size: int = 10_000) -> 
             )
             deleted_total += max(0, int(cursor.rowcount or 0))
             conn.commit()
+            scanned_total += batch_size
             last_id = batch_end
+            if scanned_total >= next_progress_log:
+                logger.info(
+                    "database_cleanup_progress scanned=%s deleted=%s last_id=%s",
+                    scanned_total,
+                    deleted_total,
+                    last_id,
+                )
+                next_progress_log += 100_000
+            # Let regular monitor writes acquire SQLite's single writer lock.
+            time.sleep(0.05)
         conn.execute("PRAGMA optimize")
         conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
     return deleted_total
