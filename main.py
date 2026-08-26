@@ -1255,6 +1255,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("normalize url values used as combo ping targets", "Ping-Ziele kombinierter Checks werden aus URLs zuverlässiger normalisiert."),
         ("add combined ping and http monitor checks", "Monitore können Ping und HTTP gemeinsam prüfen."),
         ("simplify telegram notification icons", "Telegram-Benachrichtigungen nutzen weniger und ruhigere Icons."),
+        ("clarify monitor failure reasons", "Benachrichtigungen nennen bei HTTP-Ausfällen jetzt den konkreten Grund, etwa eine Zeitüberschreitung beim Verbindungsaufbau oder beim Lesen der Serverantwort."),
         ("improve backups, card details, and dashboard responsiveness", "Backups, Kartendetails und Dashboard-Reaktionszeit wurden verbessert."),
         ("repair corrupted system python caches during setup", "Das Setup kann beschädigte Python-Cache-Dateien besser bereinigen."),
         ("recover damaged python environments during updates", "Updates können beschädigte Python-Umgebungen besser wiederherstellen."),

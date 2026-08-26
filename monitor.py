@@ -126,6 +126,26 @@ def normalize_monitor_error(message: Optional[str]) -> Optional[str]:
     return message
 
 
+def describe_http_error(exc: httpx.HTTPError, timeout_seconds: float) -> str:
+    """Return a useful German reason even when httpx has an empty message."""
+    timeout_label = f" ({timeout_seconds:g} Sek.)" if timeout_seconds > 0 else ""
+    if isinstance(exc, httpx.ConnectTimeout):
+        return f"Zeitüberschreitung beim Verbindungsaufbau{timeout_label}."
+    if isinstance(exc, httpx.ReadTimeout):
+        return f"Zeitüberschreitung beim Lesen der Serverantwort{timeout_label}."
+    if isinstance(exc, httpx.WriteTimeout):
+        return f"Zeitüberschreitung beim Senden der Anfrage{timeout_label}."
+    if isinstance(exc, httpx.PoolTimeout):
+        return "Keine freie HTTP-Verbindung innerhalb des Zeitlimits verfügbar."
+    if isinstance(exc, httpx.ConnectError):
+        return normalize_monitor_error(str(exc)) or "Verbindung zum Ziel konnte nicht aufgebaut werden."
+    if isinstance(exc, httpx.RemoteProtocolError):
+        return normalize_monitor_error(str(exc)) or "Der Webserver hat die Verbindung unerwartet beendet."
+    if isinstance(exc, httpx.TooManyRedirects):
+        return "Zu viele HTTP-Weiterleitungen."
+    return normalize_monitor_error(str(exc)) or f"HTTP-Anfrage ist fehlgeschlagen ({type(exc).__name__})."
+
+
 def format_notification_error(channel: str, exc: Exception) -> str:
     message = str(exc).strip()
 
@@ -284,7 +304,7 @@ async def check_http_target_raw(monitor: dict[str, Any]) -> tuple[str, float, Op
             error_message = f"HTTP-Status {response.status_code}"
     except httpx.HTTPError as exc:
         response_time = round((time.perf_counter() - start) * 1000, 2)
-        error_message = normalize_monitor_error(str(exc))
+        error_message = describe_http_error(exc, timeout_seconds)
     except Exception as exc:
         response_time = round((time.perf_counter() - start) * 1000, 2)
         error_message = normalize_monitor_error(f"Unerwarteter Fehler: {exc}")
@@ -690,6 +710,13 @@ def _telegram_error_label(category: Any) -> str:
     return labels.get(str(category or "unknown"), "Nicht erreichbar")
 
 
+def _notification_failure_reason(result: dict[str, Any]) -> str:
+    detail = str(result.get("error_msg") or "").strip()
+    if detail:
+        return detail
+    return _telegram_error_label(result.get("error_category"))
+
+
 def build_telegram_notification_payload(
     settings: dict[str, Any],
     monitor: dict[str, Any],
@@ -728,7 +755,7 @@ def build_telegram_notification_payload(
             lines.append(f"<b>Antwortzeit:</b> {response_time:.0f} ms")
     else:
         category = _telegram_error_label(result.get("error_category"))
-        reason = html.escape(str(result.get("error_msg") or "Keine Detailmeldung verfügbar."))
+        reason = html.escape(_notification_failure_reason(result))
         lines.append(f"<b>Ursache:</b> {category}")
         if reason.lower() != category.lower():
             lines.append(f"<i>{reason}</i>")
@@ -762,9 +789,7 @@ def build_notification_message(
     response_text = (
         f"{result['response_time']:.0f} ms" if result.get("response_time") is not None else "n/a"
     )
-    reason = result.get("error_msg") or (
-        "Wieder erreichbar." if is_recovered else "Keine Fehlermeldung verfügbar."
-    )
+    reason = "Wieder erreichbar." if is_recovered else _notification_failure_reason(result)
     checked_at = format_timestamp_for_notification(result["checked_at"], settings.get("app_timezone", "UTC"))
     app_url = _notification_app_url(settings)
     lines = [

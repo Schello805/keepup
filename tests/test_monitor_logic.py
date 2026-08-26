@@ -1,7 +1,30 @@
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from monitor import _ntfy_target_url, check_ping_http_target_raw, send_ntfy_text, send_test_ntfy_rich_notification
+import httpx
+
+from monitor import (
+    _notification_failure_reason,
+    _ntfy_target_url,
+    check_ping_http_target_raw,
+    describe_http_error,
+    send_ntfy_text,
+    send_test_ntfy_rich_notification,
+)
+
+
+class HttpErrorReasonTests(unittest.TestCase):
+    def test_read_timeout_reason_is_useful_when_exception_message_is_empty(self):
+        request = httpx.Request("GET", "https://example.test")
+
+        reason = describe_http_error(httpx.ReadTimeout("", request=request), 10)
+
+        self.assertEqual(reason, "Zeitüberschreitung beim Lesen der Serverantwort (10 Sek.).")
+
+    def test_notification_uses_error_category_when_detail_is_missing(self):
+        reason = _notification_failure_reason({"error_msg": None, "error_category": "timeout"})
+
+        self.assertEqual(reason, "Zeitüberschreitung")
 
 
 class PingHttpModeTests(unittest.IsolatedAsyncioTestCase):
