@@ -632,9 +632,11 @@ systemctl restart keepup.service</p>
                                     runBtn.textContent = 'Update läuft…';
                                     setRestartStage("prepare");
                                     try {
-                                        if (!updateProof) {
-                                            throw new Error('update_proof_missing');
-                                        }
+                                        const proofRes = await fetch('/api/update/proof', { cache: 'no-store' });
+                                        if (!proofRes.ok) throw new Error('update_proof_refresh_failed');
+                                        const proofPayload = await proofRes.json();
+                                        updateProof = proofPayload.update_run_token || null;
+                                        if (!updateProof) throw new Error('update_proof_missing');
                                         setRestartStage("install");
                                         showRestartChanges((latestUpdateStatus && latestUpdateStatus.pending_changes) || []);
                                         const runRes = await fetch('/api/update/run', {
@@ -672,8 +674,9 @@ systemctl restart keepup.service</p>
                                         }
                                     } catch (e) {
                                         runBtn.textContent = 'Fehlgeschlagen';
-                                        if (String(e && e.message || '') === 'update_proof_missing') {
-                                            text.textContent = 'Die Update-Freigabe fehlt oder ist abgelaufen. Bitte Seite neu laden und erneut versuchen.';
+                                        const errorCode = String(e && e.message || '');
+                                        if (errorCode === 'update_proof_missing' || errorCode === 'update_proof_refresh_failed') {
+                                            text.textContent = 'Die Update-Freigabe konnte nicht erneuert werden. Bitte Verbindung prüfen und erneut versuchen.';
                                         }
                                     } finally {
                                         window.setTimeout(() => {

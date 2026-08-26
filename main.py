@@ -1256,6 +1256,7 @@ def _humanize_commit_subject(subject: str) -> str:
         ("add combined ping and http monitor checks", "Monitore können Ping und HTTP gemeinsam prüfen."),
         ("simplify telegram notification icons", "Telegram-Benachrichtigungen nutzen weniger und ruhigere Icons."),
         ("clarify monitor failure reasons", "Benachrichtigungen nennen bei HTTP-Ausfällen jetzt den konkreten Grund, etwa eine Zeitüberschreitung beim Verbindungsaufbau oder beim Lesen der Serverantwort."),
+        ("refresh browser update proof before starting", "Der Update-Button erneuert seine Freigabe direkt vor dem Start und funktioniert dadurch auch nach längerer geöffneter Seite ohne Neuladen."),
         ("improve backups, card details, and dashboard responsiveness", "Backups, Kartendetails und Dashboard-Reaktionszeit wurden verbessert."),
         ("repair corrupted system python caches during setup", "Das Setup kann beschädigte Python-Cache-Dateien besser bereinigen."),
         ("recover damaged python environments during updates", "Updates können beschädigte Python-Umgebungen besser wiederherstellen."),
@@ -1816,6 +1817,18 @@ app.include_router(navigation_router)
 async def update_status() -> JSONResponse:
     payload = await get_cached_update_status_payload()
     return JSONResponse(payload)
+
+
+@app.get("/api/update/proof")
+async def update_proof() -> JSONResponse:
+    secret = os.environ.get("KEEPUP_UPDATE_TOKEN", "").strip()
+    if not secret:
+        raise HTTPException(status_code=403, detail="Update ist nicht aktiviert (KEEPUP_UPDATE_TOKEN fehlt).")
+    proof, expires_at = _issue_update_run_token(secret)
+    return JSONResponse(
+        {"update_run_token": proof, "update_run_token_expires_at": expires_at},
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/api/update/run")

@@ -4,7 +4,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 import database
-from main import build_notification_settings_payload, read_limited_upload
+from main import (
+    _issue_update_run_token,
+    _validate_update_run_token,
+    build_notification_settings_payload,
+    read_limited_upload,
+)
 
 
 class ChunkedUpload:
@@ -18,6 +23,18 @@ class ChunkedUpload:
 
 
 class SafetyGuardTests(unittest.IsolatedAsyncioTestCase):
+    def test_browser_refreshes_update_proof_before_starting_update(self):
+        template = (Path(__file__).parents[1] / "templates" / "_shared.html").read_text(encoding="utf-8")
+        self.assertIn("fetch('/api/update/proof', { cache: 'no-store' })", template)
+
+    def test_new_update_proof_remains_valid_after_old_page_proof_expires(self):
+        with patch("main.time.time", return_value=120.0):
+            old_proof, _ = _issue_update_run_token("secret")
+        with patch("main.time.time", return_value=600.0):
+            new_proof, _ = _issue_update_run_token("secret")
+            self.assertFalse(_validate_update_run_token("secret", old_proof))
+            self.assertTrue(_validate_update_run_token("secret", new_proof))
+
     def test_wal_mode_is_only_configured_during_database_initialization(self):
         source = (Path(__file__).parents[1] / "database.py").read_text(encoding="utf-8")
         get_db_source = source.split("def get_db()", 1)[1].split("def init_db()", 1)[0]
