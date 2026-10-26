@@ -1173,6 +1173,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("smooth monitor edits and toggles without full reloads", "Monitore lassen sich jetzt ohne harten Browser-Reload pausieren und fortsetzen. Beim Bearbeiten und Anlegen bleiben Karten sofort bedienbar und umgedrehte Detailansichten erhalten."),
         ("make database status metrics actionable", "Der Datenbankstatus unterscheidet jetzt aktive Daten von wiederverwendbarem Platz und zeigt zusätzlich SQLite-Version, Antwortzeit sowie freien Datenträgerspeicher."),
         ("show database health in system status", "Der Systemstatus zeigt jetzt Datenbankgröße, WAL-Datei, wiederverwendbaren Speicher, Aufbewahrungsdauer und SQLite-Erreichbarkeit an."),
         ("prevent database cleanup lock contention", "Die Datenbankbereinigung nutzt jetzt passende Incident-Indizes, gibt Schreibzugriffe zwischen Löschblöcken frei und meldet ihren Fortschritt."),

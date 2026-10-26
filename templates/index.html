@@ -229,9 +229,11 @@
                                     <p class="text-xs uppercase tracking-[0.25em] text-slate-400">{{ monitor_type_label }}</p>
                                 </div>
                                 {% if monitor_categories %}
-                                <div class="mb-1.5 flex max-w-full flex-wrap gap-1">
+                                <div class="mb-1.5 flex max-w-full flex-wrap gap-1 category-chips-container">
                                     {% for category in monitor_categories %}<span class="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">{{ category }}</span>{% endfor %}
                                 </div>
+                                {% else %}
+                                <div class="mb-1.5 hidden max-w-full flex-wrap gap-1 category-chips-container"></div>
                                 {% endif %}
                                 <h3 class="truncate text-xl font-semibold">{{ monitor.name }}</h3>
                                 <p class="truncate text-sm text-slate-400">{{ monitor.target }}</p>
@@ -989,10 +991,6 @@
             clearOpenDetails();
             document.querySelectorAll(".monitor-card").forEach((card) => {
                 card.classList.remove("is-hidden");
-                const inner = card.querySelector("[id^='card-inner-']");
-                if (inner) {
-                    inner.classList.remove("is-flipped");
-                }
             });
 
             document.querySelectorAll("#monitor-cards-shell .monitor-card-grid").forEach((grid) => {
@@ -1351,6 +1349,61 @@
             }, 4200);
         }
 
+        function applyCardToggleState(card, enabled) {
+            if (!(card instanceof HTMLElement)) return;
+            const front = card.querySelector(".card-front");
+            const dot = card.querySelector(".card-front span.rounded-full[class*='bg-']");
+            const pill = card.querySelector(".card-front span.rounded-full.uppercase");
+            const toggleBtn = card.querySelector("form.js-monitor-toggle button[type='submit']");
+            
+            if (enabled) {
+                card.dataset.monitorStatus = "up";
+                card.dataset.monitorStatusRank = "3";
+                if (front) {
+                    front.className = "card-front backface-hidden w-full h-full flex flex-col rounded-3xl border border-emerald-300/35 bg-emerald-500/20 p-3 shadow-panel card-sheen";
+                }
+                if (dot) {
+                    dot.className = "inline-flex h-3 w-3 rounded-full bg-emerald-400";
+                }
+                if (pill) {
+                    pill.className = "rounded-full px-3 py-1 text-xs font-semibold uppercase border border-emerald-400/20 bg-emerald-500/10 text-emerald-100";
+                    pill.textContent = "up";
+                }
+                if (toggleBtn) {
+                    toggleBtn.setAttribute("aria-label", "Monitor pausieren");
+                    toggleBtn.setAttribute("title", "Pausieren");
+                    toggleBtn.className = "inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-100 hover:bg-amber-500/25 transition cursor-pointer";
+                    toggleBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm10 0a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/></svg>
+                        <span class="sr-only">Pausieren</span>
+                    `;
+                }
+            } else {
+                card.dataset.monitorStatus = "paused";
+                card.dataset.monitorStatusRank = "2";
+                if (front) {
+                    front.className = "card-front backface-hidden w-full h-full flex flex-col rounded-3xl border border-slate-400/20 bg-slate-400/10 p-3 shadow-panel card-sheen";
+                }
+                if (dot) {
+                    dot.className = "inline-flex h-3 w-3 rounded-full bg-slate-400";
+                }
+                if (pill) {
+                    pill.className = "rounded-full px-3 py-1 text-xs font-semibold uppercase border border-slate-400/20 bg-slate-400/10 text-slate-300";
+                    pill.textContent = "paused";
+                }
+                if (toggleBtn) {
+                    toggleBtn.setAttribute("aria-label", "Monitor fortsetzen");
+                    toggleBtn.setAttribute("title", "Fortsetzen");
+                    toggleBtn.className = "inline-flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-100 hover:bg-emerald-500/25 transition cursor-pointer";
+                    toggleBtn.innerHTML = `
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 6.5c0-1.1 1.2-1.78 2.14-1.2l7.2 4.5c.9.56.9 1.84 0 2.4l-7.2 4.5A1.41 1.41 0 0 1 8.5 15.5v-9Z"/></svg>
+                        <span class="sr-only">Fortsetzen</span>
+                    `;
+                }
+            }
+            applyMonitorFilters();
+        }
+
         function bindMonitorToggleForms(scope = document) {
             scope.querySelectorAll("form.js-monitor-toggle").forEach((form) => {
                 if (!(form instanceof HTMLFormElement)) return;
@@ -1372,17 +1425,19 @@
                         }
                         const data = await res.json();
                         showToast((data && data.message) ? data.message : "Status aktualisiert.", "info");
-                        const refreshed = await refreshMonitorCards();
-                        if (!refreshed) {
-                            window.location.reload();
+                        const card = form.closest(".monitor-card");
+                        if (card && typeof data.enabled === "boolean") {
+                            applyCardToggleState(card, data.enabled);
                         }
+                        refreshDashboardTop();
+                        scheduleMonitorCardRefreshes([400, 1500, 3500]);
                     } catch (err) {
                         showToast("Aktion fehlgeschlagen.", "error");
                     } finally {
                         if (btn instanceof HTMLButtonElement) {
                             window.setTimeout(() => {
                                 btn.disabled = false;
-                            }, 600);
+                            }, 400);
                         }
                     }
                 });
@@ -1512,7 +1567,6 @@
                 window.__keepupCardsRefreshSkippedWhileEditing = true;
                 return null;
             }
-            if (!options.force && document.querySelector(".is-flipped")) return null;
             if (!options.force && navigator.onLine === false) return false;
             if (window.__keepupSnapshotPromise) return window.__keepupSnapshotPromise;
             const promise = (async () => {
@@ -1529,6 +1583,9 @@
                 const cards = parseSnapshotElement(payload.cards_html, "monitor-cards-shell");
                 if (!top || !cards) return false;
                 const previous = captureConfirmedStatuses();
+                const flippedIds = [...document.querySelectorAll(".preserve-3d.is-flipped")]
+                    .map((el) => el.id.replace("card-inner-", ""))
+                    .filter(Boolean);
                 const nextFilter = top.querySelector("#active-dashboard-filters");
                 document.getElementById("active-dashboard-filters")?.remove();
                 if (nextFilter) document.body.appendChild(nextFilter);
@@ -1537,6 +1594,18 @@
                 window.__keepupSnapshotVersion = version;
                 afterDashboardTopUpdated();
                 afterMonitorCardsUpdated();
+                flippedIds.forEach((id) => {
+                    const inner = document.getElementById(`card-inner-${id}`);
+                    if (inner) {
+                        inner.classList.add("is-flipped");
+                        const content = document.getElementById(`card-back-content-${id}`);
+                        const cached = window.__keepupDetailCache?.get(String(id));
+                        if (content && cached) {
+                            content.innerHTML = cached.html;
+                            renderCharts(content).catch(() => {});
+                        }
+                    }
+                });
                 announceStatusChanges(previous);
                 syncDashboardSoundButton();
                 return true;
@@ -1713,6 +1782,83 @@
             });
         }
 
+        function updateExistingMonitorCard(data) {
+            const card = document.querySelector(`[data-monitor-id="${data.id}"]`);
+            if (!card) {
+                addPendingMonitorCard(data, { scroll: false });
+                return;
+            }
+            const nameEl = card.querySelector(".card-front h3");
+            if (nameEl) nameEl.textContent = data.name || "";
+            card.dataset.monitorName = String(data.name || "").toLowerCase();
+
+            const targetEl = card.querySelector(".card-front h3 + p");
+            if (targetEl) targetEl.textContent = data.target || "";
+
+            const pingEl = card.querySelector(".card-front h3 + p + p");
+            if (pingEl) {
+                if (data.ping_target) {
+                    pingEl.textContent = `Ping: ${data.ping_target}`;
+                    pingEl.classList.remove("invisible");
+                } else if (data.monitor_type && data.monitor_type.startsWith("ping_http")) {
+                    pingEl.textContent = "Ping: Hostname der URL";
+                    pingEl.classList.remove("invisible");
+                } else {
+                    pingEl.classList.add("invisible");
+                }
+            }
+
+            const categoryLabels = (data.categories || [data.category]).map((item) => String(item || "").trim()).filter(Boolean);
+            const categoryLabel = categoryLabels.join(" ");
+            const categoryKeys = categoryLabels.map((item) => item.toLowerCase());
+            card.dataset.monitorCategory = categoryKeys[0] || "__none__";
+            card.dataset.monitorCategories = `|${categoryKeys.join("|") || "__none__"}|`;
+            card.dataset.monitorSearch = `${data.name || ""} ${categoryLabel} ${data.target || ""} ${data.ping_target || ""}`.toLowerCase();
+
+            let catContainer = card.querySelector(".card-front .category-chips-container");
+            if (!catContainer) {
+                const h3 = card.querySelector(".card-front h3");
+                if (h3) {
+                    let prev = h3.previousElementSibling;
+                    if (prev && prev.classList.contains("category-chips-container")) {
+                        catContainer = prev;
+                    } else if (categoryLabels.length) {
+                        catContainer = document.createElement("div");
+                        catContainer.className = "mb-1.5 flex max-w-full flex-wrap gap-1 category-chips-container";
+                        h3.parentElement.insertBefore(catContainer, h3);
+                    }
+                }
+            }
+            if (catContainer) {
+                if (categoryLabels.length) {
+                    catContainer.classList.remove("hidden");
+                    catContainer.innerHTML = categoryLabels.map((c) => `<span class="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">${escapeHtml(c)}</span>`).join("");
+                } else {
+                    catContainer.classList.add("hidden");
+                    catContainer.innerHTML = "";
+                }
+            }
+
+            const typeLabel = card.querySelector(".card-front p.text-xs.uppercase.tracking-\\[0\\.25em\\]");
+            if (typeLabel && data.type_label) {
+                typeLabel.textContent = data.type_label;
+            }
+
+            const editBtn = card.querySelector("button[onclick*='openEditPanel']");
+            if (editBtn) {
+                editBtn.dataset.monitorName = data.name || "";
+                editBtn.dataset.monitorCategory = data.category || "";
+                editBtn.dataset.monitorCategories = JSON.stringify(data.categories || []);
+                editBtn.dataset.monitorType = data.monitor_type || "http";
+                editBtn.dataset.monitorTarget = data.target || "";
+                editBtn.dataset.monitorPingTarget = data.ping_target || "";
+                editBtn.dataset.monitorHttpMethod = data.http_method || "GET";
+                editBtn.dataset.monitorInterval = String(data.interval || "60");
+            }
+
+            applyMonitorFilters();
+        }
+
         function addPendingMonitorCard(monitor, options = {}) {
             const grid = document.querySelector("#monitor-cards-shell .monitor-card-grid");
             if (!grid) {
@@ -1720,39 +1866,38 @@
                 return;
             }
             const existing = document.querySelector(`[data-monitor-id="${monitor.id}"]`);
-            const nextSibling = existing?.nextElementSibling || null;
-            const previousOrder = existing?.dataset.monitorOrder || String(grid.querySelectorAll(".monitor-card").length);
-            const previousCreated = existing?.dataset.monitorCreated || monitor.created_at || monitor.id || previousOrder;
-            const previousStatus = existing?.dataset.monitorStatus || "unknown";
-            const previousStatusRank = existing?.dataset.monitorStatusRank || "1";
-            if (existing) existing.remove();
+            if (existing) {
+                updateExistingMonitorCard(monitor);
+                return;
+            }
+            const previousOrder = String(grid.querySelectorAll(".monitor-card").length);
             const pingLine = monitor.ping_target ? `Ping: ${escapeHtml(monitor.ping_target)}` : "Ping: Hostname der URL";
             const categoryLabels = (monitor.categories || [monitor.category]).map((item) => String(item || "").trim()).filter(Boolean);
             const categoryLabel = categoryLabels.join(" ");
             const categoryKey = categoryLabels[0]?.toLowerCase() || "__none__";
             const categoryKeys = categoryLabels.map((item) => item.toLowerCase());
             const categoryBadge = categoryLabels.length
-                ? `<div class="mb-1.5 flex max-w-full flex-wrap gap-1">${categoryLabels.map((item) => `<span class="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">${escapeHtml(item)}</span>`).join("")}</div>`
-                : "";
+                ? `<div class="mb-1.5 flex max-w-full flex-wrap gap-1 category-chips-container">${categoryLabels.map((item) => `<span class="rounded-full border border-sky-300/20 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold text-sky-100">${escapeHtml(item)}</span>`).join("")}</div>`
+                : `<div class="mb-1.5 hidden max-w-full flex-wrap gap-1 category-chips-container"></div>`;
             const spinnerTitle = options.spinnerTitle || "Erster Check läuft";
-            const spinnerMessage = options.spinnerMessage || "Warte auf erste Rückmeldung...";
             const card = document.createElement("article");
-            card.dataset.monitorStatus = previousStatus;
+            card.dataset.monitorStatus = "unknown";
             card.dataset.monitorCategory = categoryKey;
             card.dataset.monitorCategories = `|${categoryKeys.join("|") || "__none__"}|`;
             card.dataset.monitorSearch = `${monitor.name || ""} ${categoryLabel} ${monitor.target || ""} ${monitor.ping_target || ""}`.toLowerCase();
             card.dataset.monitorName = String(monitor.name || "").toLowerCase();
             card.dataset.monitorResponseTime = "-1";
             card.dataset.monitorUptime = "-1";
-            card.dataset.monitorCreated = previousCreated;
-            card.dataset.monitorStatusRank = previousStatusRank;
+            card.dataset.monitorCreated = monitor.created_at || monitor.id || previousOrder;
+            card.dataset.monitorStatusRank = "1";
             card.dataset.monitorOrder = previousOrder;
             card.dataset.monitorId = monitor.id;
-            card.className = "monitor-card perspective-1000 flex min-w-0 cursor-wait";
+            card.className = "monitor-card perspective-1000 flex min-w-0 cursor-pointer transition duration-500";
+            card.onclick = (e) => handleMonitorCardClick(e, String(monitor.id));
             card.innerHTML = `
-                <div class="relative flex min-w-0 w-full flex-1">
-                    <div class="card-front w-full h-full flex flex-col rounded-3xl border border-amber-300/35 bg-amber-500/20 p-3 shadow-panel card-sheen">
-                        <div class="flex items-start justify-between gap-3">
+                <div id="card-inner-${monitor.id}" class="relative flex min-w-0 w-full flex-1 transition-transform duration-500 preserve-3d">
+                    <div class="card-front backface-hidden w-full h-full flex flex-col rounded-3xl border border-amber-300/35 bg-amber-500/20 p-3 shadow-panel card-sheen">
+                        <div class="flex items-start justify-between gap-3 flex-shrink-0">
                             <div class="min-w-0">
                                 <div class="mb-1.5 flex items-center gap-2">
                                     <span class="inline-flex h-3 w-3 rounded-full bg-amber-400"></span>
@@ -1761,43 +1906,71 @@
                                 ${categoryBadge}
                                 <h3 class="truncate text-xl font-semibold">${escapeHtml(monitor.name || "Neuer Monitor")}</h3>
                                 <p class="truncate text-sm text-slate-400">${escapeHtml(monitor.target || "-")}</p>
-                                <p class="truncate text-xs text-slate-500">${pingLine}</p>
+                                <p class="truncate text-xs text-slate-500 ${monitor.ping_enabled ? '' : 'invisible'}">${escapeHtml(pingLine)}</p>
                             </div>
-                            <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
-                                <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
-                                ${escapeHtml(spinnerTitle)}
-                            </span>
+                            <div class="card-front-interactive flex flex-col items-end gap-1.5" onclick="event.stopPropagation()">
+                                <div class="flex items-center gap-2">
+                                    <span class="rounded-full px-3 py-1 text-xs font-semibold uppercase border border-amber-400/20 bg-amber-500/10 text-amber-200">
+                                        unknown
+                                    </span>
+                                </div>
+                                <span class="inline-flex items-center gap-1.5 text-[10px] whitespace-nowrap text-amber-100/90">
+                                    <span class="h-3 w-3 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
+                                    ${escapeHtml(spinnerTitle)}
+                                </span>
+                            </div>
                         </div>
                         <div class="mt-2 flex items-center justify-between rounded-xl border border-white/10 bg-slate-950/25 px-3 py-1.5 text-xs">
                             <span class="uppercase tracking-wide text-slate-400">Antwortzeit</span>
                             <span class="font-medium text-slate-300">-</span>
                         </div>
-                        <div class="mt-2 grid grid-cols-3 gap-2 text-xs">
+                        <div class="mt-2 grid grid-cols-3 gap-2 text-xs flex-shrink-0">
                             <div class="rounded-xl bg-slate-950/45 p-2 text-center"><p class="text-[10px] uppercase tracking-wide text-slate-400">Seit - T</p><p class="mt-0.5 text-sm font-semibold text-slate-100">-%</p></div>
                             <div class="rounded-xl bg-slate-950/45 p-2 text-center"><p class="text-[10px] uppercase tracking-wide text-slate-400">30 Tage</p><p class="mt-0.5 text-sm font-semibold text-slate-100">-%</p></div>
                             <div class="rounded-xl bg-slate-950/45 p-2 text-center"><p class="text-[10px] uppercase tracking-wide text-slate-400">Aktuell</p><p class="mt-0.5 text-sm font-semibold text-slate-100">-%</p></div>
                         </div>
-                        <div class="mt-2 flex items-center gap-2 text-sm text-amber-100/85">
-                            <span class="h-4 w-4 rounded-full border-2 border-amber-200/30 border-t-amber-200 animate-spin"></span>
-                            <span>${escapeHtml(spinnerMessage)}</span>
+                        <div class="card-front-interactive mt-2 flex flex-wrap gap-2 cursor-default" onclick="event.stopPropagation()">
+                            <form action="/monitors/${monitor.id}/toggle" method="post" class="js-monitor-toggle">
+                                <button type="submit" aria-label="Monitor pausieren" title="Pausieren" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-100 hover:bg-amber-500/25 transition cursor-pointer">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M7 5a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Zm10 0a1 1 0 0 1 1 1v12a1 1 0 1 1-2 0V6a1 1 0 0 1 1-1Z"/></svg>
+                                    <span class="sr-only">Pausieren</span>
+                                </button>
+                            </form>
+                            <button type="button" data-monitor-id="${monitor.id}" data-monitor-name="${escapeHtml(monitor.name || '')}" data-monitor-category="${escapeHtml(monitor.category || '')}" data-monitor-categories='${escapeHtml(JSON.stringify(categoryLabels))}' data-monitor-type="${escapeHtml(monitor.monitor_type || 'http')}" data-monitor-target="${escapeHtml(monitor.target || '')}" data-monitor-ping-target="${escapeHtml(monitor.ping_target || '')}" data-monitor-interval="${escapeHtml(String(monitor.interval || 60))}" onclick="openEditPanel(this)" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-100 transition hover:bg-sky-500/25 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="m16.86 3.49 3.65 3.65M18.27 2.08a2 2 0 0 1 2.83 2.83L7.5 18.5 3 19.5l1-4.5L18.27 2.08Z"/></svg>
+                                <span class="sr-only">Bearbeiten</span>
+                            </button>
+                            <button type="button" onclick="flipCard('card-inner-${monitor.id}')" aria-label="Details anzeigen" title="Details" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white/10 text-slate-100 transition hover:bg-white/15 cursor-pointer">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12Z"/>
+                                    <circle cx="12" cy="12" r="3"/>
+                                </svg>
+                                <span class="sr-only">Details</span>
+                            </button>
+                            <form action="/monitors/${monitor.id}/delete" method="post" class="js-monitor-delete ml-auto">
+                                <button type="submit" aria-label="Monitor löschen" title="Löschen" class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 cursor-pointer">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6h18M8 6V4h8v2m-7 4v8m6-8v8M6 6l1 14h10l1-14"/></svg>
+                                    <span class="sr-only">Löschen</span>
+                                </button>
+                            </form>
                         </div>
+                    </div>
+                    <div class="card-back absolute inset-0 backface-hidden w-full h-full rotate-y-180 flex flex-col rounded-3xl border border-white/10 bg-slate-900/95 p-4 shadow-panel cursor-default" onclick="event.stopPropagation()">
+                        <div class="flex items-start justify-between gap-4 mb-4 flex-shrink-0">
+                            <h3 class="text-lg font-semibold text-slate-50 truncate">Details & Logs</h3>
+                            <button type="button" onclick="flipCard('card-inner-${monitor.id}')" aria-label="Zurückdrehen" title="Zurück" class="tap-target inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-100 transition hover:bg-white/10">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        <div id="card-back-content-${monitor.id}" class="overflow-y-auto scrollbar-thin h-full pr-1"></div>
                     </div>
                 </div>
             `;
-            if (options.keepPosition && nextSibling) {
-                grid.insertBefore(card, nextSibling);
-            } else if (options.keepPosition) {
-                grid.appendChild(card);
-            } else {
-                grid.prepend(card);
-            }
-            if (options.rememberPending !== false) {
-                rememberPendingMonitorCard(monitor, options);
-            }
+            grid.prepend(card);
+            bindMonitorToggleForms(card);
+            bindMonitorDeleteForms(card);
+            bindMonitorRunForms(card);
             applyMonitorFilters();
-            if (options.scroll !== false) {
-                card.scrollIntoView({ behavior: "smooth", block: "center" });
-            }
         }
 
         function bindMonitorCreateForms(scope = document) {
@@ -1883,14 +2056,9 @@
                     closeEditPanel();
                     rememberCategoryOption(data.categories || data.category);
                     showToast(data.message || "Monitor wurde aktualisiert.", "success");
-                    addPendingMonitorCard(data, {
-                        keepPosition: true,
-                        scroll: false,
-                        spinnerTitle: "Wird aktualisiert",
-                        spinnerMessage: "Änderung wird geprüft...",
-                    });
+                    updateExistingMonitorCard(data);
                     refreshDashboardTop();
-                    scheduleMonitorCardRefreshes([700, 1500, 3000, 6000, 12000]);
+                    scheduleMonitorCardRefreshes([700, 1800, 4000, 8000]);
                 } catch (error) {
                     showToast("Monitor konnte nicht gespeichert werden.", "error");
                 } finally {
