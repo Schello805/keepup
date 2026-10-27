@@ -526,6 +526,18 @@
     </style>
 </head>
 <body class="min-h-screen text-slate-100">
+    <div id="pull-to-refresh" class="pointer-events-none fixed inset-x-0 top-0 z-50 flex -translate-y-full justify-center transition-transform duration-200 ease-out">
+        <div class="mt-3 flex items-center gap-2.5 rounded-full border border-sky-300/30 bg-slate-900/95 px-4 py-2 text-xs font-semibold text-sky-200 shadow-xl backdrop-blur-md">
+            <svg id="pull-arrow" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+            </svg>
+            <svg id="pull-spinner" xmlns="http://www.w3.org/2000/svg" class="hidden h-4 w-4 animate-spin text-sky-400" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-80" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"></path>
+            </svg>
+            <span id="pull-text">Nach unten ziehen zum Aktualisieren</span>
+        </div>
+    </div>
     <main class="mx-auto max-w-7xl px-4 pb-28 pt-4 sm:px-6 sm:pb-12 lg:px-8">
         {{ render_toast(toast) }}
         {{ render_page_header(summary.overall_status, active_page) }}
@@ -2200,6 +2212,82 @@
             });
         }
 
+        function initPullToRefresh() {
+            const indicator = document.getElementById("pull-to-refresh");
+            const arrow = document.getElementById("pull-arrow");
+            const spinner = document.getElementById("pull-spinner");
+            const text = document.getElementById("pull-text");
+            if (!indicator || !arrow || !spinner || !text) return;
+
+            let startY = 0;
+            let currentY = 0;
+            let isPulling = false;
+            let isRefreshing = false;
+            const threshold = 65;
+
+            window.addEventListener("touchstart", (e) => {
+                if (window.scrollY > 5 || isRefreshing) return;
+                if (document.querySelector(".monitor-modal:not(.hidden)")) return;
+                startY = e.touches[0].clientY;
+                isPulling = true;
+            }, { passive: true });
+
+            window.addEventListener("touchmove", (e) => {
+                if (!isPulling || isRefreshing) return;
+                currentY = e.touches[0].clientY;
+                const pullDistance = currentY - startY;
+                if (pullDistance <= 0 || window.scrollY > 0) {
+                    indicator.style.transform = "translateY(-100%)";
+                    return;
+                }
+                const damped = Math.min(85, Math.pow(pullDistance, 0.82));
+                indicator.style.transform = `translateY(${damped}px)`;
+                if (damped >= threshold) {
+                    arrow.style.transform = "rotate(180deg)";
+                    text.textContent = "Loslassen zum Aktualisieren";
+                } else {
+                    arrow.style.transform = "rotate(0deg)";
+                    text.textContent = "Nach unten ziehen zum Aktualisieren";
+                }
+            }, { passive: true });
+
+            window.addEventListener("touchend", async () => {
+                if (!isPulling || isRefreshing) return;
+                isPulling = false;
+                const pullDistance = currentY - startY;
+                const damped = Math.min(85, Math.pow(Math.max(0, pullDistance), 0.82));
+                if (damped >= threshold && window.scrollY <= 0) {
+                    isRefreshing = true;
+                    indicator.style.transform = `translateY(${threshold}px)`;
+                    arrow.classList.add("hidden");
+                    spinner.classList.remove("hidden");
+                    text.textContent = "Aktualisiere...";
+                    if ("vibrate" in navigator) {
+                        try { navigator.vibrate(20); } catch (_) {}
+                    }
+                    try {
+                        await refreshDashboardSnapshot({ force: true });
+                    } catch (_) {}
+                    window.setTimeout(() => {
+                        indicator.style.transform = "translateY(-100%)";
+                        window.setTimeout(() => {
+                            arrow.classList.remove("hidden");
+                            arrow.style.transform = "rotate(0deg)";
+                            spinner.classList.add("hidden");
+                            text.textContent = "Nach unten ziehen zum Aktualisieren";
+                            isRefreshing = false;
+                        }, 250);
+                    }, 400);
+                } else {
+                    indicator.style.transform = "translateY(-100%)";
+                    arrow.style.transform = "rotate(0deg)";
+                }
+                startY = 0;
+                currentY = 0;
+            }, { passive: true });
+        }
+
+        initPullToRefresh();
         window.setTimeout(dismissToast, 4200);
         togglePingTargetField("new");
         setCategoryFormValue("new", "");

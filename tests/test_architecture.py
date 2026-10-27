@@ -86,6 +86,15 @@ class ArchitectureTests(unittest.TestCase):
                 self.assertIn("idx_incidents_start_check", indexes)
                 self.assertIn("idx_incidents_end_check", indexes)
 
+    def test_init_db_configures_incremental_auto_vacuum(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            db_path = Path(tmpdir) / "keepup.db"
+            with patch.object(database, "DATABASE_URL", db_path):
+                database.init_db()
+                with database.get_db() as conn:
+                    mode = conn.execute("PRAGMA auto_vacuum").fetchone()[0]
+                self.assertEqual(mode, 2)
+
     def test_database_metrics_do_not_scan_application_tables(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "keepup.db"

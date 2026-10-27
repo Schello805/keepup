@@ -173,6 +173,13 @@ def init_db() -> None:
         # Journal mode is persistent and may require an exclusive lock. Set it once
         # during startup instead of blocking every web request and monitor check.
         conn.execute("PRAGMA journal_mode = WAL")
+        try:
+            auto_vac = conn.execute("PRAGMA auto_vacuum").fetchone()
+            if auto_vac and int(auto_vac[0]) == 0:
+                conn.execute("PRAGMA auto_vacuum = INCREMENTAL")
+                conn.execute("VACUUM")
+        except sqlite3.OperationalError:
+            pass
         cursor = conn.cursor()
         cursor.executescript(
             """
@@ -1063,8 +1070,15 @@ def cleanup_old_checks(days: Optional[int] = None, batch_size: int = 10_000) -> 
             # Let regular monitor writes acquire SQLite's single writer lock.
             time.sleep(0.05)
         conn.execute("PRAGMA optimize")
-        conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
-    return deleted_total
+        try:
+            conn.execute("PRAGMA incremental_vacuum(5000)")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except sqlite3.OperationalError:
+            conn.execute("PRAGMA wal_checkpoint(PASSIVE)")
+        return deleted_total
 
 
 def get_recent_logs(monitor_id: int, limit: int = 8) -> list[dict[str, Any]]:

@@ -150,5 +150,26 @@ class NtfyNotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("KeepUp oeffnen", FakeClient.last_headers["Actions"])
 
 
+class PingConcurrencyAndStaggerTests(unittest.IsolatedAsyncioTestCase):
+    async def test_ping_check_semaphore_limits_concurrency(self):
+        import monitor
+        self.assertEqual(monitor.MAX_CONCURRENT_PING_CHECKS, 10)
+        self.assertIsInstance(monitor._ping_check_semaphore, monitor.asyncio.Semaphore)
+
+    async def test_run_all_checks_once_staggering(self):
+        import monitor
+        monitors = [{"id": 1, "enabled": 1}, {"id": 2, "enabled": 1}, {"id": 3, "enabled": 0}]
+        executed = []
+
+        async def fake_check(mid):
+            executed.append(mid)
+
+        with patch("monitor.list_monitors", return_value=monitors), \
+             patch("monitor.execute_monitor_check", side_effect=fake_check):
+            await monitor.run_all_checks_once(stagger_seconds=0.01)
+
+        self.assertEqual(executed, [1, 2])
+
+
 if __name__ == "__main__":
     unittest.main()

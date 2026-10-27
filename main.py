@@ -1173,6 +1173,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("add ping semaphore staggered startup pull to refresh and incremental vacuum", "Ping-Checks sind jetzt durch eine Lastbegrenzung geschützt, der App-Start staffelt Initialprüfungen und SQLite nutzt inkrementelles Auto-Vacuum mit WAL-Truncate. Das mobile Dashboard unterstützt Pull-to-Refresh per Wischgeste."),
         ("smooth monitor edits and toggles without full reloads", "Monitore lassen sich jetzt ohne harten Browser-Reload pausieren und fortsetzen. Beim Bearbeiten und Anlegen bleiben Karten sofort bedienbar und umgedrehte Detailansichten erhalten."),
         ("make database status metrics actionable", "Der Datenbankstatus unterscheidet jetzt aktive Daten von wiederverwendbarem Platz und zeigt zusätzlich SQLite-Version, Antwortzeit sowie freien Datenträgerspeicher."),
         ("show database health in system status", "Der Systemstatus zeigt jetzt Datenbankgröße, WAL-Datei, wiederverwendbaren Speicher, Aufbewahrungsdauer und SQLite-Erreichbarkeit an."),

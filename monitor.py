@@ -30,6 +30,7 @@ from database import (
 
 HTTP_USER_AGENT = "KeepUp/1.0"
 MAX_CONCURRENT_HTTP_CHECKS = 8
+MAX_CONCURRENT_PING_CHECKS = 10
 HTTP_CONNECTION_LIMIT = 16
 HTTP_KEEPALIVE_CONNECTION_LIMIT = 8
 logger = logging.getLogger("keepup.monitor")
@@ -39,6 +40,7 @@ _notification_batch_lock = asyncio.Lock()
 _http_check_client: Optional[httpx.AsyncClient] = None
 _http_check_client_lock = asyncio.Lock()
 _http_check_semaphore = asyncio.Semaphore(MAX_CONCURRENT_HTTP_CHECKS)
+_ping_check_semaphore = asyncio.Semaphore(MAX_CONCURRENT_PING_CHECKS)
 
 
 async def _ensure_http_check_client() -> httpx.AsyncClient:
@@ -364,35 +366,36 @@ def _resolve_ping_target(value: Any) -> str:
 async def check_ping_target_raw(
     monitor: dict[str, Any], target: Optional[str] = None
 ) -> tuple[str, float, Optional[str], Optional[str]]:
-    start = time.perf_counter()
-    system = platform.system().lower()
-    timeout = int(monitor["timeout"])
-    ping_target = target or monitor["target"]
+    async with _ping_check_semaphore:
+        start = time.perf_counter()
+        system = platform.system().lower()
+        timeout = int(monitor["timeout"])
+        ping_target = target or monitor["target"]
 
-    if system == "windows":
-        command = ["ping", "-n", "1", "-w", str(timeout * 1000), ping_target]
-    elif system == "darwin":
-        command = ["ping", "-c", "1", "-W", str(timeout), ping_target]
-    else:
-        command = ["ping", "-c", "1", "-W", str(timeout), ping_target]
+        if system == "windows":
+            command = ["ping", "-n", "1", "-w", str(timeout * 1000), ping_target]
+        elif system == "darwin":
+            command = ["ping", "-c", "1", "-W", str(timeout), ping_target]
+        else:
+            command = ["ping", "-c", "1", "-W", str(timeout), ping_target]
 
-    try:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await process.communicate()
-        response_time = round((time.perf_counter() - start) * 1000, 2)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await process.communicate()
+            response_time = round((time.perf_counter() - start) * 1000, 2)
 
-        status = "up" if process.returncode == 0 else "down"
-        error_message = None if status == "up" else normalize_monitor_error(_extract_ping_error(stdout, stderr))
-    except Exception as exc:
-        response_time = round((time.perf_counter() - start) * 1000, 2)
-        status = "down"
-        error_message = normalize_monitor_error(f"Ping-Fehler: {exc}")
+            status = "up" if process.returncode == 0 else "down"
+            error_message = None if status == "up" else normalize_monitor_error(_extract_ping_error(stdout, stderr))
+        except Exception as exc:
+            response_time = round((time.perf_counter() - start) * 1000, 2)
+            status = "down"
+            error_message = normalize_monitor_error(f"Ping-Fehler: {exc}")
 
-    return status, response_time, error_message, categorize_monitor_error(error_message, status)
+        return status, response_time, error_message, categorize_monitor_error(error_message, status)
 
 
 def _extract_ping_error(stdout: bytes, stderr: bytes) -> str:
@@ -1012,8 +1015,19 @@ def reschedule_monitor_jobs(scheduler: AsyncIOScheduler) -> None:
         _schedule_monitor_job(scheduler, monitor, settings)
 
 
-async def run_all_checks_once() -> None:
+async def _execute_staggered_check(monitor_id: int, delay_seconds: float) -> None:
+    if delay_seconds > 0:
+        await asyncio.sleep(delay_seconds)
+    await execute_monitor_check(monitor_id)
+
+
+async def run_all_checks_once(stagger_seconds: float = 0.1) -> None:
     monitors = await asyncio.to_thread(list_monitors)
     if not monitors:
         return
-    await asyncio.gather(*(execute_monitor_check(monitor["id"]) for monitor in monitors if monitor.get("enabled", 1)))
+    enabled_monitors = [m for m in monitors if m.get("enabled", 1)]
+    tasks = [
+        _execute_staggered_check(monitor["id"], index * max(0.0, float(stagger_seconds)))
+        for index, monitor in enumerate(enabled_monitors)
+    ]
+    await asyncio.gather(*tasks)
