@@ -1173,6 +1173,7 @@ def _humanize_commit_subject(subject: str) -> str:
     normalized = subject.strip().rstrip(".")
     lower = normalized.lower()
     translations = (
+        ("build and commit updated static keepup css", "Das kompilierte CSS-Bundle für das Dashboard wurde aktualisiert und synchronisiert."),
         ("fix mobile pull to refresh initial visibility and guard middle click", "Der Pull-to-Refresh-Hinweis auf Mobilgeräten bleibt im Ruhezustand vollständig ausgeblendet und erscheint nur bei aktiver Wischgeste. Ein Klick auf das Mausrad dreht Karten nicht mehr versehentlich um."),
         ("add ping semaphore staggered startup pull to refresh and incremental vacuum", "Ping-Checks sind jetzt durch eine Lastbegrenzung geschützt, der App-Start staffelt Initialprüfungen und SQLite nutzt inkrementelles Auto-Vacuum mit WAL-Truncate. Das mobile Dashboard unterstützt Pull-to-Refresh per Wischgeste."),
         ("smooth monitor edits and toggles without full reloads", "Monitore lassen sich jetzt ohne harten Browser-Reload pausieren und fortsetzen. Beim Bearbeiten und Anlegen bleiben Karten sofort bedienbar und umgedrehte Detailansichten erhalten."),
