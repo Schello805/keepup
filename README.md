@@ -13,6 +13,26 @@ Die App setzt auf:
 - `httpx` für asynchrone HTTP-Checks
 - `Tailwind CSS` und `HTMX` für die Weboberfläche
 
+## Schnellinstallation mit einem Befehl
+
+Für eine **Neuinstallation auf Debian, Ubuntu oder Raspberry Pi OS mit systemd** den folgenden Einzeiler im Terminal ausführen. Benötigt werden Python 3.11 oder neuer, Internetzugang und ein Benutzer mit `sudo`-Rechten.
+
+```bash
+sudo bash -c 'set -e; apt-get update && apt-get install -y git python3 python3-venv python3-pip iputils-ping libcap2-bin && git clone https://github.com/Schello805/keepup.git /opt/keepup && /opt/keepup/scripts/install_keepup.sh'
+```
+
+Der Befehl installiert die Systempakete, lädt KeepUp nach `/opt/keepup`, richtet die Python-Umgebung und den Dienstbenutzer `keepup` ein und startet den Dienst `keepup.service`. Der Dienst startet künftig automatisch beim Booten. Node.js und npm sind für die Installation nicht erforderlich; das fertige CSS ist enthalten.
+
+Anschließend im Browser **`http://DEINE-SERVER-IP:8000`** öffnen und die ersten Monitore sowie Benachrichtigungen einrichten. Die Status-Wall ist unter `http://DEINE-SERVER-IP:8000/wall` erreichbar.
+
+Der Einzeiler setzt voraus, dass `/opt/keepup` noch nicht existiert. Für eine bestehende Installation stattdessen das Update-Skript verwenden:
+
+```bash
+sudo /opt/keepup/scripts/update_keepup.sh
+```
+
+Bei einer Root-Shell kann das führende `sudo` entfallen. Für macOS oder einen Betrieb ohne systemd siehe die Abschnitte zur lokalen Entwicklung und zum Betrieb ohne systemd weiter unten.
+
 ## Funktionen
 
 - HTTP/S- und Ping-Monitore
